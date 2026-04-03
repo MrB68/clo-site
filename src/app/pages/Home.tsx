@@ -18,7 +18,7 @@ export function Home() {
       <section className="relative h-screen">
         <div className="absolute inset-0 bg-black">
           <img
-            src="https://images.unsplash.com/photo-1547587091-d639c1c338b3?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtaW5pbWFsJTIwYmxhY2slMjB3aGl0ZSUyMGZhc2hpb24lMjBjbG90aGluZ3xlbnwxfHx8fDE3NzUxMzk4NDl8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral"
+            src="https://images.unsplash.com/photo-1724184888115-e76e42f53dcc?q=80&w=3264&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
             alt="Hero"
             className="w-full h-full object-cover opacity-90"
           />
