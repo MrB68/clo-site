@@ -5,8 +5,7 @@ import { Star, ShoppingBag, Heart, Truck, RefreshCw, Shield } from "lucide-react
 import { useProducts } from "../contexts/ProductsContext";
 import { ProductCard } from "../components/ProductCard";
 import { toast } from "sonner";
-import { getStoredReviews, type StoredReview } from "../utils/reviews";
-import { getCustomerProfileByEmail } from "../utils/customerProfile";
+import { supabase } from "../../lib/supabase";
 
 interface CartItem {
   productId: string;
@@ -23,7 +22,7 @@ export function ProductDetail() {
   const [selectedColor, setSelectedColor] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [activeImage, setActiveImage] = useState(0);
-  const [reviews, setReviews] = useState<StoredReview[]>(() => getStoredReviews());
+  const [reviews, setReviews] = useState<any[]>([]);
 
   useEffect(() => {
     if (!product) {
@@ -36,20 +35,25 @@ export function ProductDetail() {
     setActiveImage(0);
   }, [product]);
 
+
   useEffect(() => {
-    const syncReviews = () => {
-      setReviews(getStoredReviews());
+    const fetchReviews = async () => {
+      if (!product) return;
+
+      const { data, error } = await supabase
+        .from("reviews")
+        .select("*")
+        .eq("product_id", product.id);
+
+      if (error) {
+        console.error("Error fetching reviews:", error);
+      } else {
+        setReviews(data || []);
+      }
     };
 
-    syncReviews();
-    window.addEventListener("reviewsUpdated", syncReviews);
-    window.addEventListener("storage", syncReviews);
-
-    return () => {
-      window.removeEventListener("reviewsUpdated", syncReviews);
-      window.removeEventListener("storage", syncReviews);
-    };
-  }, []);
+    fetchReviews();
+  }, [product]);
 
   if (!product) {
     return (
@@ -68,10 +72,10 @@ export function ProductDetail() {
     .filter((p) => p.category === product.category && p.id !== product.id)
     .slice(0, 4);
   const approvedReviews = reviews.filter(
-    (review) => review.productId === product.id && review.status === "approved"
+    (review) => review.product_id === product.id && review.status === "approved"
   );
   const averageRating = approvedReviews.length
-    ? approvedReviews.reduce((sum, review) => sum + review.rating, 0) /
+    ? approvedReviews.reduce((sum, review) => sum + (review.rating ?? 0), 0) /
       approvedReviews.length
     : 0;
 
@@ -339,43 +343,35 @@ export function ProductDetail() {
               {approvedReviews.map((review) => (
                 <div key={review.id} className="border-b pb-6">
                   <div className="flex items-center gap-4 mb-3">
-                    {getCustomerProfileByEmail(review.customerEmail)?.profileImage ? (
-                      <img
-                        src={getCustomerProfileByEmail(review.customerEmail)?.profileImage}
-                        alt={review.customerName}
-                        className="h-10 w-10 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-black text-xs font-medium uppercase tracking-wider text-white dark:bg-white dark:text-black">
-                        {review.customerName
-                          .split(" ")
-                          .map((part) => part[0])
-                          .join("")
-                          .slice(0, 2)}
-                      </div>
-                    )}
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-black text-xs font-medium uppercase tracking-wider text-white dark:bg-white dark:text-black">
+                      {review.name
+                        .split(" ")
+                        .map((part: string) => part[0])
+                        .join("")
+                        .slice(0, 2)}
+                    </div>
                     <div className="flex items-center gap-1">
                       {[...Array(5)].map((_, i) => (
                         <Star
                           key={i}
                           size={14}
                           className={
-                            i < review.rating ? "fill-black" : "fill-gray-300"
+                            i < (review.rating ?? 0) ? "fill-black" : "fill-gray-300"
                           }
                         />
                       ))}
                     </div>
-                    <span className="font-medium">{review.customerName}</span>
+                    <span className="font-medium">{review.name}</span>
                     <span className="text-sm text-gray-500">
-                      {new Date(review.date).toLocaleDateString("en-US", {
+                      {new Date(review.created_at).toLocaleDateString("en-US", {
                         year: "numeric",
                         month: "long",
                         day: "numeric",
                       })}
                     </span>
                   </div>
-                  <p className="mb-2 font-medium">{review.title}</p>
-                  <p className="text-gray-600 dark:text-gray-300">{review.comment}</p>
+                  <p className="mb-2 font-medium">{review.title || "Review"}</p>
+                  <p className="text-gray-600 dark:text-gray-300">{review.comment || ""}</p>
                   {review.adminReply && (
                     <div className="mt-4 rounded-lg border border-black/10 bg-gray-50 p-4 dark:border-white/10 dark:bg-neutral-900">
                       <p className="text-sm font-medium">Reply from {review.adminReplyBy || "Admin"}</p>

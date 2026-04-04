@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Trash2, Plus, Minus, ArrowRight, ShoppingBag } from "lucide-react";
 import { useProducts } from "../contexts/ProductsContext";
+import { supabase } from "../../lib/supabase";
 
 interface CartItem {
   productId: string;
@@ -132,6 +133,42 @@ export function Cart() {
   const shipping = subtotal > 100 ? 0 : 500;
   const total = subtotal + shipping;
 
+  const placeOrder = async () => {
+    try {
+      const orderItems = populatedCartItems.map(item => ({
+        productId: item.product.id,
+        name: item.product.name,
+        price: item.product.price,
+        quantity: item.quantity,
+        size: item.selectedSize,
+        color: item.selectedColor,
+      }));
+
+      const { error } = await supabase.from("orders").insert([
+        {
+          items: orderItems,
+          total: total,
+          status: "pending",
+        }
+      ]);
+
+      if (error) {
+        console.error(error);
+        alert("Order failed");
+        return;
+      }
+
+      setCartItems([]);
+      localStorage.removeItem("cartItems");
+
+      alert("Order placed successfully");
+      navigate("/");
+
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   if (!products || products.length === 0) {
     return <div className="pt-20 text-center">Loading...</div>;
   }
@@ -256,7 +293,7 @@ export function Cart() {
 
           <button
             type="button"
-            onClick={() => window.location.assign("/checkout")}
+            onClick={placeOrder}
             className="w-full bg-black py-4 text-white transition hover:bg-gray-900 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
           >
             Checkout

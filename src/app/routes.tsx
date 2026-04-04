@@ -15,6 +15,10 @@ import { Orders } from "./pages/Orders";
 import { Terms } from "./pages/Terms";
 import { Privacy } from "./pages/Privacy";
 import { NotFound } from "./pages/NotFound";
+import Shipping from "./pages/Shipping";
+import SizeGuide from "./pages/SizeGuide";
+import Contact from "./pages/Contact";
+import CustomerService from "./pages/CustomerService";
 
 export const router = createBrowserRouter([
   {
@@ -34,6 +38,10 @@ export const router = createBrowserRouter([
       { path: "profile", Component: Profile },
       { path: "terms", Component: Terms },
       { path: "privacy", Component: Privacy },
+      { path: "shipping", Component: Shipping },
+      { path: "size-guide", Component: SizeGuide },
+      { path: "contact", Component: Contact },
+      { path: "customer-service", Component: CustomerService },
       { path: "*", Component: NotFound },
     ],
   },

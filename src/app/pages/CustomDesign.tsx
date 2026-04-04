@@ -2,7 +2,8 @@ import { motion } from "motion/react";
 import { Upload, X, Check, Minus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { appendCustomDesignSubmission } from "../utils/customDesigns";
+import { supabase } from "../../lib/supabase";
+import { useAuth } from "../contexts/AuthContext";
 
 interface DesignForm {
   name: string;
@@ -26,6 +27,7 @@ export function CustomDesign() {
     file: null,
   });
   const [submitted, setSubmitted] = useState(false);
+  const { user } = useAuth();
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -52,14 +54,6 @@ export function CustomDesign() {
     }
   };
 
-  const fileToDataUrl = (file: File) =>
-    new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => reject(new Error("Unable to read file"));
-      reader.readAsDataURL(file);
-    });
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -68,28 +62,53 @@ export function CustomDesign() {
       return;
     }
 
-    try {
-      const fileDataUrl = await fileToDataUrl(form.file);
+    if (!user) {
+      toast.error("Please login first");
+      return;
+    }
 
-      appendCustomDesignSubmission({
-        id: `CD-${Date.now()}`,
-        name: form.name.trim(),
-        email: form.email.trim(),
-        phone: form.phone.trim(),
-        productType: form.productType,
-        quantity: Number(form.quantity),
-        message: form.message.trim(),
-        file: {
-          name: form.file.name,
-          type: form.file.type,
-          dataUrl: fileDataUrl,
+    try {
+      const filePath = `designs/${user.id}/${Date.now()}-${form.file.name}`;
+
+      const { data, error: uploadError } = await supabase.storage
+        .from("custom-designs")
+        .upload(filePath, form.file);
+
+      if (uploadError) {
+        console.error(uploadError);
+        toast.error("Failed to upload file");
+        return;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from("custom-designs")
+        .getPublicUrl(data.path);
+
+      const imageUrl = urlData.publicUrl;
+
+      const { error } = await supabase.from("custom_designs").insert([
+        {
+          user_id: user.id,
+          customer_email: form.email.trim(),
+          name: form.name.trim(),
+          phone: form.phone.trim(),
+          product_type: form.productType,
+          quantity: Number(form.quantity),
+          message: form.message.trim(),
+          image_url: imageUrl,
+          status: "pending",
         },
-        status: "new",
-        createdAt: new Date().toISOString(),
-      });
+      ]);
+
+      if (error) {
+        console.error(error);
+        toast.error("Failed to submit design");
+        return;
+      }
 
       setSubmitted(true);
       toast.success("Design submitted successfully");
+
       setTimeout(() => {
         setSubmitted(false);
         setForm({

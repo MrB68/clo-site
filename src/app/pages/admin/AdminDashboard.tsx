@@ -4,14 +4,13 @@ import { motion } from "motion/react";
 import { BarChart3, Users, MessageSquare, Share2, LogOut, Package, Plus, ExternalLink, TicketPercent, Palette, Moon, Sun, History, ArchiveRestore } from "lucide-react";
 import {
   appendAdminAuditLog,
-  authenticateAdmin,
-  createAdminSession,
-  getAdminAccounts,
   getAdminSession,
   saveAdminSession,
   clearAdminSession,
   type AdminSession,
 } from "../../utils/admin";
+
+import { supabase } from "../../../lib/supabase";
 
 // Lazy load admin components for code splitting
 const SalesAnalytics = lazy(() => import("./SalesAnalytics").then(module => ({ default: module.SalesAnalytics })));
@@ -132,30 +131,50 @@ export function AdminDashboard() {
     );
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const matchingAdmin = authenticateAdmin(email, password);
 
-    if (matchingAdmin) {
-      const nextSession: AdminSession = createAdminSession(matchingAdmin);
-      setIsAuthenticated(true);
-      setAdminSession(nextSession);
-      saveAdminSession(nextSession);
-      appendAdminAuditLog({
-        adminId: nextSession.id,
-        adminName: nextSession.name,
-        adminEmail: nextSession.email,
-        branch: nextSession.branch,
-        action: "logged in",
-        entityType: "admin-session",
-        entityName: nextSession.email,
-        details: `Signed into the ${nextSession.branch} dashboard.`,
-      });
-      setEmail("");
-      setPassword("");
-    } else {
-      alert("Incorrect admin email or password");
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      alert(error.message);
+      return;
     }
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      alert("Login failed");
+      return;
+    }
+
+    const { data } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .single();
+
+    if (data?.role !== "admin") {
+      alert("Access denied: not an admin");
+      return;
+    }
+
+    setIsAuthenticated(true);
+    setAdminSession({
+      id: user.id,
+      name: data.name,
+      email: user.email,
+      role: data.role,
+      branch: "Main",
+    } as any);
+
+    setEmail("");
+    setPassword("");
   };
 
   const handleLogout = () => {
@@ -240,16 +259,6 @@ export function AdminDashboard() {
               Access Admin Panel
             </button>
           </form>
-          <p className={`mt-4 text-center text-xs ${adminTheme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
-            Demo accounts are available for head office and branch managers.
-          </p>
-          <div className={`mt-3 space-y-1 text-center text-xs ${adminTheme === "dark" ? "text-gray-500" : "text-gray-500"}`}>
-            {getAdminAccounts().map((account) => (
-              <p key={account.id}>
-                {account.branch}: {account.email} / {account.password}
-              </p>
-            ))}
-          </div>
         </motion.div>
       </div>
     );
@@ -375,11 +384,11 @@ export function AdminDashboard() {
               <div className="grid gap-2 text-sm sm:text-right">
                 <p className="tracking-wider">
                   <span className="font-semibold">Name:</span>{" "}
-                  {adminSession?.name ?? DEMO_ADMIN_ACCOUNT.name}
+                  {adminSession?.name ?? "Unknown Admin"}
                 </p>
                 <p className="tracking-wider text-gray-600 dark:text-gray-400">
                   <span className="font-semibold text-black dark:text-white">Email:</span>{" "}
-                  {adminSession?.email ?? DEMO_ADMIN_ACCOUNT.email}
+                  {adminSession?.email ?? "No email"}
                 </p>
                 <p className="tracking-wider text-gray-600 dark:text-gray-400">
                   <span className="font-semibold text-black dark:text-white">Role:</span>{" "}

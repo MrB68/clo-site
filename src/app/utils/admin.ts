@@ -1,3 +1,5 @@
+import { supabase } from "../../lib/supabase";
+
 export interface AdminAccount {
   id: string;
   name: string;
@@ -148,23 +150,38 @@ export function clearAdminSession() {
   localStorage.removeItem("adminAuthenticated");
 }
 
-export function getAdminAuditLogs() {
-  return readJson<AdminAuditLog[]>(ADMIN_AUDIT_LOGS_KEY, []);
+export async function getAdminAuditLogs() {
+  const { data, error } = await supabase
+    .from("admin_logs")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error(error);
+    return [];
+  }
+
+  return data || [];
 }
 
-export function appendAdminAuditLog(
+export async function appendAdminAuditLog(
   entry: Omit<AdminAuditLog, "id" | "createdAt">
 ) {
-  const nextEntry: AdminAuditLog = {
-    ...entry,
-    id: `audit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    createdAt: new Date().toISOString(),
-  };
+  const { error } = await supabase.from("admin_logs").insert([
+    {
+      admin_id: entry.adminId,
+      admin_name: entry.adminName,
+      admin_email: entry.adminEmail,
+      branch: entry.branch,
+      action: entry.action,
+      entity_type: entry.entityType,
+      entity_name: entry.entityName,
+      details: entry.details,
+    },
+  ]);
 
-  const logs = getAdminAuditLogs();
-  writeJson(ADMIN_AUDIT_LOGS_KEY, [nextEntry, ...logs]);
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(new Event("adminAuditLogUpdated"));
+  if (error) {
+    console.error("Failed to save admin log:", error);
   }
 }
 

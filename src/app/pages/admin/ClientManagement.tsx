@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion } from "motion/react";
 import { Search, Mail, Phone, MapPin, Calendar, DollarSign, ShoppingBag, Star, MessageSquare } from "lucide-react";
-import { getStoredOrders, type StoredOrder } from "../../utils/orders";
 import { getAdminSession } from "../../utils/admin";
 import { getCustomerProfileByEmail } from "../../utils/customerProfile";
+import { supabase } from "../../../lib/supabase";
+import { StoredOrder } from "@/app/utils/orders";
 
 interface Client {
   id: string;
@@ -42,7 +43,7 @@ function buildClientNotes(clientOrders: StoredOrder[]) {
   return `Recent order items: ${latestItems}`;
 }
 
-function buildClientsFromOrders(orders: StoredOrder[]) {
+function buildClientsFromOrders(orders: any[]) {
   const groupedOrders = new Map<string, StoredOrder[]>();
 
   orders.forEach((order) => {
@@ -87,7 +88,7 @@ function getClientInitials(name: string) {
 }
 
 export function ClientManagement() {
-  const adminSession = getAdminSession();
+  const adminSession = useMemo(() => getAdminSession(), []);
   const [clients, setClients] = useState<Client[]>([]);
   const [filteredClients, setFilteredClients] = useState<Client[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -96,27 +97,26 @@ export function ClientManagement() {
   const [showClientModal, setShowClientModal] = useState(false);
 
   useEffect(() => {
-    const syncClients = () => {
-      const storedOrders = getStoredOrders();
-      const visibleOrders =
-        adminSession && adminSession.branch !== "Head Office"
-          ? storedOrders.filter((order) => order.branch === adminSession.branch)
-          : storedOrders;
+  const fetchClients = async () => {
+    const { data: orders, error } = await supabase
+      .from("orders")
+      .select("*");
 
-      setClients(buildClientsFromOrders(visibleOrders));
-    };
+    if (error) {
+      console.error("Client fetch error:", error);
+      return;
+    }
 
-    syncClients();
-    window.addEventListener("ordersUpdated", syncClients);
-    window.addEventListener("customerProfileUpdated", syncClients);
-    window.addEventListener("storage", syncClients);
+    const visibleOrders =
+      adminSession && adminSession.branch !== "Head Office"
+        ? (orders || []).filter((order: any) => order.branch === adminSession.branch)
+        : (orders || []);
 
-    return () => {
-      window.removeEventListener("ordersUpdated", syncClients);
-      window.removeEventListener("customerProfileUpdated", syncClients);
-      window.removeEventListener("storage", syncClients);
-    };
-  }, [adminSession]);
+    setClients(buildClientsFromOrders(visibleOrders));
+  };
+
+  fetchClients();
+}, [adminSession?.branch]);
 
   useEffect(() => {
     let filtered = clients;

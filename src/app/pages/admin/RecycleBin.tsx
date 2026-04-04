@@ -1,36 +1,8 @@
 import { useEffect, useState } from "react";
 import { RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { getPromoCodes, savePromoCodes, type DiscountOption } from "../../utils/promoCodes";
-import {
-  appendAdminAuditLog,
-  getAdminSession,
-  getRecycleBinItems,
-  removeRecycleBinItem,
-  type RecycleBinItem,
-} from "../../utils/admin";
-
-function restoreProduct(payload: unknown) {
-  const product = payload as Record<string, unknown>;
-  const currentProducts = JSON.parse(localStorage.getItem("mainProducts") || "[]");
-  const nextProducts = Array.isArray(currentProducts) ? currentProducts : [];
-
-  if (!nextProducts.some((item: Record<string, unknown>) => item.id === product.id)) {
-    nextProducts.unshift(product);
-    localStorage.setItem("mainProducts", JSON.stringify(nextProducts));
-    localStorage.setItem("adminProducts", JSON.stringify(nextProducts));
-    window.dispatchEvent(new Event("productsUpdated"));
-  }
-}
-
-function restorePromoCode(payload: unknown) {
-  const promoCode = payload as DiscountOption;
-  const promoCodes = getPromoCodes();
-
-  if (!promoCodes.some((item) => item.code === promoCode.code)) {
-    savePromoCodes([promoCode, ...promoCodes]);
-  }
-}
+import { appendAdminAuditLog, getAdminSession } from "../../utils/admin";
+import { supabase } from "../../../lib/supabase";
 
 function formatDate(dateString: string) {
   return new Date(dateString).toLocaleString("en-US", {
@@ -43,51 +15,64 @@ function formatDate(dateString: string) {
 }
 
 export function RecycleBin() {
-  const [items, setItems] = useState<RecycleBinItem[]>(() => getRecycleBinItems());
+  const [items, setItems] = useState<any[]>([]);
 
   useEffect(() => {
-    const syncItems = () => {
-      setItems(getRecycleBinItems());
+    const fetchItems = async () => {
+      const { data, error } = await supabase
+        .from("recycle_bin")
+        .select("*")
+        .order("deleted_at", { ascending: false });
+
+      if (error) {
+        console.error("Failed to fetch recycle bin:", error);
+        return;
+      }
+
+      setItems(data || []);
     };
 
-    window.addEventListener("adminRecycleBinUpdated", syncItems);
-    window.addEventListener("storage", syncItems);
-
-    return () => {
-      window.removeEventListener("adminRecycleBinUpdated", syncItems);
-      window.removeEventListener("storage", syncItems);
-    };
+    fetchItems();
   }, []);
 
-  const handleRestore = (item: RecycleBinItem) => {
-    if (item.entityType === "product") {
-      restoreProduct(item.payload);
-    }
+  const handleRestore = async (item: any) => {
+    try {
+      if (item.entity_type === "product") {
+        await supabase.from("products").insert([item.payload]);
+      }
 
-    if (item.entityType === "promoCode") {
-      restorePromoCode(item.payload);
-    }
+      if (item.entity_type === "promoCode") {
+        await supabase.from("promo_codes").insert([item.payload]);
+      }
 
-    removeRecycleBinItem(item.id);
-    const adminSession = getAdminSession();
-    if (adminSession) {
-      appendAdminAuditLog({
-        adminId: adminSession.id,
-        adminName: adminSession.name,
-        adminEmail: adminSession.email,
-        branch: adminSession.branch,
-        action: "restored",
-        entityType: item.entityType,
-        entityName: item.entityName,
-        details: `Recovered from recycle bin.`,
-      });
+      await supabase.from("recycle_bin").delete().eq("id", item.id);
+
+      const adminSession = getAdminSession();
+      if (adminSession) {
+        appendAdminAuditLog({
+          adminId: adminSession.id,
+          adminName: adminSession.name,
+          adminEmail: adminSession.email,
+          branch: adminSession.branch,
+          action: "restored",
+          entityType: item.entity_type,
+          entityName: item.entity_name,
+          details: "Recovered from recycle bin.",
+        });
+      }
+
+      setItems((prev) => prev.filter((i) => i.id !== item.id));
+      toast.success(`${item.entity_name} restored`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Restore failed");
     }
-    toast.success(`${item.entityName} restored`);
   };
 
-  const handlePermanentDelete = (item: RecycleBinItem) => {
-    removeRecycleBinItem(item.id);
-    toast.success(`${item.entityName} removed from recycle bin`);
+  const handlePermanentDelete = async (item: any) => {
+    await supabase.from("recycle_bin").delete().eq("id", item.id);
+    setItems((prev) => prev.filter((i) => i.id !== item.id));
+    toast.success(`${item.entity_name} removed permanently`);
   };
 
   return (
@@ -124,18 +109,18 @@ export function RecycleBin() {
               >
                 <div className="space-y-1">
                   <div className="flex flex-wrap items-center gap-3">
-                    <p className="font-semibold tracking-wider">{item.entityName}</p>
+                    <p className="font-semibold tracking-wider">{item.entity_name}</p>
                     <span className="rounded-full bg-gray-100 px-3 py-1 text-xs uppercase tracking-wider text-gray-700">
-                      {item.entityType}
+                      {item.entity_type}
                     </span>
                     <span className="rounded-full bg-amber-100 px-3 py-1 text-xs uppercase tracking-wider text-amber-700">
-                      {item.branch}
+                      {item.branch || "main"}
                     </span>
                   </div>
                   <p className="text-sm text-gray-600">
-                    Deleted by {item.deletedByName} ({item.deletedByEmail})
+                    Deleted by {item.deleted_by} ({item.deleted_by})
                   </p>
-                  <p className="text-xs text-gray-500">{formatDate(item.deletedAt)}</p>
+                  <p className="text-xs text-gray-500">{formatDate(item.deleted_at)}</p>
                 </div>
                 <div className="flex gap-3">
                   <button

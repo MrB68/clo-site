@@ -37,13 +37,13 @@ export function Layout() {
           const items = JSON.parse(cartItems);
           const totalItems = Array.isArray(items)
             ? items.reduce(
-                (sum, item) =>
-                  sum +
-                  (typeof item?.quantity === "number" && item.quantity > 0
-                    ? item.quantity
-                    : 1),
-                0
-              )
+              (sum, item) =>
+                sum +
+                (typeof item?.quantity === "number" && item.quantity > 0
+                  ? item.quantity
+                  : 1),
+              0
+            )
             : 0;
           setCartCount(totalItems);
         } catch {
@@ -92,11 +92,10 @@ export function Layout() {
       <motion.nav
         initial={{ y: -100 }}
         animate={{ y: 0 }}
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-          scrolled || !isHomePage
+        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled || !isHomePage
             ? "bg-background shadow-sm"
             : "bg-transparent text-white"
-        }`}
+          }`}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-20">
@@ -109,25 +108,22 @@ export function Layout() {
             <div className="hidden md:flex items-center gap-8">
               <Link
                 to="/shop"
-                className={`hover:opacity-70 transition-opacity tracking-widest uppercase text-sm ${
-                  scrolled || !isHomePage ? "text-black" : "text-white"
-                }`}
+                className={`hover:opacity-70 transition-opacity tracking-widest uppercase text-sm ${scrolled || !isHomePage ? "text-black" : "text-white"
+                  }`}
               >
                 Shop
               </Link>
               <Link
                 to="/custom"
-                className={`hover:opacity-70 transition-opacity tracking-widest uppercase text-sm ${
-                  scrolled || !isHomePage ? "text-black" : "text-white"
-                }`}
+                className={`hover:opacity-70 transition-opacity tracking-widest uppercase text-sm ${scrolled || !isHomePage ? "text-black" : "text-white"
+                  }`}
               >
                 Custom
               </Link>
               <Link
                 to="/about"
-                className={`hover:opacity-70 transition-opacity tracking-widest uppercase text-sm ${
-                  scrolled || !isHomePage ? "text-black" : "text-white"
-                }`}
+                className={`hover:opacity-70 transition-opacity tracking-widest uppercase text-sm ${scrolled || !isHomePage ? "text-black" : "text-white"
+                  }`}
               >
                 About
               </Link>
@@ -137,27 +133,24 @@ export function Layout() {
             <div className="hidden md:flex items-center gap-6">
               <button
                 onClick={toggleTheme}
-                className={`hover:opacity-70 transition-opacity ${
-                  scrolled || !isHomePage ? "text-black dark:text-white" : "text-white"
-                }`}
+                className={`hover:opacity-70 transition-opacity ${scrolled || !isHomePage ? "text-black dark:text-white" : "text-white"
+                  }`}
                 aria-label="Toggle theme"
               >
                 {mounted && theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
               </button>
               <button
                 onClick={() => setSearchOpen(!searchOpen)}
-                className={`hover:opacity-70 transition-opacity ${
-                  scrolled || !isHomePage ? "text-black" : "text-white"
-                }`}
+                className={`hover:opacity-70 transition-opacity ${scrolled || !isHomePage ? "text-black" : "text-white"
+                  }`}
               >
                 <Search size={20} />
               </button>
               <div className="relative">
                 <button
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
-                  className={`hover:opacity-70 transition-opacity ${
-                    scrolled || !isHomePage ? "text-black" : "text-white"
-                  }`}
+                  className={`hover:opacity-70 transition-opacity ${scrolled || !isHomePage ? "text-black" : "text-white"
+                    }`}
                 >
                   <User size={20} />
                 </button>
@@ -227,9 +220,8 @@ export function Layout() {
               </div>
               <Link
                 to="/cart"
-                className={`hover:opacity-70 transition-opacity relative ${
-                  scrolled || !isHomePage ? "text-black" : "text-white"
-                }`}
+                className={`hover:opacity-70 transition-opacity relative ${scrolled || !isHomePage ? "text-black" : "text-white"
+                  }`}
               >
                 <ShoppingCart size={20} />
                 {cartCount > 0 && (
@@ -243,9 +235,8 @@ export function Layout() {
             {/* Mobile Menu Button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className={`md:hidden ${
-                scrolled || !isHomePage ? "text-black" : "text-white"
-              }`}
+              className={`md:hidden ${scrolled || !isHomePage ? "text-black" : "text-white"
+                }`}
             >
               {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
@@ -378,20 +369,96 @@ export function Layout() {
         <Outlet />
       </main>
 
-      {/* Footer */}
+
       <footer className="bg-black text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
           <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-[1fr_0.9fr_0.9fr_1.2fr] lg:gap-12">
-            {/* Brand */}
-            <div className="group space-y-4 sm:col-span-2 lg:col-span-1">
+            {/* Brand + SOCIAL MEDIA LINKS */}
+            <div className="group space-y-6 sm:col-span-2 lg:col-span-1">
               <h3 className="text-xl tracking-[0.3em] uppercase">clo</h3>
               <div className="space-y-2">
-              <p className="max-w-xs text-gray-400 text-sm leading-6">
-                Minimal. Original. Design.
-              </p>
-                <p className="text-sm uppercase tracking-[0.20em] text-white/0 transition duration-300 group-hover:text-white/75">
-                      Extravagant
+                <p className="max-w-xs text-gray-400 text-sm leading-6">
+                  Minimal. Original. Design.
                 </p>
+                <p className=" flex place-items-centertext-sm uppercase tracking-[0.20em] text-white/0 transition duration-300 group-hover:text-white/75">
+                  Extravagant
+                </p>
+              </div>
+
+              {/* === SOCIAL MEDIA LINKS === */}
+              <div className="flex items-center gap-4 pt-4">
+                {/* Facebook */}
+                <a
+                  href=""//facebook.com/yourpage"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                 className="group/social relative w-11 h-11 flex items-center justify-center hover:scale-105 transition-all duration-300"
+                >
+
+                  {/* White Icon (default) */}
+                  <img
+                    src="/icons/facebook-white.svg"
+                    alt="Facebook"
+                    className="w-9 h-9 absolute transition-opacity duration-300 group-hover/social:opacity-0"
+                  />
+
+                  {/* Colored Icon (hover) */}
+                  <img
+                    src="/icons/facebook-color.svg"
+                    alt="Facebook"
+                    className="w-9 h-9 absolute opacity-0 transition-opacity duration-300 group-hover/social:opacity-100"
+                  />
+
+                </a>
+
+                {/* Instagram */}
+                <a
+                  href="https://www.instagram.com/clofitstudios/?utm_source=ig_web_button_share_sheet"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group/social relative w-11 h-11 flex items-center justify-center hover:scale-105 transition-all duration-300"
+                  aria-label="Instagram"
+                >
+
+                  {/* White Icon (default) */}
+                  <img
+                    src="/icons/instagram-white.svg"
+                    alt="Instagram"
+                    className="w-9 h-9 absolute transition-opacity duration-300 group-hover/social:opacity-0"
+                  />
+
+                  {/* Colored Icon (hover) */}
+                  <img
+                    src="/icons/instagram-color.svg"
+                    alt="Instagram"
+                    className="w-9 h-9 absolute opacity-0 transition-opacity duration-300 group-hover/social:opacity-100"
+                  />
+
+                </a>
+
+                {/* TikTok */}
+                <a
+                  href=""//tiktok.com/yourpage"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group/social relative w-11 h-11 flex items-center justify-center hover:scale-105 transition-all duration-300"
+                >
+
+                  {/* White Icon (default) */}
+                  <img
+                    src="/icons/tiktok-white.svg"
+                    alt="TikTok"
+                    className="w-9 h-9 absolute transition-opacity duration-300 group-hover/social:opacity-0"
+                  />
+
+                  {/* Colored Icon (hover) */}
+                  <img
+                    src="/icons/tiktok-color.svg"
+                    alt="TikTok"
+                    className="w-9 h-9 absolute opacity-0 transition-opacity duration-300 group-hover/social:opacity-100"
+                  />
+
+                </a>
               </div>
             </div>
 
@@ -399,26 +466,10 @@ export function Layout() {
             <div className="space-y-4">
               <h4 className="font-medium tracking-widest uppercase text-sm">Shop</h4>
               <ul className="space-y-3 text-sm text-gray-400">
-                <li>
-                  <Link to="/shop" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">
-                    All Products
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/custom" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">
-                    Custom Prints
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/shop?filter=new" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">
-                    New Arrivals
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/shop" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">
-                    Collections
-                  </Link>
-                </li>
+                <li><Link to="/shop" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">All Products</Link></li>
+                <li><Link to="/custom" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">Custom Prints</Link></li>
+                <li><Link to="/shop?filter=new" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">New Arrivals</Link></li>
+                <li><Link to="/shop" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">Collections</Link></li>
               </ul>
             </div>
 
@@ -426,26 +477,10 @@ export function Layout() {
             <div className="space-y-4">
               <h4 className="font-medium tracking-widest uppercase text-sm">Help</h4>
               <ul className="space-y-3 text-sm text-gray-400">
-                <li>
-                  <a href="#" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">
-                    Customer Service
-                  </a>
-                </li>
-                <li>
-                  <Link to="/shipping" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">
-                    Shipping & Returns
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/size-guide" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">
-                    Size Guide
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/contact" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">
-                    Contact Us
-                  </Link>
-                </li>
+                <li><a href="#" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">Customer Service</a></li>
+                <li><Link to="/shipping" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">Shipping & Returns</Link></li>
+                <li><Link to="/size-guide" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">Size Guide</Link></li>
+                <li><Link to="/contact" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">Contact Us</Link></li>
               </ul>
             </div>
 
@@ -468,16 +503,62 @@ export function Layout() {
             </div>
           </div>
 
-          {/* Bottom */}
-          <div className="mt-12 flex flex-col gap-4 border-t border-white/10 pt-8 text-center text-sm text-gray-400 md:flex-row md:items-center md:justify-between md:text-left">
-            <p>© 2026 clo. All rights reserved.</p>
-            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 md:justify-end">
-              <Link to="/privacy" className="hover:text-white transition-colors tracking-wider">
-                Privacy Policy
-              </Link>
-              <Link to="/terms" className="hover:text-white transition-colors tracking-wider">
-                Terms of Service
-              </Link>
+          {/* === PAYMENT METHODS SECTION === */}
+          <div className="mt-12 border-t border-white/10 pt-8">
+            <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:justify-between">
+              {/* Payment Methods */}
+              <div className="flex items-center gap-1 flex-wrap justify-center">
+                <span className="text-xs uppercase tracking-wider text-white/60 mr-4 hidden sm:block">We accept:</span>
+
+                {/* Cash on Delivery */}
+                <div className="group flex items-center gap-2 bg-white/5 px-3 py-2 rounded-lg">
+                  <img
+                    src="/icons/COD.svg"
+                    alt="COD"
+                    className="w-9 h-11 text-white group-hover:text-green-400" />
+                </div>
+
+                {/* eSewa */}
+                <div className="flex items-center gap-2 bg-white/5 px-3 py-2 rounded-lg">
+                  <img
+                    src="/icons/ESEWA.png"
+                    alt="eSewa"
+                    className="w-18 h-7 text-white group-hover:text-green-400" />
+                  </div>
+
+                {/* Khalti */}
+                <div className="group flex items-center gap-2 bg-white/5 px-3 py-2 rounded-lg">
+                  {/* PLACE YOUR KHALTI ICON HERE */}
+                  <img
+                    src="/icons/KHALTI.png"
+                    alt="Khalti"
+                    className="w-18 h-9 text-white group-hover:text-green-400" />
+                
+                </div>
+
+                {/* Nepal Pay */}
+                <div className="group flex items-center gap-2 bg-white/5 px-3 py-2 rounded-lg">
+                  <img
+                    src="/icons/NCH.png"
+                    alt="Nepal Pay"
+                    className="w-18 h-9 object-contain"
+                  />
+                
+                </div>
+              </div>
+
+              {/* Copyright & Legal */}
+              <div className="flex flex-col gap-4 text-center text-sm text-gray-400 md:flex-row md:items-center md:justify-between md:text-left">
+                <p>© 2026 clo. All rights reserved.</p>
+                <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 md:justify-end">
+                  <Link to="/privacy" className="hover:text-white transition-colors tracking-wider">
+                    Privacy Policy
+                  </Link>
+                  <Link to="/terms" className="hover:text-white transition-colors tracking-wider">
+                    Terms of Service
+                  </Link>
+                </div>
+              </div>
             </div>
           </div>
         </div>

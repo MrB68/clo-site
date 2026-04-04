@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { motion } from "motion/react";
 import { SlidersHorizontal, X } from "lucide-react";
@@ -8,14 +8,23 @@ import { StyleToggle } from "../components/StyleToggle";
 
 export function Shop() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [selectedStyle, setSelectedStyle] = useState<"minimal" | "extravagant">("minimal");
-  const [selectedSize, setSelectedSize] = useState<string>("all");
-  const [priceRange, setPriceRange] = useState<string>("all");
+  const [selectedSize, setSelectedSize] = useState<string>("All");
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 0]);
   const [sortBy, setSortBy] = useState<string>("featured");
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const { products } = useProducts();
+  const prices = products.map((p) => p.price);
+  const minPrice = prices.length ? Math.min(...prices) : 0;
+  const maxPrice = prices.length ? Math.max(...prices) : 100;
+
+  useEffect(() => {
+    if (products.length > 0) {
+      setPriceRange([minPrice, maxPrice]);
+    }
+  }, [products]);
   const searchQuery = searchParams.get("search")?.trim().toLowerCase() ?? "";
 
   // Filter products
@@ -33,32 +42,23 @@ export function Shop() {
     );
   }
 
-  if (selectedCategory !== "all") {
+  if (selectedCategory !== "All") {
     filteredProducts = filteredProducts.filter(
       (p) => p.category === selectedCategory
     );
   }
 
-  if (selectedSize !== "all") {
+  if (selectedSize !== "All") {
     filteredProducts = filteredProducts.filter((p) =>
       p.sizes.includes(selectedSize)
     );
   }
 
-  if (priceRange !== "all") {
-    if (priceRange === "under-100") {
-      filteredProducts = filteredProducts.filter((p) => p.price < 13300);
-    } else if (priceRange === "100-200") {
-      filteredProducts = filteredProducts.filter(
-        (p) => p.price >= 13300 && p.price <= 26600
-      );
-    } else if (priceRange === "200-300") {
-      filteredProducts = filteredProducts.filter(
-        (p) => p.price > 26600 && p.price <= 39900
-      );
-    } else if (priceRange === "over-300") {
-      filteredProducts = filteredProducts.filter((p) => p.price > 39900);
-    }
+  // Slider price filter
+  if (priceRange[0] !== 0 || priceRange[1] !== 0) {
+    filteredProducts = filteredProducts.filter(
+      (p) => p.price >= priceRange[0] && p.price <= priceRange[1]
+    );
   }
 
   // Sort products
@@ -71,16 +71,16 @@ export function Shop() {
   }
 
   const clearFilters = () => {
-    setSelectedCategory("all");
-    setSelectedSize("all");
-    setPriceRange("all");
+    setSelectedCategory("All");
+    setSelectedSize("All");
+    setPriceRange([minPrice, maxPrice]);
   };
 
   const hasActiveFilters =
     searchQuery.length > 0 ||
-    selectedCategory !== "all" ||
-    selectedSize !== "all" ||
-    priceRange !== "all";
+    selectedCategory !== "All" ||
+    selectedSize !== "All" ||
+    !(priceRange[0] === minPrice && priceRange[1] === maxPrice);
 
   const searchLabel = useMemo(() => {
     if (!searchQuery) {
@@ -148,7 +148,7 @@ export function Shop() {
                   <h4 className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
                     Category
                   </h4>
-                  {["all", "men", "women", "accessories"].map((category) => (
+                  {["All", "men", "women", "accessories"].map((category) => (
                     <label
                       key={category}
                       className="flex items-center gap-2 cursor-pointer"
@@ -170,7 +170,7 @@ export function Shop() {
                   <h4 className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
                     Size
                   </h4>
-                  {["all", "XS", "S", "M", "L", "XL"].map((size) => (
+                  {["All", "XS", "S", "M", "L", "XL"].map((size) => (
                     <label
                       key={size}
                       className="flex items-center gap-2 cursor-pointer"
@@ -188,31 +188,55 @@ export function Shop() {
                 </div>
 
                 {/* Price Filter */}
-                <div className="space-y-3">
+                <div className="space-y-4">
                   <h4 className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
                     Price
                   </h4>
-                  {[
-                    { value: "all", label: "All Prices" },
-                    { value: "under-100", label: "Under NPR 13,300" },
-                    { value: "100-200", label: "NPR 13,300 - NPR 26,600" },
-                    { value: "200-300", label: "NPR 26,600 - NPR 39,900" },
-                    { value: "over-300", label: "Over NPR 39,900" },
-                  ].map((option) => (
-                    <label
-                      key={option.value}
-                      className="flex items-center gap-2 cursor-pointer"
-                    >
-                      <input
-                        type="radio"
-                        name="price"
-                        checked={priceRange === option.value}
-                        onChange={() => setPriceRange(option.value)}
-                        className="w-4 h-4"
+
+                  <div className="px-1">
+                    <div className="flex justify-between text-xs text-gray-500 mb-2">
+                      <span>NPR {(Math.round(priceRange[0] / 1000) * 1000).toLocaleString()}</span>
+                      <span>NPR {(Math.round(priceRange[1] / 1000) * 1000).toLocaleString()}</span>
+                    </div>
+
+                    <div className="relative h-1 bg-gray-200 rounded mb-4 hover:bg-gray-300 transition-colors duration-200">
+                      <div
+                        className="absolute h-1 bg-black rounded transition-all duration-300 ease-out"
+                        style={{
+                          left: `${maxPrice > minPrice ? ((priceRange[0] - minPrice) / (maxPrice - minPrice)) * 100 : 0}%`,
+                          width: `${maxPrice > minPrice ? ((priceRange[1] - priceRange[0]) / (maxPrice - minPrice)) * 100 : 0}%`,
+                        }}
                       />
-                      <span className="text-sm tracking-wider">{option.label}</span>
-                    </label>
-                  ))}
+                    </div>
+
+                    <input
+                      type="range"
+                      min={minPrice}
+                      max={maxPrice}
+                      value={priceRange[0]}
+                      onChange={(e) =>
+                        setPriceRange([
+                          Math.min(Number(e.target.value), priceRange[1] - 1),
+                          priceRange[1],
+                        ])
+                      }
+                      className="w-full appearance-none bg-transparent cursor-pointer relative z-10 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:bg-black [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:duration-200 hover:[&::-webkit-slider-thumb]:scale-110 active:[&::-webkit-slider-thumb]:scale-125"
+                    />
+
+                    <input
+                      type="range"
+                      min={minPrice}
+                      max={maxPrice}
+                      value={priceRange[1]}
+                      onChange={(e) =>
+                        setPriceRange([
+                          priceRange[0],
+                          Math.max(Number(e.target.value), priceRange[0] + 1),
+                        ])
+                      }
+                      className="w-full appearance-none bg-transparent -mt-2 cursor-pointer relative z-20 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:bg-black [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:duration-200 hover:[&::-webkit-slider-thumb]:scale-110 active:[&::-webkit-slider-thumb]:scale-125"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -341,7 +365,7 @@ export function Shop() {
               <h4 className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
                 Size
               </h4>
-              {["all", "XS", "S", "M", "L", "XL"].map((size) => (
+              {["All", "XS", "S", "M", "L", "XL"].map((size) => (
                 <label
                   key={size}
                   className="flex items-center gap-2 cursor-pointer"
@@ -359,31 +383,55 @@ export function Shop() {
             </div>
 
             {/* Price Filter */}
-            <div className="space-y-3 mb-6">
+            <div className="space-y-4 mb-6">
               <h4 className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
                 Price
               </h4>
-              {[
-                { value: "all", label: "All Prices" },
-                { value: "under-100", label: "Under $100" },
-                { value: "100-200", label: "$100 - $200" },
-                { value: "200-300", label: "$200 - $300" },
-                { value: "over-300", label: "Over $300" },
-              ].map((option) => (
-                <label
-                  key={option.value}
-                  className="flex items-center gap-2 cursor-pointer"
-                >
-                  <input
-                    type="radio"
-                    name="price-mobile"
-                    checked={priceRange === option.value}
-                    onChange={() => setPriceRange(option.value)}
-                    className="w-4 h-4"
+
+              <div className="px-1">
+                <div className="flex justify-between text-xs text-gray-500 mb-2">
+                  <span>NPR {(Math.round(priceRange[0] / 1000) * 1000).toLocaleString()}</span>
+                  <span>NPR {(Math.round(priceRange[1] / 1000) * 1000).toLocaleString()}</span>
+                </div>
+
+                <div className="relative h-1 bg-gray-200 rounded mb-4 hover:bg-gray-300 transition-colors duration-200">
+                  <div
+                    className="absolute h-1 bg-black rounded transition-all duration-300 ease-out"
+                    style={{
+                      left: `${maxPrice > minPrice ? ((priceRange[0] - minPrice) / (maxPrice - minPrice)) * 100 : 0}%`,
+                      width: `${maxPrice > minPrice ? ((priceRange[1] - priceRange[0]) / (maxPrice - minPrice)) * 100 : 0}%`,
+                    }}
                   />
-                  <span className="text-sm tracking-wider">{option.label}</span>
-                </label>
-              ))}
+                </div>
+
+                <input
+                  type="range"
+                  min={minPrice}
+                  max={maxPrice}
+                  value={priceRange[0]}
+                  onChange={(e) =>
+                    setPriceRange([
+                      Math.min(Number(e.target.value), priceRange[1] - 1),
+                      priceRange[1],
+                    ])
+                  }
+                  className="w-full appearance-none bg-transparent cursor-pointer relative z-10 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:bg-black [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:duration-200 hover:[&::-webkit-slider-thumb]:scale-110 active:[&::-webkit-slider-thumb]:scale-125"
+                />
+
+                <input
+                  type="range"
+                  min={minPrice}
+                  max={maxPrice}
+                  value={priceRange[1]}
+                  onChange={(e) =>
+                    setPriceRange([
+                      priceRange[0],
+                      Math.max(Number(e.target.value), priceRange[0] + 1),
+                    ])
+                  }
+                  className="w-full appearance-none bg-transparent -mt-2 cursor-pointer relative z-20 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:bg-black [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:duration-200 hover:[&::-webkit-slider-thumb]:scale-110 active:[&::-webkit-slider-thumb]:scale-125"
+                />
+              </div>
             </div>
 
             <button

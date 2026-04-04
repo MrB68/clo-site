@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { supabase } from "../../../lib/supabase";
 import { motion } from "motion/react";
 import {
   XAxis,
@@ -48,7 +49,7 @@ function getDaysForTimeRange(timeRange: "7d" | "30d" | "90d") {
 
 export function SalesAnalytics() {
   const { products } = useProducts();
-  const adminSession = getAdminSession();
+  const adminSession = useMemo(() => getAdminSession(), []);
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d');
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [totalOrders, setTotalOrders] = useState(0);
@@ -63,12 +64,21 @@ export function SalesAnalytics() {
   });
 
   useEffect(() => {
-    const syncAnalytics = () => {
+    const syncAnalytics = async () => {
       const now = new Date();
       const cutoff = new Date(now);
       cutoff.setDate(now.getDate() - (getDaysForTimeRange(timeRange) - 1));
 
-      const orders = getStoredOrders()
+      const { data: ordersData, error } = await supabase
+  .from("orders")
+  .select("*");
+
+if (error) {
+  console.error("Supabase error:", error);
+  return;
+}
+
+const orders = (ordersData || [])
         .filter((order) => new Date(order.date) >= cutoff)
         .filter((order) => order.status === "delivered")
         .filter((order) =>
@@ -101,7 +111,7 @@ export function SalesAnalytics() {
 
       const productPerformance = new Map<string, TopProduct>();
       orders.forEach((order) => {
-        order.items.forEach((item) => {
+        order.items.forEach((item: { id: string; name: any; price: number; quantity: number; }) => {
           const product = products.find((entry) => entry.id === item.id);
           const existing = productPerformance.get(item.id) ?? {
             id: item.id,
@@ -122,7 +132,7 @@ export function SalesAnalytics() {
 
       const categoryTotals = new Map<string, number>();
       orders.forEach((order) => {
-        order.items.forEach((item) => {
+        order.items.forEach((item: { id: string; price: number; quantity: number; }) => {
           const category = products.find((entry) => entry.id === item.id)?.category ?? "unknown";
           categoryTotals.set(
             category,
@@ -165,7 +175,7 @@ export function SalesAnalytics() {
       window.removeEventListener("ordersUpdated", syncAnalytics);
       window.removeEventListener("storage", syncAnalytics);
     };
-  }, [adminSession, products, timeRange]);
+  }, [adminSession?.branch, timeRange]);
 
   useEffect(() => {
     const syncAdminTheme = () => {

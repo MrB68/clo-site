@@ -1,13 +1,20 @@
 import { useEffect, useState } from "react";
 import { BadgePercent, Plus, TicketPercent, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import {
-  defaultPromoCodes,
-  getPromoCodes,
-  savePromoCodes,
-  type DiscountOption,
-} from "../../utils/promoCodes";
-import { addRecycleBinItem, appendAdminAuditLog, getAdminSession } from "../../utils/admin";
+import { getAdminSession } from "../../utils/admin";
+import { supabase } from "../../../lib/supabase";
+
+type DiscountOption = {
+  code: string;
+  label: string;
+  description: string;
+  type: "percent" | "flat" | "shipping";
+  value: number;
+  showInCheckout: boolean;
+  expiryDate?: string;
+  usageLimit?: number | null;
+  usedCount?: number | null;
+};
 
 interface PromoCodeForm {
   code: string;
@@ -16,6 +23,8 @@ interface PromoCodeForm {
   type: DiscountOption["type"];
   value: string;
   showInCheckout: "yes" | "no";
+  expiryDate: string;
+  usageLimit: string;
 }
 
 const initialForm: PromoCodeForm = {
@@ -25,26 +34,39 @@ const initialForm: PromoCodeForm = {
   type: "percent",
   value: "",
   showInCheckout: "yes",
+  expiryDate: "",
+  usageLimit: "",
 };
 
 export function PromoCodeManagement() {
   const adminSession = getAdminSession();
-  const [promoCodes, setPromoCodes] = useState<DiscountOption[]>(() => getPromoCodes());
+  const [promoCodes, setPromoCodes] = useState<DiscountOption[]>([]);
   const [form, setForm] = useState<PromoCodeForm>(initialForm);
 
   useEffect(() => {
-    const syncPromoCodes = () => {
-      setPromoCodes(getPromoCodes());
-    };
-
-    window.addEventListener("promoCodesUpdated", syncPromoCodes);
-    window.addEventListener("storage", syncPromoCodes);
-
-    return () => {
-      window.removeEventListener("promoCodesUpdated", syncPromoCodes);
-      window.removeEventListener("storage", syncPromoCodes);
-    };
+    fetchPromoCodes();
   }, []);
+
+  const fetchPromoCodes = async () => {
+    const { data, error } = await supabase
+      .from("promo_codes")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) console.error(error);
+
+    setPromoCodes((data || []).map((p: any) => ({
+      code: p.code,
+      label: p.label,
+      description: p.description,
+      type: p.type,
+      value: p.value,
+      showInCheckout: p.show_in_checkout,
+      expiryDate: p.expiry_date,
+      usageLimit: p.usage_limit,
+      usedCount: p.used_count,
+    })));
+  };
 
   const handleChange = (
     event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -53,7 +75,7 @@ export function PromoCodeManagement() {
     setForm((current) => ({ ...current, [name]: value }));
   };
 
-  const handleAddPromoCode = (event: React.FormEvent) => {
+  const handleAddPromoCode = async (event: React.FormEvent) => {
     event.preventDefault();
 
     const code = form.code.trim().toUpperCase();
@@ -71,98 +93,72 @@ export function PromoCodeManagement() {
       return;
     }
 
-    if (promoCodes.some((promoCode) => promoCode.code === code)) {
-      toast.error("Promo code already exists");
-      return;
-    }
-
-    const nextPromoCodes = [
+    const { error } = await supabase.from("promo_codes").insert([
       {
         code,
         label,
         description,
         type: form.type,
         value: form.type === "shipping" ? 0 : parsedValue,
-        showInCheckout: form.showInCheckout === "yes",
+        show_in_checkout: form.showInCheckout === "yes",
+        expiry_date: form.expiryDate || null,
+        usage_limit: form.usageLimit ? Number(form.usageLimit) : null,
+        used_count: 0,
       },
-      ...promoCodes,
-    ];
+    ]);
 
-    setPromoCodes(nextPromoCodes);
-    savePromoCodes(nextPromoCodes);
+    if (error) {
+      toast.error("Failed to add promo code");
+      return;
+    }
+
+    await fetchPromoCodes();
     setForm({ ...initialForm });
-    if (adminSession) {
-      appendAdminAuditLog({
-        adminId: adminSession.id,
-        adminName: adminSession.name,
-        adminEmail: adminSession.email,
-        branch: adminSession.branch,
-        action: "added",
-        entityType: "promo-code",
-        entityName: code,
-        details: `Created ${form.type} promo code.`,
-      });
-    }
-    toast.success("Promo code added");
   };
 
-  const handleRemovePromoCode = (code: string) => {
-    const removedPromoCode = promoCodes.find((promoCode) => promoCode.code === code);
-    const nextPromoCodes = promoCodes.filter((promoCode) => promoCode.code !== code);
-    setPromoCodes(nextPromoCodes);
-    savePromoCodes(nextPromoCodes);
-    if (removedPromoCode && adminSession) {
-      addRecycleBinItem({
-        entityType: "promoCode",
-        entityId: removedPromoCode.code,
-        entityName: removedPromoCode.code,
-        payload: removedPromoCode,
-        deletedByName: adminSession.name,
-        deletedByEmail: adminSession.email,
-        branch: adminSession.branch,
-      });
-      appendAdminAuditLog({
-        adminId: adminSession.id,
-        adminName: adminSession.name,
-        adminEmail: adminSession.email,
-        branch: adminSession.branch,
-        action: "deleted",
-        entityType: "promo-code",
-        entityName: removedPromoCode.code,
-        details: `Moved promo code to recycle bin.`,
-      });
+  const handleRemovePromoCode = async (promo: DiscountOption) => {
+    try {
+      // 1. insert into recycle_bin
+      await supabase.from("recycle_bin").insert([
+        {
+          entity_type: "promoCode",
+          entity_name: promo.code,
+          payload: promo,
+          deleted_by: adminSession?.email || "admin",
+        },
+      ]);
+
+      // 2. delete from promo_codes
+      await supabase.from("promo_codes").delete().eq("code", promo.code);
+
+      // 3. update UI
+      setPromoCodes((prev) => prev.filter((p) => p.code !== promo.code));
+
+      toast.success("Promo moved to recycle bin");
+    } catch (error) {
+      console.error(error);
+      toast.error("Delete failed");
     }
-    toast.success("Promo code removed");
   };
 
-  const handleToggleVisibility = (code: string) => {
-    const nextPromoCodes = promoCodes.map((promoCode) =>
-      promoCode.code === code
-        ? { ...promoCode, showInCheckout: !promoCode.showInCheckout }
-        : promoCode
-    );
-    setPromoCodes(nextPromoCodes);
-    savePromoCodes(nextPromoCodes);
-    const updatedPromoCode = nextPromoCodes.find((promoCode) => promoCode.code === code);
-    if (updatedPromoCode && adminSession) {
-      appendAdminAuditLog({
-        adminId: adminSession.id,
-        adminName: adminSession.name,
-        adminEmail: adminSession.email,
-        branch: adminSession.branch,
-        action: updatedPromoCode.showInCheckout ? "showed" : "hid",
-        entityType: "promo-code",
-        entityName: updatedPromoCode.code,
-        details: `Updated checkout visibility.`,
-      });
+  const handleToggleVisibility = async (code: string) => {
+    const current = promoCodes.find((p) => p.code === code);
+    if (!current) return;
+
+    const { error } = await supabase
+      .from("promo_codes")
+      .update({ show_in_checkout: !current.showInCheckout })
+      .eq("code", code);
+
+    if (!error) {
+      await fetchPromoCodes();
     }
-    toast.success("Promo code visibility updated");
   };
 
-  const handleResetDefaults = () => {
-    setPromoCodes(defaultPromoCodes);
-    savePromoCodes(defaultPromoCodes);
-    toast.success("Default promo codes restored");
+  const handleResetDefaults = async () => {
+    await supabase.from("promo_codes").delete().neq("code", "");
+    await fetchPromoCodes();
+    toast.success("Promo codes cleared");
   };
 
   return (
@@ -261,6 +257,14 @@ export function PromoCodeManagement() {
                       </div>
                       <p className="mt-1 text-sm font-medium text-gray-900">{promoCode.label}</p>
                       <p className="text-sm text-gray-600">{promoCode.description}</p>
+                      <p className="text-xs text-gray-500">
+                        Used: {promoCode.usedCount || 0} / {promoCode.usageLimit || "∞"}
+                      </p>
+                      {promoCode.expiryDate && (
+                        <p className="text-xs text-gray-500">
+                          Expires: {new Date(promoCode.expiryDate).toLocaleDateString()}
+                        </p>
+                      )}
                   </div>
                   <div className="flex items-center gap-4">
                     <p className="text-sm font-medium text-gray-700">
@@ -279,7 +283,7 @@ export function PromoCodeManagement() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleRemovePromoCode(promoCode.code)}
+                      onClick={() => handleRemovePromoCode(promoCode)}
                       className="inline-flex items-center gap-2 text-sm font-medium text-red-600 hover:text-red-700"
                     >
                       <Trash2 size={16} />
@@ -342,6 +346,21 @@ export function PromoCodeManagement() {
               placeholder={form.type === "percent" ? "Percentage value" : "Discount value"}
               disabled={form.type === "shipping"}
               className="w-full border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:border-black disabled:bg-gray-100"
+            />
+            <input
+              type="date"
+              name="expiryDate"
+              value={form.expiryDate}
+              onChange={handleChange}
+              className="w-full border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:border-black"
+            />
+            <input
+              type="number"
+              name="usageLimit"
+              value={form.usageLimit}
+              onChange={handleChange}
+              placeholder="Usage Limit"
+              className="w-full border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:border-black"
             />
             <select
               name="showInCheckout"

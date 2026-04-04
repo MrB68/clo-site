@@ -1,42 +1,41 @@
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { CheckCircle2, Eye, FileImage, Mail, MessageSquare, Phone, Palette } from "lucide-react";
-import {
-  getCustomDesignSubmissions,
-  saveCustomDesignSubmissions,
-  type CustomDesignSubmission,
-} from "../../utils/customDesigns";
+import { supabase } from "../../../lib/supabase";
 
 export function CustomDesignManagement() {
-  const [submissions, setSubmissions] = useState<CustomDesignSubmission[]>(() =>
-    getCustomDesignSubmissions()
-  );
-  const [selectedSubmission, setSelectedSubmission] =
-    useState<CustomDesignSubmission | null>(null);
+  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [selectedSubmission, setSelectedSubmission] = useState<any | null>(null);
 
   useEffect(() => {
-    const syncSubmissions = () => {
-      setSubmissions(getCustomDesignSubmissions());
+    const fetchDesigns = async () => {
+      const { data, error } = await supabase
+        .from("custom_designs")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (!error) {
+        setSubmissions(data || []);
+      }
     };
 
-    window.addEventListener("customDesignSubmissionsUpdated", syncSubmissions);
-    window.addEventListener("storage", syncSubmissions);
-
-    return () => {
-      window.removeEventListener("customDesignSubmissionsUpdated", syncSubmissions);
-      window.removeEventListener("storage", syncSubmissions);
-    };
+    fetchDesigns();
   }, []);
 
-  const updateSubmissionStatus = (
-    submissionId: string,
-    status: CustomDesignSubmission["status"]
-  ) => {
-    const updatedSubmissions = submissions.map((submission) =>
-      submission.id === submissionId ? { ...submission, status } : submission
-    );
-    setSubmissions(updatedSubmissions);
-    saveCustomDesignSubmissions(updatedSubmissions);
+  const updateSubmissionStatus = async (submissionId: string, status: string) => {
+    const { error } = await supabase
+      .from("custom_designs")
+      .update({ status })
+      .eq("id", submissionId);
+
+    if (!error) {
+      const { data } = await supabase
+        .from("custom_designs")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      setSubmissions(data || []);
+    }
   };
 
   const formatDate = (dateString: string) =>
@@ -48,7 +47,7 @@ export function CustomDesignManagement() {
       minute: "2-digit",
     });
 
-  const getStatusColor = (status: CustomDesignSubmission["status"]) => {
+  const getStatusColor = (status: string) => {
     switch (status) {
       case "new":
         return "bg-blue-100 text-blue-700";
@@ -151,9 +150,9 @@ export function CustomDesignManagement() {
                   </div>
                   <p className="text-sm font-medium text-gray-900">{submission.name}</p>
                   <p className="text-sm text-gray-600">
-                    {submission.productType} x {submission.quantity}
+                    {submission.product_type} x {submission.quantity}
                   </p>
-                  <p className="text-sm text-gray-500">{formatDate(submission.createdAt)}</p>
+                  <p className="text-sm text-gray-500">{formatDate(submission.created_at)}</p>
                 </div>
 
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -162,7 +161,7 @@ export function CustomDesignManagement() {
                     onChange={(event) =>
                       updateSubmissionStatus(
                         submission.id,
-                        event.target.value as CustomDesignSubmission["status"]
+                        event.target.value
                       )
                     }
                     className="border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-black"
@@ -206,7 +205,7 @@ export function CustomDesignManagement() {
                 <h3 className="text-xl font-semibold tracking-widest uppercase">
                   {selectedSubmission.id}
                 </h3>
-                <p className="text-sm text-gray-600">{formatDate(selectedSubmission.createdAt)}</p>
+                <p className="text-sm text-gray-600">{formatDate(selectedSubmission.created_at)}</p>
               </div>
               <button
                 type="button"
@@ -232,7 +231,7 @@ export function CustomDesignManagement() {
                     Request
                   </h4>
                   <p className="text-sm text-gray-700">
-                    Product: {selectedSubmission.productType}
+                    Product: {selectedSubmission.product_type}
                   </p>
                   <p className="text-sm text-gray-700">
                     Quantity: {selectedSubmission.quantity}
@@ -256,30 +255,12 @@ export function CustomDesignManagement() {
                 <h4 className="mb-3 text-sm font-semibold uppercase tracking-wider">
                   Uploaded Design
                 </h4>
-                {selectedSubmission.file ? (
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3 text-sm text-gray-700">
-                      <FileImage size={18} />
-                      <span>{selectedSubmission.file.name}</span>
-                    </div>
-                    {selectedSubmission.file.type.startsWith("image/") ? (
-                      <img
-                        src={selectedSubmission.file.dataUrl}
-                        alt={selectedSubmission.file.name}
-                        className="max-h-[28rem] w-full rounded border border-gray-200 object-contain"
-                      />
-                    ) : (
-                      <a
-                        href={selectedSubmission.file.dataUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-2 border border-black px-4 py-2 text-sm font-medium uppercase tracking-wider transition hover:bg-black hover:text-white dark:border-white dark:hover:bg-white dark:hover:text-black"
-                      >
-                        <Eye size={16} />
-                        Open File
-                      </a>
-                    )}
-                  </div>
+                {selectedSubmission.image_url ? (
+                  <img
+                    src={selectedSubmission.image_url}
+                    alt="Design"
+                    className="max-h-[28rem] w-full rounded border border-gray-200 object-contain"
+                  />
                 ) : (
                   <p className="text-sm text-gray-600">No file attached.</p>
                 )}

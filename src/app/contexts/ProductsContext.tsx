@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-
+import { supabase } from '../../lib/supabase';
 export interface Product {
   id: string;
   name: string;
@@ -422,70 +422,41 @@ const loadProducts = (): Product[] => {
 };
 
 export const ProductsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [products, setProducts] = useState<Product[]>(loadProducts);
+  const [products, setProducts] = useState<Product[]>([]);
 
-  // Listen for storage changes and custom product update events
   useEffect(() => {
-    // Handler for storage changes (when admin updates products, or cross-window updates)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'mainProducts' && e.newValue) {
-        try {
-          const updatedProducts = JSON.parse(e.newValue);
-          setProducts(updatedProducts.map((p: any) => ({
-            ...p,
-            image: p.images && p.images.length > 0 ? p.images[0] : (p.image || ''),
-            stock: p.stock ?? 10,
-            featured: p.featured ?? false,
-            rating: p.rating ?? 0,
-            reviews: p.reviews ?? 0,
-            tags: p.tags ?? [],
-            material: p.material ?? '',
-            careInstructions: p.careInstructions ?? '',
-            createdAt: p.createdAt ?? new Date().toISOString(),
-            updatedAt: p.updatedAt ?? new Date().toISOString(),
-            category: p.category || 'women',
-            style: p.style || 'minimal'
-          })));
-        } catch (error) {
-          console.error('Error parsing products from storage event:', error);
-        }
+    const fetchProducts = async () => {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*');
+
+      if (error) {
+        console.error('Supabase error:', error);
+      } else {
+        setProducts((data || []).map((p: any) => ({
+          ...p,
+          image: p?.image || p?.images?.[0] || "",
+          images: Array.isArray(p?.images) ? p.images : (p?.image ? [p.image] : []),
+          sizes: p?.sizes || [],
+          colors: p?.colors || [],
+          description: p?.description || "",
+          price: p?.price ?? 0,
+          category: p?.category || "women",
+          style: p?.style || "minimal",
+          stock: p?.stock ?? 10,
+          featured: p?.featured ?? false,
+          rating: p?.rating ?? 0,
+          reviews: p?.reviews ?? 0,
+          tags: p?.tags ?? [],
+          material: p?.material ?? "",
+          careInstructions: p?.care_instructions ?? "",
+          createdAt: p?.created_at ?? new Date().toISOString(),
+          updatedAt: p?.updated_at ?? new Date().toISOString()
+         })));
       }
     };
 
-    // Handler for custom product update events from admin panel (same window)
-    const handleProductsUpdate = () => {
-      try {
-        const savedProducts = localStorage.getItem('mainProducts');
-        if (savedProducts) {
-          const updatedProducts = JSON.parse(savedProducts);
-          setProducts(updatedProducts.map((p: any) => ({
-            ...p,
-            image: p.images && p.images.length > 0 ? p.images[0] : (p.image || ''),
-            stock: p.stock ?? 10,
-            featured: p.featured ?? false,
-            rating: p.rating ?? 0,
-            reviews: p.reviews ?? 0,
-            tags: p.tags ?? [],
-            material: p.material ?? '',
-            careInstructions: p.careInstructions ?? '',
-            createdAt: p.createdAt ?? new Date().toISOString(),
-            updatedAt: p.updatedAt ?? new Date().toISOString(),
-            category: p.category || 'women',
-            style: p.style || 'minimal'
-          })));
-        }
-      } catch (error) {
-        console.error('Error handling products update event:', error);
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('productsUpdated', handleProductsUpdate);
-
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('productsUpdated', handleProductsUpdate);
-    };
+    fetchProducts();
   }, []);
 
   const refreshProducts = () => {

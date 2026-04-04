@@ -63,7 +63,7 @@ export function Profile() {
   };
 
   const derivedName = useMemo(() => {
-    const fullName = user.name.trim();
+    const fullName = (user.name || "").trim();
     const parts = fullName.split(/\s+/);
 
     return {
@@ -199,7 +199,7 @@ export function Profile() {
                       {savedDetails.profileImage ? (
                         <img
                           src={savedDetails.profileImage}
-                          alt={user.name}
+                          alt={user.name || "User"}
                           className="h-full w-full object-cover"
                         />
                       ) : (
@@ -217,9 +217,9 @@ export function Profile() {
                     </label>
                   </div>
                   <div>
-                    <h3 className="font-medium tracking-wider">{user.name}</h3>
+                    <h3 className="font-medium tracking-wider">{user.name || "User"}</h3>
                     <p className="text-sm text-gray-500 tracking-wider uppercase">
-                      Member since {formatDate(user.createdAt)}
+                      Member since N/A
                     </p>
                   </div>
                 </div>
@@ -234,7 +234,7 @@ export function Profile() {
                     </label>
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded">
                       <User size={16} className="text-gray-400" />
-                      <span className="tracking-wider">{user.name}</span>
+                      <span className="tracking-wider">{user.name || "User"}</span>
                     </div>
                   </div>
 
@@ -254,7 +254,7 @@ export function Profile() {
                     </label>
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded">
                       <Calendar size={16} className="text-gray-400" />
-                      <span className="tracking-wider">{formatDate(user.createdAt)}</span>
+                      <span className="tracking-wider">N/A</span>
                     </div>
                   </div>
 

@@ -1,119 +1,48 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, JSXElementConstructor, Key, ReactElement, ReactNode, ReactPortal } from "react";
 import { motion } from "motion/react";
 import { Search, Eye, Edit, Truck, CheckCircle, XCircle, Clock, Package, Printer } from "lucide-react";
 import { toast } from "sonner";
-import { getStoredOrders, saveStoredOrders, type StoredOrder } from "../../utils/orders";
+import { supabase } from "../../../lib/supabase";
 import { appendAdminAuditLog, getAdminSession } from "../../utils/admin";
 
-type Order = StoredOrder;
+type Order = any;
 
-const mockOrders: Order[] = [
-  {
-    id: "ORD-001",
-    customerName: "Sarah Johnson",
-    customerEmail: "sarah.j@email.com",
-    date: "2024-01-15",
-    status: "delivered",
-    total: 33117,
-    source: "website",
-    branch: "Bagmati Branch",
-    shippingAddress: "123 Main St, Kathmandu, Nepal",
-    trackingNumber: "TK123456789",
-    items: [
-      { id: "3", name: "Urban Streetwear Set", quantity: 1, price: 33117 }
-    ]
-  },
-  {
-    id: "ORD-002",
-    customerName: "Mike Chen",
-    customerEmail: "mike.chen@email.com",
-    date: "2024-01-14",
-    status: "shipped",
-    total: 21147,
-    source: "instagram",
-    branch: "Gandaki Branch",
-    shippingAddress: "456 Oak Ave, Pokhara, Nepal",
-    trackingNumber: "TK987654321",
-    items: [
-      { id: "11", name: "Black Knit Sweater", quantity: 1, price: 21147 }
-    ]
-  },
-  {
-    id: "ORD-003",
-    customerName: "Emma Davis",
-    customerEmail: "emma.davis@email.com",
-    date: "2024-01-13",
-    status: "processing",
-    total: 159000,
-    source: "facebook",
-    branch: "Bagmati Branch",
-    shippingAddress: "789 Pine Rd, Lalitpur, Nepal",
-    items: [
-      { id: "1", name: "Classic Black Jacket", quantity: 1, price: 39867 },
-      { id: "6", name: "Essential White Tee", quantity: 2, price: 7847 }
-    ]
-  },
-  {
-    id: "ORD-004",
-    customerName: "Alex Rodriguez",
-    customerEmail: "alex.rodriguez@email.com",
-    date: "2024-01-12",
-    status: "pending",
-    total: 398000,
-    source: "tiktok",
-    branch: "Bagmati Branch",
-    shippingAddress: "321 Elm St, Bhaktapur, Nepal",
-    items: [
-      { id: "9", name: "Runway Collection Piece", quantity: 1, price: 398000 }
-    ]
-  },
-  {
-    id: "ORD-005",
-    customerName: "Lisa Wang",
-    customerEmail: "lisa.wang@email.com",
-    date: "2024-01-11",
-    status: "cancelled",
-    total: 46417,
-    source: "website",
-    branch: "Bagmati Branch",
-    shippingAddress: "654 Cedar Ln, Kathmandu, Nepal",
-    items: [
-      { id: "5", name: "Premium Denim Jacket", quantity: 1, price: 46417 }
-    ]
-  }
-];
 
 export function OrderManagement() {
-  const [orders, setOrders] = useState<Order[]>(() => {
-    const storedOrders = getStoredOrders();
-    return storedOrders.length > 0 ? storedOrders : mockOrders;
-  });
-  const [filteredOrders, setFilteredOrders] = useState<Order[]>(() => {
-    const storedOrders = getStoredOrders();
-    return storedOrders.length > 0 ? storedOrders : mockOrders;
-  });
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [remarksDraft, setRemarksDraft] = useState<Record<string, string>>({});
   const [exchangeResponseDraft, setExchangeResponseDraft] = useState("");
-  const adminSession = getAdminSession();
+  const adminSession = useMemo(() => getAdminSession(), []);
 
+  const fetchOrders = async () => {
+  const { data, error } = await supabase.from("orders").select("*");
+
+  if (error) {
+    console.error("Error fetching orders:", error);
+    return;
+  }
+
+  setOrders(
+    (data || []).map((o: any) => ({
+      ...o,
+      customerName: o.customer_name,
+      customerEmail: o.customer_email,
+      date: o.created_at,
+      shippingAddress: o.address,
+    }))
+  );
+};
+
+//user effect to fetch orders on component mount
   useEffect(() => {
-    const syncOrders = () => {
-      const storedOrders = getStoredOrders();
-      setOrders(storedOrders.length > 0 ? storedOrders : mockOrders);
-    };
+  fetchOrders();
+}, []);
 
-    window.addEventListener("ordersUpdated", syncOrders);
-    window.addEventListener("storage", syncOrders);
-
-    return () => {
-      window.removeEventListener("ordersUpdated", syncOrders);
-      window.removeEventListener("storage", syncOrders);
-    };
-  }, []);
 
   useEffect(() => {
     let filtered = orders;
@@ -142,36 +71,31 @@ export function OrderManagement() {
     }
 
     setFilteredOrders(filtered);
-  }, [adminSession, orders, searchTerm, statusFilter, sourceFilter]);
+  }, [adminSession?.branch, orders, searchTerm, statusFilter, sourceFilter]);
 
-  const updateOrderStatus = (orderId: string, newStatus: Order['status']) => {
-    setOrders((prevOrders) => {
-      const updatedOrders = prevOrders.map((order) =>
-        order.id === orderId ? { ...order, status: newStatus } : order
+  const updateOrderStatus = async (orderId: string, newStatus: string) => {
+    const { error } = await supabase
+      .from("orders")
+      .update({ status: newStatus })
+      .eq("id", orderId);
+
+    if (error) {
+      console.error(error);
+      toast.error("Failed to update status");
+    } else {
+      setOrders((prev) =>
+        prev.map((order) =>
+          order.id === orderId ? { ...order, status: newStatus } : order
+        )
       );
-
-      saveStoredOrders(updatedOrders);
-      const updatedOrder = updatedOrders.find((order) => order.id === orderId);
-      if (adminSession && updatedOrder) {
-        appendAdminAuditLog({
-          adminId: adminSession.id,
-          adminName: adminSession.name,
-          adminEmail: adminSession.email,
-          branch: adminSession.branch,
-          action: "updated order status",
-          entityType: "order",
-          entityName: updatedOrder.id,
-          details: `Changed status to ${newStatus}.`,
-        });
-      }
-      return updatedOrders;
-    });
+      await fetchOrders();
+    }
   };
 
   const openOrderModal = (order: Order) => {
     setSelectedOrder(order);
     setRemarksDraft(
-      Object.fromEntries(order.items.map((item) => [item.id, item.adminRemark ?? ""]))
+      Object.fromEntries(order.items.map((item: { id: any; adminRemark: any; }) => [String(item.id), item.adminRemark ?? ""]))
     );
     setExchangeResponseDraft(order.exchangeRequest?.adminMessage ?? "");
   };
@@ -218,7 +142,7 @@ export function OrderManagement() {
             <tbody>
               ${order.items
                 .map(
-                  (item) => `
+                  (item: { name: any; quantity: any; price: { toLocaleString: () => any; }; adminRemark: any; }) => `
                     <tr>
                       <td>${item.name}</td>
                       <td>${item.quantity}</td>
@@ -251,88 +175,58 @@ export function OrderManagement() {
     }
   };
 
-  const handleSaveRemarks = () => {
-    if (!selectedOrder) {
+  const handleSaveRemarks = async () => {
+    if (!selectedOrder) return;
+
+    const updatedItems = selectedOrder.items.map((item: any) => ({
+      ...item,
+      adminRemark: (remarksDraft[String(item.id)] ?? "").trim(),
+    }));
+
+    const { error } = await supabase
+      .from("orders")
+      .update({ items: updatedItems })
+      .eq("id", selectedOrder.id);
+
+    if (error) {
+      console.error(error);
+      toast.error("Failed to save remarks");
       return;
     }
 
-    setOrders((prevOrders) => {
-      const updatedOrders = prevOrders.map((order) =>
-        order.id === selectedOrder.id
-          ? {
-              ...order,
-              items: order.items.map((item) => ({
-                ...item,
-                adminRemark: remarksDraft[item.id]?.trim() ?? "",
-              })),
-            }
-          : order
-      );
-
-      const updatedOrder = updatedOrders.find((order) => order.id === selectedOrder.id) ?? null;
-      saveStoredOrders(updatedOrders);
-      setSelectedOrder(updatedOrder);
-
-      if (adminSession && updatedOrder) {
-        appendAdminAuditLog({
-          adminId: adminSession.id,
-          adminName: adminSession.name,
-          adminEmail: adminSession.email,
-          branch: adminSession.branch,
-          action: "updated",
-          entityType: "order",
-          entityName: updatedOrder.id,
-          details: "Saved item-specific admin remarks.",
-        });
-      }
-
-      return updatedOrders;
-    });
-
-    toast.success("Order remarks saved.");
+    await fetchOrders();
+    toast.success("Order remarks saved");
   };
 
-  const handleExchangeDecision = (orderId: string, decision: "approved" | "rejected") => {
-    setOrders((prevOrders) => {
-      const updatedOrders = prevOrders.map((order) =>
-        order.id === orderId && order.exchangeRequest
-          ? {
-              ...order,
-              status: decision === "approved" ? "exchange_requested" : "delivered",
-              exchangeRequest: {
-                ...order.exchangeRequest,
-                status: decision,
-                adminMessage: exchangeResponseDraft.trim(),
-                reviewedAt: new Date().toISOString(),
-                reviewedBy: adminSession?.name || "Admin",
-              },
-            }
-          : order
-      );
+  const handleExchangeDecision = async (orderId: string, decision: "approved" | "rejected") => {
+    const order = orders.find((o) => o.id === orderId);
+    if (!order || !order.exchangeRequest) return;
 
-      const updatedOrder = updatedOrders.find((order) => order.id === orderId) ?? null;
-      saveStoredOrders(updatedOrders);
-      setSelectedOrder(updatedOrder);
+    const updatedExchange = {
+      ...order.exchangeRequest,
+      status: decision,
+      adminMessage: exchangeResponseDraft.trim(),
+      reviewedAt: new Date().toISOString(),
+      reviewedBy: adminSession?.name || "Admin",
+    };
 
-      if (adminSession && updatedOrder) {
-        appendAdminAuditLog({
-          adminId: adminSession.id,
-          adminName: adminSession.name,
-          adminEmail: adminSession.email,
-          branch: adminSession.branch,
-          action: decision === "approved" ? "approved" : "rejected",
-          entityType: "exchange request",
-          entityName: updatedOrder.id,
-          details: `${decision === "approved" ? "Approved" : "Rejected"} exchange request.`,
-        });
-      }
+    const { error } = await supabase
+      .from("orders")
+      .update({
+        status: decision === "approved" ? "exchange_requested" : "delivered",
+        exchangeRequest: updatedExchange,
+      })
+      .eq("id", orderId);
 
-      return updatedOrders;
-    });
+    if (error) {
+      console.error(error);
+      toast.error("Failed to update exchange request");
+      return;
+    }
 
-    toast.success(
-      decision === "approved" ? "Exchange request approved." : "Exchange request rejected."
-    );
+    await fetchOrders();
+    setSelectedOrder(null);
+    toast.success("Exchange updated");
   };
 
   const getStatusIcon = (status: Order['status']) => {
@@ -626,7 +520,7 @@ export function OrderManagement() {
               <div>
                 <h4 className="font-medium mb-4 tracking-wider uppercase">Items</h4>
                 <div className="space-y-3">
-                  {selectedOrder.items.map((item) => (
+                  { selectedOrder.items.map((item: any) => (
                     <div key={item.id} className="py-3 border-b border-gray-100">
                       <div className="flex items-center justify-between gap-4">
                       <div>
@@ -640,11 +534,11 @@ export function OrderManagement() {
                           Admin Remark For This Product
                         </label>
                         <textarea
-                          value={remarksDraft[item.id] ?? ""}
+                          value={remarksDraft[String(item.id)] ?? ""}
                           onChange={(event) =>
                             setRemarksDraft((current) => ({
                               ...current,
-                              [item.id]: event.target.value,
+                              [String(item.id)]: event.target.value,
                             }))
                           }
                           rows={2}
@@ -688,7 +582,7 @@ export function OrderManagement() {
                   </div>
                   {selectedOrder.exchangeRequest.images.length > 0 ? (
                     <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                      {selectedOrder.exchangeRequest.images.map((image, index) => (
+                      {selectedOrder.exchangeRequest.images.map((image: string | undefined, index: number) => (
                         <img
                           key={`${selectedOrder.id}-exchange-${index}`}
                           src={image}

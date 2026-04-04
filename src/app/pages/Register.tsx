@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import { Eye, EyeOff, ArrowLeft, Check } from "lucide-react";
-import { useAuth } from "../contexts/AuthContext";
+import { supabase } from "../../lib/supabase";
 
 export function Register() {
   const [formData, setFormData] = useState({
@@ -17,7 +17,6 @@ export function Register() {
   const [isLoading, setIsLoading] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
-  const { signUp } = useAuth();
   const navigate = useNavigate();
 
   const handleInputChange = (field: string, value: string) => {
@@ -62,12 +61,30 @@ export function Register() {
     setIsLoading(true);
 
     try {
-      const success = await signUp(formData.name, formData.email, formData.password);
-      if (success) {
-        navigate("/");
-      } else {
-        setError("An account with this email already exists");
+      // Step 1: Create user in Supabase Auth
+      const { data, error } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+      });
+
+      if (error) {
+        setError(error.message);
+        return;
       }
+
+      // Step 2: Insert into profiles table
+      if (data.user) {
+        await supabase.from("profiles").insert([
+          {
+            id: data.user.id,
+            email: formData.email,
+            name: formData.name,
+            role: "user",
+          },
+        ]);
+      }
+
+      navigate("/");
     } catch (err) {
       setError("An error occurred. Please try again.");
     } finally {

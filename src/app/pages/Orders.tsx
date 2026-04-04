@@ -5,26 +5,16 @@ import { ArrowLeft, Package, Clock, CheckCircle, Truck, XCircle } from "lucide-r
 import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
 import { useProducts } from "../contexts/ProductsContext";
-import { getStoredOrders, saveStoredOrders, type StoredOrder } from "../utils/orders";
-import {
-  appendStoredReview,
-  getStoredReviews,
-  type StoredReview,
-} from "../utils/reviews";
+import { supabase } from "../../lib/supabase";
+import { StoredReview } from "../utils/reviews";
 
-type OrderItemWithImage = StoredOrder["items"][number] & {
-  image: string;
-};
-
-type CustomerOrder = StoredOrder & {
-  items: OrderItemWithImage[];
-};
+type CustomerOrder = any;
 
 export function Orders() {
   const { user } = useAuth();
   const { products } = useProducts();
-  const [storedOrders, setStoredOrders] = useState<StoredOrder[]>(() => getStoredOrders());
-  const [storedReviews, setStoredReviews] = useState<StoredReview[]>(() => getStoredReviews());
+  const [storedOrders, setStoredOrders] = useState<any[]>([]);
+  const [storedReviews, setStoredReviews] = useState<any[]>([]);
   const [reviewDraft, setReviewDraft] = useState({
     orderId: "",
     productId: "",
@@ -43,44 +33,51 @@ export function Orders() {
   });
 
   useEffect(() => {
-    const syncOrders = () => {
-      setStoredOrders(getStoredOrders());
+    const fetchOrders = async () => {
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from("orders")
+        .select("*")
+        .eq("customer_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (!error) {
+        setStoredOrders(data || []);
+      }
     };
 
-    syncOrders();
-    window.addEventListener("ordersUpdated", syncOrders);
-    window.addEventListener("storage", syncOrders);
-
-    return () => {
-      window.removeEventListener("ordersUpdated", syncOrders);
-      window.removeEventListener("storage", syncOrders);
-    };
-  }, []);
+    fetchOrders();
+  }, [user]);
 
   useEffect(() => {
-    const syncReviews = () => {
-      setStoredReviews(getStoredReviews());
-    };
-
-    syncReviews();
-    window.addEventListener("reviewsUpdated", syncReviews);
-    window.addEventListener("storage", syncReviews);
+    const channel = supabase
+      .channel("orders")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "orders" },
+        () => {
+          if (user) {
+            supabase
+              .from("orders")
+              .select("*")
+              .eq("customer_id", user.id)
+              .then(({ data }) => setStoredOrders(data || []));
+          }
+        }
+      )
+      .subscribe();
 
     return () => {
-      window.removeEventListener("reviewsUpdated", syncReviews);
-      window.removeEventListener("storage", syncReviews);
+      supabase.removeChannel(channel);
     };
-  }, []);
+  }, [user]);
 
   const visibleOrders = useMemo(() => {
-    const userOrders = user
-      ? storedOrders.filter((order) => order.customerEmail === user.email)
-      : [];
-    const ordersToRender = userOrders.length > 0 ? userOrders : storedOrders;
-
+    const ordersToRender = storedOrders;
     return ordersToRender.map((order) => ({
       ...order,
-      items: order.items.map((item) => ({
+      items: order.items.map((item: any) => ({
         ...item,
         image:
           products.find((product) => product.id === item.id)?.image ||
@@ -88,7 +85,7 @@ export function Orders() {
           "https://images.unsplash.com/photo-1441986300917-64674bd600d8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
       })),
     }));
-  }, [products, storedOrders, user]);
+  }, [products, storedOrders]);
 
   if (!user) {
     return (
@@ -194,7 +191,7 @@ export function Orders() {
     setReviewModalOpen(true);
   };
 
-  const handleSubmitReview = () => {
+  const handleSubmitReview = async () => {
     if (!user) {
       return;
     }
@@ -204,18 +201,20 @@ export function Orders() {
       return;
     }
 
-    appendStoredReview({
-      orderId: reviewDraft.orderId,
-      customerName: user.name,
-      customerEmail: user.email,
-      productId: reviewDraft.productId,
-      productName: reviewDraft.productName,
-      rating: reviewDraft.rating,
-      title: reviewDraft.title.trim(),
-      comment: reviewDraft.comment.trim(),
-    });
+    await supabase.from("reviews").insert([
+      {
+        order_id: reviewDraft.orderId,
+        customer_name: user.name || "User",
+        customer_email: user.email,
+        product_id: reviewDraft.productId,
+        product_name: reviewDraft.productName,
+        rating: reviewDraft.rating,
+        title: reviewDraft.title.trim(),
+        comment: reviewDraft.comment.trim(),
+        status: "pending",
+      },
+    ]);
 
-    setStoredReviews(getStoredReviews());
     setReviewModalOpen(false);
     toast.success("Review submitted for admin approval");
   };
@@ -269,7 +268,7 @@ export function Orders() {
     });
   };
 
-  const handleSubmitExchangeRequest = () => {
+  const handleSubmitExchangeRequest = async () => {
     if (!selectedExchangeOrder) {
       return;
     }
@@ -279,26 +278,24 @@ export function Orders() {
       return;
     }
 
-    const nextOrders = storedOrders.map((order) =>
-      order.id === selectedExchangeOrder.id
-        ? {
-            ...order,
-            status: "exchange_requested" as const,
-            exchangeRequest: {
-              status: "pending" as const,
-              reason: exchangeDraft.reason.trim(),
-              images: exchangeDraft.images,
-              requestedAt: new Date().toISOString(),
-            },
-          }
-        : order
-    );
+    const { error } = await supabase
+      .from("orders")
+      .update({
+        status: "exchange_requested",
+        exchangeRequest: {
+          status: "pending",
+          reason: exchangeDraft.reason.trim(),
+          images: exchangeDraft.images,
+          requestedAt: new Date().toISOString(),
+        },
+      })
+      .eq("id", selectedExchangeOrder.id);
 
-    saveStoredOrders(nextOrders);
-    setStoredOrders(getStoredOrders());
-    setSelectedExchangeOrder(null);
-    setExchangeDraft({ reason: "", images: [] });
-    toast.success("Exchange request sent for admin review");
+    if (!error) {
+      toast.success("Exchange request sent for admin review");
+      setSelectedExchangeOrder(null);
+      setExchangeDraft({ reason: "", images: [] });
+    }
   };
 
   const trackingSteps: CustomerOrder["status"][] = [
@@ -397,7 +394,7 @@ export function Orders() {
 
                 {/* Order Items */}
                 <div className="px-6 py-4">
-                  {order.items.map((item) => (
+                  {order.items.map((item: any) => (
                     <div key={item.id} className="mb-4 last:mb-0">
                       <div className="flex items-center gap-4">
                       <img
@@ -666,7 +663,7 @@ export function Orders() {
               <div>
                 <p className="text-xs uppercase tracking-wider text-gray-500">Items</p>
                 <div className="mt-3 space-y-3">
-                  {selectedOrderDetails.items.map((item) => (
+                  {selectedOrderDetails.items.map((item: any) => (
                     <div key={item.id} className="flex items-center justify-between rounded border border-gray-200 px-4 py-3">
                       <div className="flex items-center gap-3">
                         <img src={item.image} alt={item.name} className="h-12 w-12 rounded object-cover" />

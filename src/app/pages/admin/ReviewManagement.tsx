@@ -3,15 +3,15 @@ import { motion } from "motion/react";
 import { Star, ThumbsUp, ThumbsDown, MessageSquare, Eye, Check, X, Filter } from "lucide-react";
 import { toast } from "sonner";
 import { appendAdminAuditLog, getAdminSession } from "../../utils/admin";
-import { getStoredReviews, saveStoredReviews, type StoredReview } from "../../utils/reviews";
 import { getCustomerProfileByEmail } from "../../utils/customerProfile";
+import { supabase } from "../../../lib/supabase";
 
-type Review = StoredReview;
+type Review = any;
 
 export function ReviewManagement() {
   const adminSession = getAdminSession();
-  const [reviews, setReviews] = useState<Review[]>(() => getStoredReviews());
-  const [filteredReviews, setFilteredReviews] = useState<Review[]>(() => getStoredReviews());
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [filteredReviews, setFilteredReviews] = useState<Review[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [ratingFilter, setRatingFilter] = useState<string>("all");
   const [selectedReview, setSelectedReview] = useState<Review | null>(null);
@@ -19,22 +19,23 @@ export function ReviewManagement() {
   const [replyDraft, setReplyDraft] = useState("");
 
   useEffect(() => {
-    const syncReviews = () => {
-      const storedReviews = getStoredReviews();
-      setReviews(storedReviews);
-      setFilteredReviews(storedReviews);
-    };
+  const fetchReviews = async () => {
+    const { data, error } = await supabase
+      .from("reviews")
+      .select("*")
+      .order("created_at", { ascending: false });
 
-    syncReviews();
-    window.addEventListener("reviewsUpdated", syncReviews);
-    window.addEventListener("storage", syncReviews);
+    if (error) {
+      console.error("Review fetch error:", error);
+      return;
+    }
 
-    return () => {
-      window.removeEventListener("reviewsUpdated", syncReviews);
-      window.removeEventListener("storage", syncReviews);
-    };
-  }, []);
+    setReviews(data || []);
+    setFilteredReviews(data || []);
+  };
 
+  fetchReviews();
+}, []);
   useEffect(() => {
     let filtered = reviews;
 
@@ -101,76 +102,86 @@ export function ReviewManagement() {
     );
   };
 
-  const handleReviewAction = (reviewId: string, action: 'approve' | 'reject') => {
-    setReviews((prev) => {
-      const nextReviews = prev.map((review) =>
-        review.id === reviewId
-          ? { ...review, status: action === "approve" ? "approved" : "rejected" }
-          : review
-      );
+  const handleReviewAction = async (reviewId: string, action: 'approve' | 'reject') => {
+  // Update UI
+  setReviews((prev) =>
+    prev.map((review) =>
+      review.id === reviewId
+        ? { ...review, status: action === "approve" ? "approved" : "rejected" }
+        : review
+    )
+  );
 
-      saveStoredReviews(nextReviews);
-      const updatedReview = nextReviews.find((review) => review.id === reviewId);
-      if (updatedReview && adminSession) {
-        appendAdminAuditLog({
-          adminId: adminSession.id,
-          adminName: adminSession.name,
-          adminEmail: adminSession.email,
-          branch: adminSession.branch,
-          action: action === "approve" ? "approved" : "rejected",
-          entityType: "review",
-          entityName: updatedReview.productName,
-          details: `Review by ${updatedReview.customerEmail} marked ${action}d.`,
-        });
-      }
+  // Update DB
+  const { error } = await supabase
+    .from("reviews")
+    .update({
+      status: action === "approve" ? "approved" : "rejected"
+    })
+    .eq("id", reviewId);
 
-      return nextReviews;
+  if (error) {
+    console.error("Failed to update review:", error);
+  }
+
+  const updatedReview = reviews.find((r) => r.id === reviewId);
+
+  if (updatedReview && adminSession) {
+    appendAdminAuditLog({
+      adminId: adminSession.id,
+      adminName: adminSession.name,
+      adminEmail: adminSession.email,
+      branch: adminSession.branch,
+      action: action === "approve" ? "approved" : "rejected",
+      entityType: "review",
+      entityName: updatedReview.productName,
+      details: `Review by ${updatedReview.customerEmail} marked ${action}d.`,
     });
-  };
+  }
+};
 
-  const handleSaveReply = () => {
-    if (!selectedReview || !adminSession) {
-      return;
-    }
+ const handleSaveReply = () => {
+  if (!selectedReview || !adminSession) {
+    return;
+  }
 
-    const trimmedReply = replyDraft.trim();
-    if (!trimmedReply) {
-      toast.error("Please enter a reply before saving.");
-      return;
-    }
+  const trimmedReply = replyDraft.trim();
+  if (!trimmedReply) {
+    toast.error("Please enter a reply before saving.");
+    return;
+  }
 
-    setReviews((prev) => {
-      const nextReviews = prev.map((review) =>
-        review.id === selectedReview.id
-          ? {
-              ...review,
-              adminReply: trimmedReply,
-              adminReplyAt: new Date().toISOString(),
-              adminReplyBy: adminSession.name,
-            }
-          : review
-      );
+  setReviews((prev) => {
+    const nextReviews = prev.map((review) =>
+      review.id === selectedReview.id
+        ? {
+            ...review,
+            adminReply: trimmedReply,
+            adminReplyAt: new Date().toISOString(),
+            adminReplyBy: adminSession.name,
+          }
+        : review
+    );
 
-      const updatedReview = nextReviews.find((review) => review.id === selectedReview.id) ?? null;
-      saveStoredReviews(nextReviews);
-      setSelectedReview(updatedReview);
+    const updatedReview = nextReviews.find((review) => review.id === selectedReview.id) ?? null;
+    setSelectedReview(updatedReview);
 
-      appendAdminAuditLog({
-        adminId: adminSession.id,
-        adminName: adminSession.name,
-        adminEmail: adminSession.email,
-        branch: adminSession.branch,
-        action: "replied",
-        entityType: "review",
-        entityName: selectedReview.productName,
-        details: `Replied to review by ${selectedReview.customerEmail}.`,
-      });
-
-      return nextReviews;
+    appendAdminAuditLog({
+      adminId: adminSession.id,
+      adminName: adminSession.name,
+      adminEmail: adminSession.email,
+      branch: adminSession.branch,
+      action: "replied",
+      entityType: "review",
+      entityName: selectedReview.productName,
+      details: `Replied to review by ${selectedReview.customerEmail}.`,
     });
 
-    toast.success("Review reply saved.");
-  };
+    return nextReviews;
+  });
+
+  toast.success("Review reply saved.");
+};
 
   const getReviewStats = () => {
     const total = reviews.length;
@@ -321,7 +332,7 @@ export function ReviewManagement() {
                   <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black text-sm font-semibold uppercase tracking-wider text-white">
                     {review.customerName
                       .split(" ")
-                      .map((part) => part[0])
+                      .map((part: any[]) => part[0])
                       .join("")
                       .slice(0, 2)}
                   </div>
@@ -352,7 +363,7 @@ export function ReviewManagement() {
 
                   {review.images && review.images.length > 0 && (
                     <div className="flex gap-2 mt-3">
-                      {review.images.map((image, index) => (
+                      {review.images.map((image: string | undefined, index: number) => (
                         <img
                           key={index}
                           src={image}
@@ -459,7 +470,7 @@ export function ReviewManagement() {
                       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black text-sm font-semibold uppercase tracking-wider text-white">
                         {selectedReview.customerName
                           .split(" ")
-                          .map((part) => part[0])
+                          .map((part: any[]) => part[0])
                           .join("")
                           .slice(0, 2)}
                       </div>
@@ -526,7 +537,7 @@ export function ReviewManagement() {
                 <div>
                   <h5 className="font-medium tracking-wider mb-3">Review Images</h5>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {selectedReview.images.map((image, index) => (
+                    {selectedReview.images.map((image: string | undefined, index: number) => (
                       <img
                         key={index}
                         src={image}

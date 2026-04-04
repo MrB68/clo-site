@@ -5,8 +5,9 @@ import { ArrowLeft, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
 import { useProducts } from "../contexts/ProductsContext";
-import { getPromoCodes, type DiscountOption } from "../utils/promoCodes";
-import { appendStoredOrder } from "../utils/orders";
+// import { getPromoCodes, type DiscountOption } from "../utils/promoCodes";
+type DiscountOption = any;
+import { supabase } from "../../lib/supabase";
 import { getCustomerProfile } from "../utils/customerProfile";
 import { nepalLocations } from "../utils/nepalLocations";
 
@@ -146,9 +147,7 @@ export function Checkout() {
   const [appliedDiscountCode, setAppliedDiscountCode] = useState("");
   const [promoCodeError, setPromoCodeError] = useState("");
   const [shippingErrors, setShippingErrors] = useState<CheckoutFieldErrors>({});
-  const [discountOptions, setDiscountOptions] = useState<DiscountOption[]>(() =>
-    getPromoCodes()
-  );
+  const [discountOptions, setDiscountOptions] = useState<DiscountOption[]>([]);
 
   useEffect(() => {
     if (!user) {
@@ -156,7 +155,7 @@ export function Checkout() {
     }
 
     const storedProfile = getCustomerProfile(user.id);
-    const nameParts = user.name.trim().split(/\s+/);
+    const nameParts = (user.name || "").trim().split(/\s+/);
 
     setFormData((current) => ({
       ...current,
@@ -197,19 +196,32 @@ export function Checkout() {
     };
   }, []);
 
+
   useEffect(() => {
-    const syncPromoCodes = () => {
-      setDiscountOptions(getPromoCodes());
+    const fetchPromoCodes = async () => {
+      const { data, error } = await supabase
+        .from("promo_codes")
+        .select("*");
+
+      if (error) {
+        console.error("Promo fetch error:", error);
+        return;
+      }
+
+      // map DB → UI format
+      const mapped = (data || []).map((p: any) => ({
+        code: p.code,
+        label: p.label,
+        description: p.description,
+        type: p.type,
+        value: p.value,
+        showInCheckout: p.show_in_checkout,
+      }));
+
+      setDiscountOptions(mapped);
     };
 
-    syncPromoCodes();
-    window.addEventListener("promoCodesUpdated", syncPromoCodes);
-    window.addEventListener("storage", syncPromoCodes);
-
-    return () => {
-      window.removeEventListener("promoCodesUpdated", syncPromoCodes);
-      window.removeEventListener("storage", syncPromoCodes);
-    };
+    fetchPromoCodes();
   }, []);
 
   useEffect(() => {
@@ -380,11 +392,8 @@ export function Checkout() {
     }
   };
 
-  const applyDiscountCode = (code: string) => {
+  const applyDiscountCode = async (code: string) => {
     const normalizedCode = code.trim().toUpperCase();
-    const matchedDiscount = discountOptions.find(
-      (option) => option.code === normalizedCode
-    );
 
     if (!normalizedCode) {
       setPromoCodeError("Please enter a promo code.");
@@ -392,18 +401,51 @@ export function Checkout() {
       return;
     }
 
-    if (!matchedDiscount) {
-      setPromoCodeError(
-        "This promo code is not available. Please use one of the available codes."
-      );
+    const { data, error } = await supabase
+      .from("promo_codes")
+      .select("*")
+      .eq("code", normalizedCode)
+      .single();
+
+    if (error || !data) {
+      setPromoCodeError("Invalid promo code");
       toast.error("Invalid promo code");
       return;
     }
 
+    // 🔒 STEP 2: prevent reuse
+    if (user) {
+      const { data: usage } = await supabase
+        .from("promo_usages")
+        .select("*")
+        .eq("promo_code", normalizedCode)
+        .eq("user_id", user.id)
+        .single();
+
+      if (usage) {
+        setPromoCodeError("You have already used this promo code");
+        toast.error("Promo already used");
+        return;
+      }
+    }
+
+    if (data.expiry_date && new Date(data.expiry_date) < new Date()) {
+      setPromoCodeError("Promo code expired");
+      toast.error("Promo expired");
+      return;
+    }
+
+    if (data.usage_limit && data.used_count >= data.usage_limit) {
+      setPromoCodeError("Promo usage limit reached");
+      toast.error("Promo limit reached");
+      return;
+    }
+
     setPromoCodeError("");
-    setAppliedDiscountCode(matchedDiscount.code);
-    setPromoCode(matchedDiscount.code);
-    toast.success(`${matchedDiscount.label} applied`);
+    setAppliedDiscountCode(data.code);
+    setPromoCode(data.code);
+
+    toast.success(`${data.label} applied`);
   };
 
   const removeDiscountCode = () => {
@@ -451,41 +493,57 @@ export function Checkout() {
     setStep("success");
   };
 
-  const finalizeOrder = () => {
-    const formattedShippingAddress = [
-      `${formData.address}, Ward ${formData.wardNumber}`,
-      `${formData.area}, ${formData.city}`,
-      `${formData.district}, ${formData.province}`,
-      `Landmark: ${formData.landmark}`,
-      formData.postalCode ? `Postal Code: ${formData.postalCode}` : "",
-      `Phone: ${formData.phone}`,
-    ]
-      .filter(Boolean)
-      .join(", ");
+  const finalizeOrder = async () => {
+    try {
+      const formattedShippingAddress = [
+        `${formData.address}, Ward ${formData.wardNumber}`,
+        `${formData.area}, ${formData.city}`,
+        `${formData.district}, ${formData.province}`,
+        `Landmark: ${formData.landmark}`,
+        formData.postalCode ? `Postal Code: ${formData.postalCode}` : "",
+        `Phone: ${formData.phone}`,
+      ]
+        .filter(Boolean)
+        .join(", ");
 
-    appendStoredOrder({
-      id: `ORD-${Date.now()}`,
-      customerName: `${formData.firstName} ${formData.lastName}`.trim(),
-      customerEmail: formData.email,
-      date: new Date().toISOString(),
-      status: "pending",
-      total,
-      items: cartItems.map((item) => ({
-        id: item.id,
-        name: item.name,
-        quantity: item.quantity,
-        price: item.price,
-      })),
-      source: "website",
-      shippingAddress: formattedShippingAddress,
-      phone: formData.phone,
-      branch: assignedBranch,
-    });
+      const { error } = await supabase.from("orders").insert([
+        {
+          customer_name: `${formData.firstName} ${formData.lastName}`.trim(),
+          customer_email: formData.email,
+          customer_id: user?.id || null,
+          total: total,
+          items: cartItems,
+          address: formattedShippingAddress,
+          status: "pending",
+        },
+      ]);
 
-    localStorage.removeItem("cartItems");
-    window.dispatchEvent(new Event("cartUpdated"));
-    setStoredCartItems([]);
-    setStep("success");
+      if (error) {
+        console.error(error);
+        toast.error("Order failed");
+        return;
+      }
+
+      // Track promo usage if discount code applied and user present
+      if (appliedDiscountCode && user) {
+        await supabase.from("promo_usages").insert([
+          {
+            promo_code: appliedDiscountCode,
+            user_id: user.id,
+          },
+        ]);
+      }
+
+      localStorage.removeItem("cartItems");
+      window.dispatchEvent(new Event("cartUpdated"));
+      setStoredCartItems([]);
+
+      toast.success("Order placed successfully");
+      setStep("success");
+    } catch (err) {
+      console.error(err);
+      toast.error("Something went wrong");
+    }
   };
 
   if (products.length === 0) {

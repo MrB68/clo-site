@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { motion } from "motion/react";
 import { Eye, EyeOff, ArrowLeft } from "lucide-react";
-import { useAuth } from "../contexts/AuthContext";
+import { supabase } from "../../lib/supabase";
 
 export function SignIn() {
   const [email, setEmail] = useState("");
@@ -11,7 +11,6 @@ export function SignIn() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const { signIn } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -23,12 +22,17 @@ export function SignIn() {
     setIsLoading(true);
 
     try {
-      const success = await signIn(email, password);
-      if (success) {
-        navigate(from, { replace: true });
-      } else {
-        setError("Invalid email or password");
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        setError(error.message);
+        return;
       }
+
+      navigate(from, { replace: true });
     } catch (err) {
       setError("An error occurred. Please try again.");
     } finally {
@@ -121,17 +125,6 @@ export function SignIn() {
             >
               Sign Up
             </Link>
-          </p>
-        </div>
-
-        {/* Demo Credentials */}
-        <div className="mt-6 p-4 bg-gray-50 rounded">
-          <p className="text-xs text-gray-500 text-center mb-2 tracking-wider uppercase">
-            Demo Credentials
-          </p>
-          <p className="text-xs text-gray-600 text-center">
-            Email: demo@example.com<br />
-            Password: demo123
           </p>
         </div>
       </motion.div>

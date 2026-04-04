@@ -13,7 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "../../components/ui/alert-dialog";
 import { toast } from "sonner";
 import { products as defaultProducts } from "../../data/products";
-import { addRecycleBinItem, appendAdminAuditLog, getAdminSession } from "../../utils/admin";
+import { supabase } from "../../../lib/supabase";
+import { appendAdminAuditLog, getAdminSession } from "../../utils/admin";
 
 interface Product {
   id: string;
@@ -104,77 +105,54 @@ export function ProductManagement() {
   const [imageUrlInput, setImageUrlInput] = useState("");
 
   useEffect(() => {
-    // Load products from localStorage (same as main app) or use default data
-    const savedProducts = localStorage.getItem('mainProducts');
-    if (savedProducts) {
-      const parsedProducts = JSON.parse(savedProducts);
-      setProducts(parsedProducts.map((p: any) => ({
-        ...p,
-        images: p.images || (p.image ? [p.image] : []), // Handle both old and new formats
-        stock: p.stock || 10,
-        featured: p.featured || false,
-        tags: p.tags || [],
-        material: p.material || "",
-        careInstructions: p.careInstructions || "",
-        rating: p.rating || 0,
-        reviews: p.reviews || 0,
-        createdAt: p.createdAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      })));
-    } else {
-      // Load from default products and enhance them
-      setProducts(defaultProducts.map((p: any) => ({
-        ...p,
-        images: p.image ? [p.image] : [], // Convert single image to array
-        stock: p.stock || 10,
-        featured: p.featured || false,
-        tags: p.tags || [],
-        material: p.material || "",
-        careInstructions: p.careInstructions || "",
-        rating: p.rating || 0,
-        reviews: p.reviews || 0,
-        createdAt: p.createdAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      })));
-    }
+    const fetchProducts = async () => {
+      const { data, error } = await supabase.from('products').select('*');
+
+      if (error) {
+        console.error('Error fetching products:', error);
+      } else {
+        setProducts((data || []).map((p: any) => ({
+          ...p,
+          images: Array.isArray(p?.images) ? p.images : (p?.image ? [p.image] : []),
+          image: p?.image || (Array.isArray(p?.images) && p.images[0]) || "",
+          stock: p?.stock ?? 10,
+          featured: p?.featured ?? false,
+          tags: p?.tags ?? [],
+          material: p?.material ?? "",
+          careInstructions: p?.care_instructions ?? "",
+          rating: p?.rating ?? 0,
+          reviews: p?.reviews ?? 0,
+          createdAt: p?.created_at ?? new Date().toISOString(),
+          updatedAt: p?.updated_at ?? new Date().toISOString()
+        })));
+      }
+    };
+
+    fetchProducts();
   }, []);
 
-  const saveProducts = (updatedProducts: Product[]) => {
+  const saveProducts = async (updatedProducts: Product[]) => {
     try {
-      const normalizedProducts = updatedProducts.map(normalizeProductForStore);
+      for (const product of updatedProducts) {
+        await supabase
+          .from('products')
+          const dbProduct = {
+            ...product,
+            original_price: product.originalPrice ?? null,
+            care_instructions: product.careInstructions ?? "",
+            created_at: product.createdAt,
+            updated_at: product.updatedAt,
+};
 
-      setProducts(normalizedProducts);
-      localStorage.setItem('mainProducts', JSON.stringify(normalizedProducts));
-      // Also update the admin-specific storage for consistency
-      localStorage.setItem('adminProducts', JSON.stringify(normalizedProducts));
-      
-      // Dispatch custom event to notify main app of product updates
-      // with multiple triggers to ensure it works across tabs/windows
-      window.dispatchEvent(new CustomEvent('productsUpdated', { 
-        detail: { timestamp: Date.now(), productCount: updatedProducts.length } 
-      }));
-      
-      // Also trigger storage event for cross-window communication
-      window.dispatchEvent(new StorageEvent('storage', {
-        key: 'mainProducts',
-        newValue: JSON.stringify(normalizedProducts),
-        oldValue: null,
-        storageArea: localStorage,
-        url: window.location.href
-      }));
-      
-      toast.success('Changes saved successfully! Updates will appear on the live site immediately.', {
-        description: 'All product changes have been persisted.',
-        duration: 3000,
-        icon: <Check className="w-4 h-4" />,
-      });
+await supabase.from('products').upsert(dbProduct);
+      }
+
+      setProducts(updatedProducts);
+
+      toast.success('Changes saved to database');
     } catch (error) {
       console.error('Error saving products:', error);
-      toast.error('Failed to save changes', {
-        description: 'There was an error saving your product changes. Please try again.',
-        duration: 4000,
-        icon: <AlertCircle className="w-4 h-4" />,
-      });
+      toast.error('Failed to save changes');
     }
   };
 
@@ -198,32 +176,53 @@ export function ProductManagement() {
     setImageUrlInput("");
   };
 
-  const handleAddProduct = () => {
-    const newProduct: Product = {
-      id: Date.now().toString(),
-      name: formData.name,
-      price: parseFloat(formData.price),
-      originalPrice: formData.originalPrice ? parseFloat(formData.originalPrice) : undefined,
-      description: formData.description,
-      category: formData.category,
-      style: formData.style,
-      image: formData.images[0] || "",
-      images: formData.images,
-      stock: parseInt(formData.stock),
-      featured: formData.featured,
-      rating: 0,
-      reviews: 0,
-      tags: formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag),
-      sizes: formData.sizes,
-      colors: formData.colors,
-      material: formData.material,
-      careInstructions: formData.careInstructions,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
+  const handleAddProduct = async () => {
+    // Sanitize and prepare the new product object
+    const newProduct: any = {
+  id: crypto.randomUUID(), // ✅ ADD THIS
 
-    const updatedProducts = [...products, newProduct];
-    saveProducts(updatedProducts);
+  name: formData.name || "Untitled",
+  price: Number(formData.price) || 0,
+  original_price: formData.originalPrice ? Number(formData.originalPrice) : null,
+  description: formData.description || "",
+  category: formData.category || "general",
+  style: formData.style || "minimal",
+  image: formData.images?.[0] || "",
+  images: formData.images || [],
+  stock: Number(formData.stock) || 0,
+  featured: formData.featured ?? false,
+  rating: 0,
+  reviews: 0,
+  tags: formData.tags ? formData.tags.split(',').map(t => t.trim()) : [],
+  sizes: formData.sizes || [],
+  colors: formData.colors || [],
+  material: formData.material || "",
+  care_instructions: formData.careInstructions || "",
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString()
+};
+
+    // Debug log before insert
+    console.log("INSERTING PRODUCT:", newProduct);
+
+    const { error } = await supabase.from('products').insert([newProduct]);
+    if (error) {
+      console.error("SUPABASE ERROR:", error?.message, error?.details, error?.hint);
+      toast.error('Failed to add product');
+      return;
+    }
+
+    // UI: add new product to local state
+    const uiProduct: Product = {
+  ...newProduct,
+  originalPrice: newProduct.original_price ?? undefined,
+  careInstructions: newProduct.care_instructions ?? "",
+  createdAt: newProduct.created_at,
+  updatedAt: newProduct.updated_at,
+};
+
+setProducts(prev => [...prev, uiProduct]);
+
     if (adminSession) {
       appendAdminAuditLog({
         adminId: adminSession.id,
@@ -236,11 +235,12 @@ export function ProductManagement() {
         details: `Created a new ${newProduct.style ?? "minimal"} product.`,
       });
     }
+
     setIsAddDialogOpen(false);
     resetForm();
   };
 
-  const handleEditProduct = () => {
+  const handleEditProduct = async () => {
     if (!editingProduct) return;
 
     const updatedProduct: Product = {
@@ -263,8 +263,36 @@ export function ProductManagement() {
       updatedAt: new Date().toISOString()
     };
 
-    const updatedProducts = products.map(p => p.id === editingProduct.id ? updatedProduct : p);
-    saveProducts(updatedProducts);
+    const { error } = await supabase
+  .from('products')
+  .update({
+    name: updatedProduct.name,
+    price: updatedProduct.price,
+    original_price: updatedProduct.originalPrice ?? null,
+    description: updatedProduct.description,
+    category: updatedProduct.category,
+    style: updatedProduct.style,
+    image: updatedProduct.image,
+    images: updatedProduct.images,
+    stock: updatedProduct.stock,
+    featured: updatedProduct.featured,
+    tags: updatedProduct.tags,
+    sizes: updatedProduct.sizes,
+    colors: updatedProduct.colors,
+    material: updatedProduct.material,
+    care_instructions: updatedProduct.careInstructions,
+    updated_at: new Date().toISOString(),
+  })
+  .eq('id', editingProduct.id);
+
+    if (error) {
+      console.error(error);
+      toast.error('Failed to update product');
+      return;
+    }
+
+    setProducts(prev => prev.map(p => p.id === editingProduct.id ? updatedProduct : p));
+
     if (adminSession) {
       appendAdminAuditLog({
         adminId: adminSession.id,
@@ -281,30 +309,42 @@ export function ProductManagement() {
     resetForm();
   };
 
-  const handleDeleteProduct = (productId: string) => {
-    const deletedProduct = products.find((product) => product.id === productId);
-    const updatedProducts = products.filter(p => p.id !== productId);
-    saveProducts(updatedProducts);
-    if (deletedProduct && adminSession) {
-      addRecycleBinItem({
-        entityType: "product",
-        entityId: deletedProduct.id,
-        entityName: deletedProduct.name,
-        payload: deletedProduct,
-        deletedByName: adminSession.name,
-        deletedByEmail: adminSession.email,
-        branch: adminSession.branch,
-      });
-      appendAdminAuditLog({
-        adminId: adminSession.id,
-        adminName: adminSession.name,
-        adminEmail: adminSession.email,
-        branch: adminSession.branch,
-        action: "deleted",
-        entityType: "product",
-        entityName: deletedProduct.name,
-        details: `Moved product to recycle bin.`,
-      });
+  const handleDeleteProduct = async (product: Product) => {
+    try {
+      // 1. Insert into recycle_bin
+      await supabase.from("recycle_bin").insert([
+        {
+          entity_type: "product",
+          entity_name: product.name,
+          payload: product,
+          deleted_by: adminSession?.email || "admin",
+        },
+      ]);
+
+      // 2. Delete from products table
+      await supabase.from("products").delete().eq("id", product.id);
+
+      // 3. Update UI
+      setProducts((prev) => prev.filter((p) => p.id !== product.id));
+
+      // 4. Audit log
+      if (adminSession) {
+        appendAdminAuditLog({
+          adminId: adminSession.id,
+          adminName: adminSession.name,
+          adminEmail: adminSession.email,
+          branch: adminSession.branch,
+          action: "deleted",
+          entityType: "product",
+          entityName: product.name,
+          details: "Moved product to recycle bin",
+        });
+      }
+
+      toast.success("Product moved to recycle bin");
+    } catch (error) {
+      console.error(error);
+      toast.error("Delete failed");
     }
   };
 
@@ -465,28 +505,38 @@ export function ProductManagement() {
           <p className="text-gray-600 dark:text-gray-400">Manage your product catalog, inventory, and features</p>
         </div>
         <div className="flex gap-3">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={() => {
-              // Manually refresh products from localStorage
-              const savedProducts = localStorage.getItem('mainProducts');
-              if (savedProducts) {
-                const parsedProducts = JSON.parse(savedProducts);
-                setProducts(parsedProducts.map((p: any) => ({
+              // Sync products from Supabase
+              const fetchProducts = async () => {
+                const { data, error } = await supabase.from('products').select('*');
+
+                if (error) {
+                  console.error('Error fetching products:', error);
+                  toast.error('Failed to sync with database');
+                  return;
+                }
+
+                setProducts((data || []).map((p: any) => ({
                   ...p,
-                  images: p.images || (p.image ? [p.image] : []),
-                  stock: p.stock || 10,
-                  featured: p.featured || false,
-                  tags: p.tags || [],
-                  material: p.material || "",
-                  careInstructions: p.careInstructions || "",
-                  rating: p.rating || 0,
-                  reviews: p.reviews || 0,
-                  createdAt: p.createdAt || new Date().toISOString(),
-                  updatedAt: new Date().toISOString()
+                  images: Array.isArray(p?.images) ? p.images : (p?.image ? [p.image] : []),
+                  image: p?.image || (Array.isArray(p?.images) && p.images[0]) || "",
+                  stock: p?.stock ?? 10,
+                  featured: p?.featured ?? false,
+                  tags: p?.tags ?? [],
+                  material: p?.material ?? "",
+                  careInstructions: p?.care_instructions ?? "",
+                  rating: p?.rating ?? 0,
+                  reviews: p?.reviews ?? 0,
+                  createdAt: p?.created_at ?? new Date().toISOString(),
+                  updatedAt: p?.updated_at ?? new Date().toISOString()
                 })));
-                toast.success('Products refreshed from storage');
-              }
+
+                toast.success('Synced with database');
+              };
+
+              fetchProducts();
             }}
             className="flex items-center gap-2"
           >
@@ -505,6 +555,9 @@ export function ProductManagement() {
                 <div className="p-6 sm:p-8">
                   <DialogHeader className="mb-6">
                     <DialogTitle>Add New Product</DialogTitle>
+                    <p className="sr-only">
+                      Fill the form to add a new product to your store
+                    </p>
                   </DialogHeader>
                   <ProductForm
                     formData={formData}
@@ -543,7 +596,7 @@ export function ProductManagement() {
             <SelectValue placeholder="All Categories" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="All">All Categories</SelectItem>
+            <SelectItem value="all">All Categories</SelectItem>
             {categories.map(category => (
               <SelectItem key={category} value={category}>{category}</SelectItem>
             ))}
@@ -603,7 +656,7 @@ export function ProductManagement() {
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancel</AlertDialogCancel>
                           <AlertDialogAction
-                            onClick={() => handleDeleteProduct(product.id)}
+                            onClick={() => handleDeleteProduct(product)}
                             className="bg-red-600 hover:bg-red-700"
                           >
                             Delete
@@ -702,6 +755,9 @@ export function ProductManagement() {
             <div className="p-6 sm:p-8">
               <DialogHeader className="mb-6">
                 <DialogTitle>Edit Product</DialogTitle>
+                <p className="sr-only">
+                  Update product details and save changes
+                </p>
               </DialogHeader>
               {editingProduct && (
                 <ProductForm

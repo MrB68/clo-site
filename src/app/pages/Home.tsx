@@ -5,33 +5,36 @@ import { ArrowRight, Minus } from "lucide-react";
 import { useProducts } from "../contexts/ProductsContext";
 import { ProductCard } from "../components/ProductCard";
 import { StyleSwitch } from "../components/StyleToggle";
-import { getStoredReviews, type StoredReview } from "../utils/reviews";
 import { getCustomerProfileByEmail } from "../utils/customerProfile";
+import { supabase } from "../../lib/supabase";
 
 export function Home() {
   const { products } = useProducts();
-  const [reviews, setReviews] = useState<StoredReview[]>(() => getStoredReviews());
+  const [reviews, setReviews] = useState<any[]>([]);
   const filteredProducts = products.filter((p) => p.style === "minimal");
   const newArrivals = filteredProducts.filter((p) => p.isNew).slice(0, 4);
   const featuredReviews = reviews
-    .filter((review) => review.status === "approved" && review.rating > 4)
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0, 3);
+  .filter((review) => review.rating > 4)
+  .slice(0, 3);
 
   useEffect(() => {
-    const syncReviews = () => {
-      setReviews(getStoredReviews());
-    };
+  const fetchReviews = async () => {
+    const { data, error } = await supabase
+      .from("reviews")
+      .select("*")
+      .eq("status", "approved")
+      .order("created_at", { ascending: false });
 
-    syncReviews();
-    window.addEventListener("reviewsUpdated", syncReviews);
-    window.addEventListener("storage", syncReviews);
+    if (error) {
+      console.error("Failed to fetch reviews:", error);
+      return;
+    }
 
-    return () => {
-      window.removeEventListener("reviewsUpdated", syncReviews);
-      window.removeEventListener("storage", syncReviews);
-    };
-  }, []);
+    setReviews(data || []);
+  };
+
+  fetchReviews();
+}, []);
 
   return (
     <div>
@@ -402,7 +405,7 @@ export function Home() {
                         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black text-sm uppercase tracking-wider text-white dark:bg-white dark:text-black">
                           {review.customerName
                             .split(" ")
-                            .map((name) => name[0])
+                            .map((name: any[]) => name[0])
                             .join("")
                             .slice(0, 2)}
                         </div>
