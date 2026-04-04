@@ -5,55 +5,6 @@ import { motion, AnimatePresence } from "motion/react";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "next-themes";
 
-const acceptedPaymentMethods = [
-  { name: "eSewa", accentClassName: "bg-green-500", textClassName: "text-green-300" },
-  { name: "IME Pay", accentClassName: "bg-red-500", textClassName: "text-red-300" },
-  { name: "Nepal Pay", accentClassName: "bg-blue-500", textClassName: "text-blue-300" },
-  { name: "Khalti", accentClassName: "bg-purple-500", textClassName: "text-fuchsia-300" },
-] as const;
-
-function PaymentLogoBadge({
-  label,
-  accentClassName,
-  textClassName,
-}: {
-  label: string;
-  accentClassName: string;
-  textClassName: string;
-}) {
-  const initials = label
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-
-  return (
-    <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 backdrop-blur-sm">
-      <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${accentClassName}`}>
-        <svg viewBox="0 0 40 40" className="h-7 w-7" aria-hidden="true">
-          <rect x="4" y="4" width="32" height="32" rx="10" fill="currentColor" className={textClassName} />
-          <text
-            x="20"
-            y="24"
-            textAnchor="middle"
-            fontSize="12"
-            fontWeight="700"
-            fill="white"
-            fontFamily="Arial, sans-serif"
-          >
-            {initials}
-          </text>
-        </svg>
-      </div>
-      <div className="min-w-0">
-        <p className="text-sm font-medium tracking-wide text-white">{label}</p>
-        <p className="text-xs uppercase tracking-[0.18em] text-gray-400">Accepted</p>
-      </div>
-    </div>
-  );
-}
-
 export function Layout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -438,8 +389,8 @@ export function Layout() {
               <p className="max-w-xs text-gray-400 text-sm leading-6">
                 Minimal. Original. Design.
               </p>
-                <p className="text-sm uppercase tracking-[0.24em] text-white/0 transition duration-300 group-hover:text-white/75">
-                  Extravagant
+                <p className="text-sm uppercase tracking-[0.20em] text-white/0 transition duration-300 group-hover:text-white/75">
+                      Extravagant
                 </p>
               </div>
             </div>
@@ -513,21 +464,6 @@ export function Layout() {
                 <button className="w-full px-6 py-3 bg-white text-black hover:bg-gray-200 transition-colors text-sm tracking-widest uppercase sm:w-auto">
                   Join
                 </button>
-              </div>
-              <div className="space-y-4 pt-2">
-                <h5 className="text-xs font-medium uppercase tracking-[0.22em] text-gray-400">
-                  Accepted Payment Methods
-                </h5>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {acceptedPaymentMethods.map((method) => (
-                    <PaymentLogoBadge
-                      key={method.name}
-                      label={method.name}
-                      accentClassName={method.accentClassName}
-                      textClassName={method.textClassName}
-                    />
-                  ))}
-                </div>
               </div>
             </div>
           </div>
