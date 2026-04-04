@@ -1,8 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import {
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -16,7 +14,10 @@ import {
   Area,
   AreaChart
 } from "recharts";
-import { TrendingUp, DollarSign, ShoppingCart, Users, Package, Star } from "lucide-react";
+import { TrendingUp, DollarSign, ShoppingCart, Users } from "lucide-react";
+import { useProducts } from "../../contexts/ProductsContext";
+import { getStoredOrders } from "../../utils/orders";
+import { getAdminSession } from "../../utils/admin";
 
 interface SalesData {
   date: string;
@@ -39,55 +40,148 @@ interface CategoryData {
   color: string;
 }
 
-const mockSalesData: SalesData[] = [
-  { date: "2024-01-01", revenue: 125000, orders: 45, customers: 38 },
-  { date: "2024-01-02", revenue: 98000, orders: 32, customers: 28 },
-  { date: "2024-01-03", revenue: 156000, orders: 58, customers: 52 },
-  { date: "2024-01-04", revenue: 134000, orders: 41, customers: 36 },
-  { date: "2024-01-05", revenue: 187000, orders: 67, customers: 61 },
-  { date: "2024-01-06", revenue: 142000, orders: 49, customers: 44 },
-  { date: "2024-01-07", revenue: 168000, orders: 62, customers: 55 },
-  { date: "2024-01-08", revenue: 195000, orders: 71, customers: 65 },
-  { date: "2024-01-09", revenue: 178000, orders: 64, customers: 58 },
-  { date: "2024-01-10", revenue: 203000, orders: 73, customers: 67 },
-  { date: "2024-01-11", revenue: 189000, orders: 68, customers: 62 },
-  { date: "2024-01-12", revenue: 221000, orders: 79, customers: 72 },
-  { date: "2024-01-13", revenue: 198000, orders: 71, customers: 65 },
-  { date: "2024-01-14", revenue: 234000, orders: 84, customers: 76 },
-];
-
-const mockTopProducts: TopProduct[] = [
-  { id: "1", name: "Classic Black Jacket", revenue: 159000, units: 53, category: "women" },
-  { id: "9", name: "Runway Collection Piece", revenue: 398000, units: 19, category: "women" },
-  { id: "12", name: "Statement Outerwear", revenue: 358000, units: 31, category: "men" },
-  { id: "5", name: "Premium Denim Jacket", revenue: 232000, units: 29, category: "men" },
-  { id: "10", name: "Beige Overcoat", revenue: 265000, units: 22, category: "women" },
-];
-
-const mockCategoryData: CategoryData[] = [
-  { name: "Women", value: 45, color: "#000000" },
-  { name: "Men", value: 35, color: "#666666" },
-  { name: "Accessories", value: 20, color: "#999999" },
-];
+function getDaysForTimeRange(timeRange: "7d" | "30d" | "90d") {
+  if (timeRange === "7d") return 7;
+  if (timeRange === "90d") return 90;
+  return 30;
+}
 
 export function SalesAnalytics() {
+  const { products } = useProducts();
+  const adminSession = getAdminSession();
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d');
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [totalOrders, setTotalOrders] = useState(0);
   const [totalCustomers, setTotalCustomers] = useState(0);
   const [avgOrderValue, setAvgOrderValue] = useState(0);
+  const [salesData, setSalesData] = useState<SalesData[]>([]);
+  const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
+  const [categoryData, setCategoryData] = useState<CategoryData[]>([]);
+  const [adminTheme, setAdminTheme] = useState<"light" | "dark">(() => {
+    const savedAdminTheme = localStorage.getItem("adminTheme");
+    return savedAdminTheme === "dark" ? "dark" : "light";
+  });
 
   useEffect(() => {
-    // Calculate metrics from mock data
-    const revenue = mockSalesData.reduce((sum, day) => sum + day.revenue, 0);
-    const orders = mockSalesData.reduce((sum, day) => sum + day.orders, 0);
-    const customers = mockSalesData.reduce((sum, day) => sum + day.customers, 0);
+    const syncAnalytics = () => {
+      const now = new Date();
+      const cutoff = new Date(now);
+      cutoff.setDate(now.getDate() - (getDaysForTimeRange(timeRange) - 1));
 
-    setTotalRevenue(revenue);
-    setTotalOrders(orders);
-    setTotalCustomers(customers);
-    setAvgOrderValue(Math.round(revenue / orders));
-  }, [timeRange]);
+      const orders = getStoredOrders()
+        .filter((order) => new Date(order.date) >= cutoff)
+        .filter((order) => order.status === "delivered")
+        .filter((order) =>
+          adminSession && adminSession.branch !== "Head Office"
+            ? order.branch === adminSession.branch
+            : true
+        );
+
+      const revenue = orders.reduce((sum, order) => sum + order.total, 0);
+      const customers = new Set(orders.map((order) => order.customerEmail.toLowerCase())).size;
+
+      const groupedSales = new Map<string, SalesData>();
+      orders.forEach((order) => {
+        const dateKey = new Date(order.date).toISOString().slice(0, 10);
+        const existing = groupedSales.get(dateKey) ?? {
+          date: dateKey,
+          revenue: 0,
+          orders: 0,
+          customers: 0,
+        };
+        existing.revenue += order.total;
+        existing.orders += 1;
+        existing.customers += 1;
+        groupedSales.set(dateKey, existing);
+      });
+
+      const nextSalesData = Array.from(groupedSales.values()).sort((a, b) =>
+        a.date.localeCompare(b.date)
+      );
+
+      const productPerformance = new Map<string, TopProduct>();
+      orders.forEach((order) => {
+        order.items.forEach((item) => {
+          const product = products.find((entry) => entry.id === item.id);
+          const existing = productPerformance.get(item.id) ?? {
+            id: item.id,
+            name: item.name,
+            revenue: 0,
+            units: 0,
+            category: product?.category ?? "unknown",
+          };
+          existing.revenue += item.price * item.quantity;
+          existing.units += item.quantity;
+          productPerformance.set(item.id, existing);
+        });
+      });
+
+      const nextTopProducts = Array.from(productPerformance.values())
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 5);
+
+      const categoryTotals = new Map<string, number>();
+      orders.forEach((order) => {
+        order.items.forEach((item) => {
+          const category = products.find((entry) => entry.id === item.id)?.category ?? "unknown";
+          categoryTotals.set(
+            category,
+            (categoryTotals.get(category) ?? 0) + item.price * item.quantity
+          );
+        });
+      });
+
+      const totalCategoryRevenue = Array.from(categoryTotals.values()).reduce(
+        (sum, value) => sum + value,
+        0
+      );
+      const fallbackColors = ["#000000", "#666666", "#999999", "#b3b3b3", "#d1d5db"];
+      const nextCategoryData = Array.from(categoryTotals.entries())
+        .map(([name, value], index) => ({
+          name,
+          value:
+            totalCategoryRevenue > 0
+              ? Math.round((value / totalCategoryRevenue) * 100)
+              : 0,
+          color: fallbackColors[index % fallbackColors.length],
+        }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 5);
+
+      setTotalRevenue(revenue);
+      setTotalOrders(orders.length);
+      setTotalCustomers(customers);
+      setAvgOrderValue(orders.length ? Math.round(revenue / orders.length) : 0);
+      setSalesData(nextSalesData);
+      setTopProducts(nextTopProducts);
+      setCategoryData(nextCategoryData);
+    };
+
+    syncAnalytics();
+    window.addEventListener("ordersUpdated", syncAnalytics);
+    window.addEventListener("storage", syncAnalytics);
+
+    return () => {
+      window.removeEventListener("ordersUpdated", syncAnalytics);
+      window.removeEventListener("storage", syncAnalytics);
+    };
+  }, [adminSession, products, timeRange]);
+
+  useEffect(() => {
+    const syncAdminTheme = () => {
+      const savedAdminTheme = localStorage.getItem("adminTheme");
+      setAdminTheme(savedAdminTheme === "dark" ? "dark" : "light");
+    };
+
+    syncAdminTheme();
+    window.addEventListener("adminThemeUpdated", syncAdminTheme);
+    window.addEventListener("storage", syncAdminTheme);
+
+    return () => {
+      window.removeEventListener("adminThemeUpdated", syncAdminTheme);
+      window.removeEventListener("storage", syncAdminTheme);
+    };
+  }, []);
 
   const formatCurrency = (value: number) => {
     return `NPR ${(value / 1000).toFixed(0)}K`;
@@ -97,6 +191,29 @@ export function SalesAnalytics() {
     return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
+  const chartColors =
+    adminTheme === "dark"
+      ? {
+          axis: "#cfcfcf",
+          grid: "#2f2f2f",
+          tooltipBg: "#0a0a0a",
+          tooltipBorder: "#333333",
+          areaStroke: "#ffffff",
+          areaFill: "#ffffff",
+          barFill: "#f5f5f5",
+          pieColors: ["#f5f5f5", "#bfbfbf", "#737373"],
+        }
+      : {
+          axis: "#4b5563",
+          grid: "#e5e7eb",
+          tooltipBg: "#ffffff",
+          tooltipBorder: "#d1d5db",
+          areaStroke: "#000000",
+          areaFill: "#000000",
+          barFill: "#000000",
+          pieColors: ["#000000", "#666666", "#999999"],
+        };
+// The component renders a sales analytics dashboard with a time range selector, KPI cards for total revenue, orders, customers, and average order value, as well as charts for revenue trends and category breakdowns. It also includes a table of top-performing products. The layout is responsive and uses Tailwind CSS for styling, along with Framer Motion for subtle animations.
   return (
     <div className="space-y-6">
       {/* Time Range Selector */}
@@ -200,26 +317,37 @@ export function SalesAnalytics() {
         >
           <h3 className="text-lg font-semibold mb-4 tracking-widest uppercase">Revenue Trend</h3>
           <ResponsiveContainer width="100%" height={300}>
-            <AreaChart data={mockSalesData}>
-              <CartesianGrid strokeDasharray="3 3" />
+            <AreaChart data={salesData}>
+              <CartesianGrid stroke={chartColors.grid} strokeDasharray="3 3" />
               <XAxis
                 dataKey="date"
                 tickFormatter={formatDate}
                 fontSize={12}
+                tick={{ fill: chartColors.axis }}
+                axisLine={{ stroke: chartColors.grid }}
+                tickLine={{ stroke: chartColors.grid }}
               />
               <YAxis
                 tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`}
                 fontSize={12}
+                tick={{ fill: chartColors.axis }}
+                axisLine={{ stroke: chartColors.grid }}
+                tickLine={{ stroke: chartColors.grid }}
               />
               <Tooltip
                 formatter={(value: number) => [`NPR ${value.toLocaleString()}`, 'Revenue']}
                 labelFormatter={(label) => formatDate(label)}
+                contentStyle={{
+                  backgroundColor: chartColors.tooltipBg,
+                  borderColor: chartColors.tooltipBorder,
+                  color: chartColors.axis,
+                }}
               />
               <Area
                 type="monotone"
                 dataKey="revenue"
-                stroke="#000000"
-                fill="#000000"
+                stroke={chartColors.areaStroke}
+                fill={chartColors.areaFill}
                 fillOpacity={0.1}
               />
             </AreaChart>
@@ -237,7 +365,7 @@ export function SalesAnalytics() {
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
-                data={mockCategoryData}
+                data={categoryData}
                 cx="50%"
                 cy="50%"
                 innerRadius={60}
@@ -245,19 +373,26 @@ export function SalesAnalytics() {
                 paddingAngle={5}
                 dataKey="value"
               >
-                {mockCategoryData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
+                {categoryData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={chartColors.pieColors[index] ?? entry.color} />
                 ))}
               </Pie>
-              <Tooltip formatter={(value: number) => [`${value}%`, 'Share']} />
+              <Tooltip
+                formatter={(value: number) => [`${value}%`, 'Share']}
+                contentStyle={{
+                  backgroundColor: chartColors.tooltipBg,
+                  borderColor: chartColors.tooltipBorder,
+                  color: chartColors.axis,
+                }}
+              />
             </PieChart>
           </ResponsiveContainer>
           <div className="flex justify-center gap-6 mt-4">
-            {mockCategoryData.map((category) => (
+            {categoryData.map((category, index) => (
               <div key={category.name} className="flex items-center gap-2">
                 <div
                   className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: category.color }}
+                  style={{ backgroundColor: chartColors.pieColors[index] ?? category.color }}
                 />
                 <span className="text-sm tracking-wider uppercase">{category.name}</span>
               </div>
@@ -275,19 +410,32 @@ export function SalesAnalytics() {
       >
         <h3 className="text-lg font-semibold mb-4 tracking-widest uppercase">Daily Orders</h3>
         <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={mockSalesData}>
-            <CartesianGrid strokeDasharray="3 3" />
+          <BarChart data={salesData}>
+            <CartesianGrid stroke={chartColors.grid} strokeDasharray="3 3" />
             <XAxis
               dataKey="date"
               tickFormatter={formatDate}
               fontSize={12}
+              tick={{ fill: chartColors.axis }}
+              axisLine={{ stroke: chartColors.grid }}
+              tickLine={{ stroke: chartColors.grid }}
             />
-            <YAxis fontSize={12} />
+            <YAxis
+              fontSize={12}
+              tick={{ fill: chartColors.axis }}
+              axisLine={{ stroke: chartColors.grid }}
+              tickLine={{ stroke: chartColors.grid }}
+            />
             <Tooltip
               formatter={(value: number) => [value, 'Orders']}
               labelFormatter={(label) => formatDate(label)}
+              contentStyle={{
+                backgroundColor: chartColors.tooltipBg,
+                borderColor: chartColors.tooltipBorder,
+                color: chartColors.axis,
+              }}
             />
-            <Bar dataKey="orders" fill="#000000" />
+            <Bar dataKey="orders" fill={chartColors.barFill} />
           </BarChart>
         </ResponsiveContainer>
       </motion.div>
@@ -321,7 +469,7 @@ export function SalesAnalytics() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {mockTopProducts.map((product, index) => (
+              {topProducts.map((product) => (
                 <tr key={product.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900 tracking-wider">

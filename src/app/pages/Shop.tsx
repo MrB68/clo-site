@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { motion } from "motion/react";
 import { SlidersHorizontal, X } from "lucide-react";
 import { useProducts } from "../contexts/ProductsContext";
@@ -6,6 +7,7 @@ import { ProductCard } from "../components/ProductCard";
 import { StyleToggle } from "../components/StyleToggle";
 
 export function Shop() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedStyle, setSelectedStyle] = useState<"minimal" | "extravagant">("minimal");
   const [selectedSize, setSelectedSize] = useState<string>("all");
@@ -14,12 +16,22 @@ export function Shop() {
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const { products } = useProducts();
+  const searchQuery = searchParams.get("search")?.trim().toLowerCase() ?? "";
 
   // Filter products
   let filteredProducts = [...products];
 
   // Filter by style
   filteredProducts = filteredProducts.filter((p) => p.style === selectedStyle);
+
+  if (searchQuery) {
+    filteredProducts = filteredProducts.filter((product) =>
+      [product.name, product.description, product.category]
+        .join(" ")
+        .toLowerCase()
+        .includes(searchQuery)
+    );
+  }
 
   if (selectedCategory !== "all") {
     filteredProducts = filteredProducts.filter(
@@ -65,12 +77,21 @@ export function Shop() {
   };
 
   const hasActiveFilters =
+    searchQuery.length > 0 ||
     selectedCategory !== "all" ||
     selectedSize !== "all" ||
     priceRange !== "all";
 
+  const searchLabel = useMemo(() => {
+    if (!searchQuery) {
+      return null;
+    }
+
+    return searchParams.get("search")?.trim() ?? "";
+  }, [searchParams, searchQuery]);
+
   return (
-    <div className="pt-20">
+    <div className="bg-white pt-20 text-black transition-colors duration-300 dark:bg-black dark:text-white">
       {/* Header */}
       <div className="bg-black text-white py-16 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
@@ -86,9 +107,20 @@ export function Shop() {
                 onStyleChange={setSelectedStyle}
               />
             </div>
-            <p className="text-gray-400 tracking-wider text-sm">
+            <p className="text-sm tracking-wider text-gray-400 dark:text-gray-500">
               {filteredProducts.length} products available
             </p>
+            {searchLabel ? (
+              <div className="flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => setSearchParams({})}
+                  className="rounded-full border border-white/30 px-4 py-2 text-xs uppercase tracking-[0.25em] text-white transition hover:bg-white hover:text-black"
+                >
+                  Search: {searchLabel} · Clear
+                </button>
+              </div>
+            ) : null}
           </motion.div>
         </div>
       </div>
@@ -104,7 +136,7 @@ export function Shop() {
                   {hasActiveFilters && (
                     <button
                       onClick={clearFilters}
-                      className="text-xs text-gray-500 hover:text-black tracking-wider uppercase"
+                      className="text-xs tracking-wider uppercase text-gray-500 transition-colors hover:text-black dark:text-gray-400 dark:hover:text-white"
                     >
                       Clear all
                     </button>
@@ -113,7 +145,7 @@ export function Shop() {
 
                 {/* Category Filter */}
                 <div className="space-y-3 mb-6">
-                  <h4 className="text-xs text-gray-500 uppercase tracking-[0.2em]">
+                  <h4 className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
                     Category
                   </h4>
                   {["all", "men", "women", "accessories"].map((category) => (
@@ -135,7 +167,7 @@ export function Shop() {
 
                 {/* Size Filter */}
                 <div className="space-y-3 mb-6">
-                  <h4 className="text-xs text-gray-500 uppercase tracking-[0.2em]">
+                  <h4 className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
                     Size
                   </h4>
                   {["all", "XS", "S", "M", "L", "XL"].map((size) => (
@@ -157,7 +189,7 @@ export function Shop() {
 
                 {/* Price Filter */}
                 <div className="space-y-3">
-                  <h4 className="text-xs text-gray-500 uppercase tracking-[0.2em]">
+                  <h4 className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
                     Price
                   </h4>
                   {[
@@ -197,18 +229,18 @@ export function Shop() {
                 <SlidersHorizontal size={18} />
                 Filters
                 {hasActiveFilters && (
-                  <span className="bg-black text-white px-2 py-0.5 text-xs">
+                  <span className="bg-black px-2 py-0.5 text-xs text-white dark:bg-white dark:text-black">
                     Active
                   </span>
                 )}
               </button>
 
               <div className="flex items-center gap-2">
-                <label className="text-xs text-gray-600 tracking-[0.2em] uppercase">Sort:</label>
+                <label className="text-xs tracking-[0.2em] uppercase text-gray-600 dark:text-gray-400">Sort:</label>
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
-                  className="border-2 border-gray-300 px-4 py-2 text-sm focus:outline-none focus:border-black tracking-wider uppercase bg-white"
+                  className="bg-white border-2 border-gray-300 px-4 py-2 text-sm tracking-wider uppercase transition-colors focus:border-black focus:outline-none dark:border-white/20 dark:bg-neutral-950 dark:text-white dark:focus:border-white"
                 >
                   <option value="featured">Featured</option>
                   <option value="price-low">Price: Low to High</option>
@@ -220,14 +252,14 @@ export function Shop() {
 
             {/* Products Grid */}
             {filteredProducts.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px bg-gray-200">
+              <div className="grid grid-cols-1 gap-px bg-gray-200 transition-colors duration-300 sm:grid-cols-2 lg:grid-cols-3 dark:bg-white/10">
                 {filteredProducts.map((product) => (
                   <ProductCard key={product.id} product={product} />
                 ))}
               </div>
             ) : (
               <div className="text-center py-24">
-                <p className="text-gray-500 tracking-wider">
+                <p className="tracking-wider text-gray-500 dark:text-gray-400">
                   No products found matching your filters.
                 </p>
                 <button
@@ -250,7 +282,7 @@ export function Shop() {
             animate={{ x: 0 }}
             exit={{ x: "-100%" }}
             onClick={(e) => e.stopPropagation()}
-            className="bg-white h-full w-72 p-6 overflow-y-auto"
+            className="h-full w-72 overflow-y-auto bg-white p-6 text-black transition-colors duration-300 dark:bg-neutral-950 dark:text-white"
           >
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-medium tracking-widest uppercase">Filters</h3>
@@ -261,7 +293,7 @@ export function Shop() {
 
             {/* Style Toggle in Mobile */}
             <div className="mb-8">
-              <h4 className="text-xs text-gray-500 uppercase tracking-[0.2em] mb-3">
+              <h4 className="mb-3 text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
                 Style
               </h4>
               <StyleToggle
@@ -276,7 +308,7 @@ export function Shop() {
                   clearFilters();
                   setFiltersOpen(false);
                 }}
-                className="text-xs text-gray-500 hover:text-black mb-6 tracking-wider uppercase"
+                className="mb-6 text-xs tracking-wider uppercase text-gray-500 transition-colors hover:text-black dark:text-gray-400 dark:hover:text-white"
               >
                 Clear all filters
               </button>
@@ -284,7 +316,7 @@ export function Shop() {
 
             {/* Category Filter */}
             <div className="space-y-3 mb-6">
-              <h4 className="text-xs text-gray-500 uppercase tracking-[0.2em]">
+              <h4 className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
                 Category
               </h4>
               {["all", "men", "women", "accessories"].map((category) => (
@@ -306,7 +338,7 @@ export function Shop() {
 
             {/* Size Filter */}
             <div className="space-y-3 mb-6">
-              <h4 className="text-xs text-gray-500 uppercase tracking-[0.2em]">
+              <h4 className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
                 Size
               </h4>
               {["all", "XS", "S", "M", "L", "XL"].map((size) => (
@@ -328,7 +360,7 @@ export function Shop() {
 
             {/* Price Filter */}
             <div className="space-y-3 mb-6">
-              <h4 className="text-xs text-gray-500 uppercase tracking-[0.2em]">
+              <h4 className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
                 Price
               </h4>
               {[
@@ -356,7 +388,7 @@ export function Shop() {
 
             <button
               onClick={() => setFiltersOpen(false)}
-              className="w-full bg-black text-white py-3 hover:bg-gray-800 transition-colors tracking-[0.2em] uppercase text-sm"
+              className="w-full bg-black py-3 text-sm tracking-[0.2em] uppercase text-white transition-colors hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
             >
               Apply Filters
             </button>

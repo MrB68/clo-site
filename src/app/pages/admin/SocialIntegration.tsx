@@ -231,7 +231,7 @@ export function SocialIntegration() {
         <div className="flex gap-2">
           <button
             onClick={() => setShowPostModal(true)}
-            className="px-4 py-2 bg-black text-white hover:bg-gray-800 transition-colors tracking-wider uppercase text-sm flex items-center gap-2"
+            className="flex items-center gap-2 bg-black px-4 py-2 text-sm uppercase tracking-wider text-white transition-colors hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
           >
             <Plus size={16} />
             Create Post
@@ -303,8 +303,8 @@ export function SocialIntegration() {
               onClick={() => setActiveTab(tab.id as any)}
               className={`flex-1 px-6 py-4 text-center tracking-wider uppercase text-sm font-medium transition-colors ${
                 activeTab === tab.id
-                  ? 'border-b-2 border-black text-black'
-                  : 'text-gray-600 hover:text-black'
+                  ? 'border-b-2 border-black text-black dark:border-white dark:text-white'
+                  : 'text-gray-600 hover:text-black dark:text-gray-400 dark:hover:text-white'
               }`}
             >
               <tab.icon size={16} className="mx-auto mb-1" />
@@ -577,7 +577,7 @@ export function SocialIntegration() {
                 <button
                   onClick={handleCreatePost}
                   disabled={!newPost.content.trim()}
-                  className="flex-1 px-4 py-2 bg-black text-white hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors tracking-wider uppercase text-sm"
+                  className="flex-1 bg-black px-4 py-2 text-sm uppercase tracking-wider text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400 dark:bg-white dark:text-black dark:hover:bg-neutral-200 dark:disabled:bg-neutral-700 dark:disabled:text-neutral-300"
                 >
                   Create Post
                 </button>

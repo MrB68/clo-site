@@ -1,129 +1,39 @@
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { Star, ThumbsUp, ThumbsDown, MessageSquare, Eye, Check, X, Filter } from "lucide-react";
+import { toast } from "sonner";
+import { appendAdminAuditLog, getAdminSession } from "../../utils/admin";
+import { getStoredReviews, saveStoredReviews, type StoredReview } from "../../utils/reviews";
+import { getCustomerProfileByEmail } from "../../utils/customerProfile";
 
-interface Review {
-  id: string;
-  customerName: string;
-  customerEmail: string;
-  productName: string;
-  productId: string;
-  rating: number;
-  title: string;
-  comment: string;
-  date: string;
-  status: 'pending' | 'approved' | 'rejected';
-  helpful: number;
-  notHelpful: number;
-  verified: boolean;
-  images?: string[];
-}
-
-const mockReviews: Review[] = [
-  {
-    id: "1",
-    customerName: "Sarah Johnson",
-    customerEmail: "sarah.j@email.com",
-    productName: "Minimalist White Shirt",
-    productId: "prod-1",
-    rating: 5,
-    title: "Absolutely perfect!",
-    comment: "This shirt is exactly what I was looking for. The fit is perfect and the quality is outstanding. Will definitely buy more from this brand.",
-    date: "2024-01-15",
-    status: "approved",
-    helpful: 12,
-    notHelpful: 1,
-    verified: true,
-    images: ["https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx3aGl0ZSUyMHNoaXJ0fGVufDF8fHx8MTc3NTA0NjY2Mnww&ixlib=rb-4.1.0&q=80&w=1080"]
-  },
-  {
-    id: "2",
-    customerName: "Mike Chen",
-    customerEmail: "mike.chen@email.com",
-    productName: "Streetwear Hoodie",
-    productId: "prod-2",
-    rating: 4,
-    title: "Great quality, runs a bit small",
-    comment: "Love the design and the material feels premium. However, it runs a bit small so I recommend sizing up. Overall very satisfied with the purchase.",
-    date: "2024-01-14",
-    status: "approved",
-    helpful: 8,
-    notHelpful: 2,
-    verified: true
-  },
-  {
-    id: "3",
-    customerName: "Anonymous",
-    customerEmail: "anon@example.com",
-    productName: "Designer Jeans",
-    productId: "prod-3",
-    rating: 2,
-    title: "Not what I expected",
-    comment: "The jeans arrived with a tear in the fabric. Very disappointed with the quality control. I expected better from this brand.",
-    date: "2024-01-13",
-    status: "pending",
-    helpful: 3,
-    notHelpful: 5,
-    verified: false
-  },
-  {
-    id: "4",
-    customerName: "Emma Davis",
-    customerEmail: "emma.davis@email.com",
-    productName: "Luxury Dress",
-    productId: "prod-4",
-    rating: 5,
-    title: "Stunning piece!",
-    comment: "This dress exceeded my expectations. The craftsmanship is incredible and it fits like a dream. Perfect for special occasions.",
-    date: "2024-01-12",
-    status: "approved",
-    helpful: 15,
-    notHelpful: 0,
-    verified: true,
-    images: [
-      "https://images.unsplash.com/photo-1595777457583-95e059d581b8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBkcmVzc3xlbnwxfHx8fDE3NzUwNDY2NjJ8MA&ixlib=rb-4.1.0&q=80&w=1080",
-      "https://images.unsplash.com/photo-1539008835657-9e8e9680c956?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxlbGVnYW50JTIwZHJlc3N8ZW58MXx8fHwxNzc1MDQ2NjYyMHww&ixlib=rb-4.1.0&q=80&w=1080"
-    ]
-  },
-  {
-    id: "5",
-    customerName: "Alex Rodriguez",
-    customerEmail: "alex.rodriguez@email.com",
-    productName: "Casual Sneakers",
-    productId: "prod-5",
-    rating: 3,
-    title: "Decent but not great",
-    comment: "The sneakers are comfortable and look good, but they started to show wear after just a few weeks. For the price, I expected better durability.",
-    date: "2024-01-11",
-    status: "pending",
-    helpful: 4,
-    notHelpful: 3,
-    verified: true
-  },
-  {
-    id: "6",
-    customerName: "Lisa Wang",
-    customerEmail: "lisa.wang@email.com",
-    productName: "Designer Bag",
-    productId: "prod-6",
-    rating: 1,
-    title: "Poor quality",
-    comment: "The bag arrived damaged and the stitching is coming apart. This is unacceptable for a designer item. I want a refund.",
-    date: "2024-01-10",
-    status: "rejected",
-    helpful: 2,
-    notHelpful: 8,
-    verified: true
-  }
-];
+type Review = StoredReview;
 
 export function ReviewManagement() {
-  const [reviews, setReviews] = useState<Review[]>(mockReviews);
-  const [filteredReviews, setFilteredReviews] = useState<Review[]>(mockReviews);
+  const adminSession = getAdminSession();
+  const [reviews, setReviews] = useState<Review[]>(() => getStoredReviews());
+  const [filteredReviews, setFilteredReviews] = useState<Review[]>(() => getStoredReviews());
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [ratingFilter, setRatingFilter] = useState<string>("all");
   const [selectedReview, setSelectedReview] = useState<Review | null>(null);
   const [showReviewModal, setShowReviewModal] = useState(false);
+  const [replyDraft, setReplyDraft] = useState("");
+
+  useEffect(() => {
+    const syncReviews = () => {
+      const storedReviews = getStoredReviews();
+      setReviews(storedReviews);
+      setFilteredReviews(storedReviews);
+    };
+
+    syncReviews();
+    window.addEventListener("reviewsUpdated", syncReviews);
+    window.addEventListener("storage", syncReviews);
+
+    return () => {
+      window.removeEventListener("reviewsUpdated", syncReviews);
+      window.removeEventListener("storage", syncReviews);
+    };
+  }, []);
 
   useEffect(() => {
     let filtered = reviews;
@@ -140,6 +50,10 @@ export function ReviewManagement() {
 
     setFilteredReviews(filtered);
   }, [reviews, statusFilter, ratingFilter]);
+
+  useEffect(() => {
+    setReplyDraft(selectedReview?.adminReply ?? "");
+  }, [selectedReview]);
 
   const getStatusColor = (status: Review['status']) => {
     switch (status) {
@@ -188,11 +102,74 @@ export function ReviewManagement() {
   };
 
   const handleReviewAction = (reviewId: string, action: 'approve' | 'reject') => {
-    setReviews(prev => prev.map(review =>
-      review.id === reviewId
-        ? { ...review, status: action === 'approve' ? 'approved' : 'rejected' }
-        : review
-    ));
+    setReviews((prev) => {
+      const nextReviews = prev.map((review) =>
+        review.id === reviewId
+          ? { ...review, status: action === "approve" ? "approved" : "rejected" }
+          : review
+      );
+
+      saveStoredReviews(nextReviews);
+      const updatedReview = nextReviews.find((review) => review.id === reviewId);
+      if (updatedReview && adminSession) {
+        appendAdminAuditLog({
+          adminId: adminSession.id,
+          adminName: adminSession.name,
+          adminEmail: adminSession.email,
+          branch: adminSession.branch,
+          action: action === "approve" ? "approved" : "rejected",
+          entityType: "review",
+          entityName: updatedReview.productName,
+          details: `Review by ${updatedReview.customerEmail} marked ${action}d.`,
+        });
+      }
+
+      return nextReviews;
+    });
+  };
+
+  const handleSaveReply = () => {
+    if (!selectedReview || !adminSession) {
+      return;
+    }
+
+    const trimmedReply = replyDraft.trim();
+    if (!trimmedReply) {
+      toast.error("Please enter a reply before saving.");
+      return;
+    }
+
+    setReviews((prev) => {
+      const nextReviews = prev.map((review) =>
+        review.id === selectedReview.id
+          ? {
+              ...review,
+              adminReply: trimmedReply,
+              adminReplyAt: new Date().toISOString(),
+              adminReplyBy: adminSession.name,
+            }
+          : review
+      );
+
+      const updatedReview = nextReviews.find((review) => review.id === selectedReview.id) ?? null;
+      saveStoredReviews(nextReviews);
+      setSelectedReview(updatedReview);
+
+      appendAdminAuditLog({
+        adminId: adminSession.id,
+        adminName: adminSession.name,
+        adminEmail: adminSession.email,
+        branch: adminSession.branch,
+        action: "replied",
+        entityType: "review",
+        entityName: selectedReview.productName,
+        details: `Replied to review by ${selectedReview.customerEmail}.`,
+      });
+
+      return nextReviews;
+    });
+
+    toast.success("Review reply saved.");
   };
 
   const getReviewStats = () => {
@@ -200,7 +177,9 @@ export function ReviewManagement() {
     const approved = reviews.filter(r => r.status === 'approved').length;
     const pending = reviews.filter(r => r.status === 'pending').length;
     const rejected = reviews.filter(r => r.status === 'rejected').length;
-    const averageRating = reviews.reduce((sum, r) => sum + r.rating, 0) / total;
+    const averageRating = total
+      ? reviews.reduce((sum, r) => sum + r.rating, 0) / total
+      : 0;
 
     return { total, approved, pending, rejected, averageRating };
   };
@@ -332,6 +311,21 @@ export function ReviewManagement() {
           >
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-start gap-4">
+                {getCustomerProfileByEmail(review.customerEmail)?.profileImage ? (
+                  <img
+                    src={getCustomerProfileByEmail(review.customerEmail)?.profileImage}
+                    alt={review.customerName}
+                    className="h-12 w-12 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black text-sm font-semibold uppercase tracking-wider text-white">
+                    {review.customerName
+                      .split(" ")
+                      .map((part) => part[0])
+                      .join("")
+                      .slice(0, 2)}
+                  </div>
+                )}
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="font-semibold tracking-wider">{review.customerName}</h3>
@@ -455,6 +449,21 @@ export function ReviewManagement() {
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-3 mb-2">
+                    {getCustomerProfileByEmail(selectedReview.customerEmail)?.profileImage ? (
+                      <img
+                        src={getCustomerProfileByEmail(selectedReview.customerEmail)?.profileImage}
+                        alt={selectedReview.customerName}
+                        className="h-12 w-12 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black text-sm font-semibold uppercase tracking-wider text-white">
+                        {selectedReview.customerName
+                          .split(" ")
+                          .map((part) => part[0])
+                          .join("")
+                          .slice(0, 2)}
+                      </div>
+                    )}
                     <h4 className="text-lg font-semibold tracking-wider">{selectedReview.customerName}</h4>
                     {selectedReview.verified && (
                       <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full tracking-wider uppercase">
@@ -494,6 +503,22 @@ export function ReviewManagement() {
               <div>
                 <h5 className="font-medium tracking-wider mb-2">{selectedReview.title}</h5>
                 <p className="text-gray-700 tracking-wider leading-relaxed">{selectedReview.comment}</p>
+              </div>
+
+              <div>
+                <label className="block font-medium tracking-wider mb-2">Admin Reply</label>
+                <textarea
+                  value={replyDraft}
+                  onChange={(event) => setReplyDraft(event.target.value)}
+                  rows={4}
+                  placeholder="Write a response that will appear on the product review."
+                  className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:border-black tracking-wider"
+                />
+                {selectedReview.adminReply && selectedReview.adminReplyAt && (
+                  <p className="mt-2 text-sm text-gray-500 tracking-wider">
+                    Last updated by {selectedReview.adminReplyBy || "Admin"} on {formatDate(selectedReview.adminReplyAt)}
+                  </p>
+                )}
               </div>
 
               {/* Review Images */}
@@ -537,8 +562,11 @@ export function ReviewManagement() {
                     </button>
                   </>
                 )}
-                <button className="flex-1 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 transition-colors tracking-wider uppercase text-sm">
-                  Reply to Review
+                <button
+                  onClick={handleSaveReply}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 transition-colors tracking-wider uppercase text-sm"
+                >
+                  Save Reply
                 </button>
                 <button
                   onClick={() => setShowReviewModal(false)}

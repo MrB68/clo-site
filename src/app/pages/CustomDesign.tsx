@@ -1,6 +1,8 @@
 import { motion } from "motion/react";
 import { Upload, X, Check, Minus } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
+import { appendCustomDesignSubmission } from "../utils/customDesigns";
 
 interface DesignForm {
   name: string;
@@ -50,22 +52,59 @@ export function CustomDesign() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const fileToDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error("Unable to read file"));
+      reader.readAsDataURL(file);
+    });
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Mock submission
-    setSubmitted(true);
-    setTimeout(() => {
-      setSubmitted(false);
-      setForm({
-        name: "",
-        email: "",
-        phone: "",
-        productType: "",
-        quantity: "",
-        message: "",
-        file: null,
+
+    if (!form.file) {
+      toast.error("Please upload your design file");
+      return;
+    }
+
+    try {
+      const fileDataUrl = await fileToDataUrl(form.file);
+
+      appendCustomDesignSubmission({
+        id: `CD-${Date.now()}`,
+        name: form.name.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        productType: form.productType,
+        quantity: Number(form.quantity),
+        message: form.message.trim(),
+        file: {
+          name: form.file.name,
+          type: form.file.type,
+          dataUrl: fileDataUrl,
+        },
+        status: "new",
+        createdAt: new Date().toISOString(),
       });
-    }, 3000);
+
+      setSubmitted(true);
+      toast.success("Design submitted successfully");
+      setTimeout(() => {
+        setSubmitted(false);
+        setForm({
+          name: "",
+          email: "",
+          phone: "",
+          productType: "",
+          quantity: "",
+          message: "",
+          file: null,
+        });
+      }, 3000);
+    } catch {
+      toast.error("Failed to submit design");
+    }
   };
 
   return (

@@ -1,16 +1,37 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import { ArrowRight, Minus } from "lucide-react";
-import { useState } from "react";
 import { useProducts } from "../contexts/ProductsContext";
 import { ProductCard } from "../components/ProductCard";
 import { StyleSwitch } from "../components/StyleToggle";
+import { getStoredReviews, type StoredReview } from "../utils/reviews";
+import { getCustomerProfileByEmail } from "../utils/customerProfile";
 
 export function Home() {
-  const [activeStyle, setActiveStyle] = useState<"minimal" | "extravagant">("minimal");
   const { products } = useProducts();
-  const filteredProducts = products.filter((p) => p.style === activeStyle);
+  const [reviews, setReviews] = useState<StoredReview[]>(() => getStoredReviews());
+  const filteredProducts = products.filter((p) => p.style === "minimal");
   const newArrivals = filteredProducts.filter((p) => p.isNew).slice(0, 4);
+  const featuredReviews = reviews
+    .filter((review) => review.status === "approved" && review.rating > 4)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, 3);
+
+  useEffect(() => {
+    const syncReviews = () => {
+      setReviews(getStoredReviews());
+    };
+
+    syncReviews();
+    window.addEventListener("reviewsUpdated", syncReviews);
+    window.addEventListener("storage", syncReviews);
+
+    return () => {
+      window.removeEventListener("reviewsUpdated", syncReviews);
+      window.removeEventListener("storage", syncReviews);
+    };
+  }, []);
 
   return (
     <div>
@@ -24,7 +45,7 @@ export function Home() {
           />
         </div>
         <div className="relative z-10 h-full flex items-center justify-center">
-          <div className="text-center text-white space-y-12 px-4">
+          <div className="text-center text-white space-y-12 px-4 md:px-0">
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
@@ -60,7 +81,7 @@ export function Home() {
       </section>
 
       {/* Philosophy Section */}
-      <section className="py-32 px-4 sm:px-6 lg:px-8 bg-white">
+      <section className="border-b border-black bg-white px-4 py-32 text-black transition-all duration-700 dark:border-white/10 dark:bg-black dark:text-white sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto text-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -69,35 +90,30 @@ export function Home() {
             transition={{ duration: 0.8 }}
             className="space-y-8"
           >
-            <div className="flex items-center justify-center gap-4 mb-8">
-              <div className="w-12 h-px bg-black"></div>
-              <Minus size={16} />
-              <div className="w-12 h-px bg-black"></div>
+            <div className="flex items-center justify-center gap-4 mb-8 opacity-60">
+              <div className="h-px w-12 bg-black transition-colors duration-500 dark:bg-white"></div>
+              <Minus size={16} className="text-black transition-colors duration-500 dark:text-white" />
+              <div className="h-px w-12 bg-black transition-colors duration-500 dark:bg-white"></div>
             </div>
-            <h2 className="text-4xl md:text-5xl tracking-[0.2em] uppercase">
+            <h2 className="text-4xl tracking-[0.2em] uppercase text-black transition-colors duration-500 dark:text-white md:text-5xl">
               Less is More
             </h2>
-            <p className="text-base md:text-lg max-w-2xl mx-auto leading-relaxed text-gray-600">
-              We believe in the power of simplicity. Each piece is thoughtfully
-              designed to transcend trends, focusing on clean lines, quality
-              materials, and timeless aesthetics.
+            <p className="mx-auto max-w-2xl text-base leading-relaxed text-gray-600 transition-colors duration-500 dark:text-gray-300 md:text-lg">
+              We believe in the power of simplicity. Each piece is thoughtfully designed to transcend trends, focusing on clean lines, quality materials, and timeless aesthetics.
             </p>
           </motion.div>
         </div>
       </section>
 
       {/* Style Toggle Section */}
-      <section className="py-32 px-4 sm:px-6 lg:px-8 bg-white border-t border-gray-200">
+      <section className="border-t border-black bg-white px-4 py-32 transition-all duration-700 dark:border-white/10 dark:bg-black sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto">
-          <StyleSwitch 
-            activeStyle={activeStyle}
-            onStyleChange={setActiveStyle}
-          />
+          <StyleSwitch />
         </div>
       </section>
 
       {/* Collection Grid */}
-      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-black text-white">
+      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-black text-white transition-all duration-700">
         <div className="max-w-7xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -105,17 +121,17 @@ export function Home() {
             viewport={{ once: true }}
             className="text-center mb-20"
           >
-            <h2 className="text-3xl md:text-4xl tracking-[0.2em] uppercase mb-3">
+            <h2 className="text-3xl md:text-4xl tracking-[0.2em] uppercase mb-3 text-white">
               Collections
             </h2>
-            <div className="flex items-center justify-center gap-4">
-              <div className="w-8 h-px-white"></div>
-              <Minus size={12} className="opacity-50" />
-              <div className="w-8 h-px-white"></div>
+            <div className="flex items-center justify-center gap-4 opacity-50">
+              <div className="w-8 h-px bg-white"></div>
+              <Minus size={12} className="text-white" />
+              <div className="w-8 h-px bg-white"></div>
             </div>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-white">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-black">
             {/* Men */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -176,7 +192,7 @@ export function Home() {
       </section>
 
       {/* New Arrivals */}
-      <section className="py-32 px-4 sm:px-6 lg:px-8 bg-white">
+      <section className="border-b border-black bg-white px-4 py-32 text-black transition-all duration-700 dark:border-white/10 dark:bg-black dark:text-white sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -184,17 +200,17 @@ export function Home() {
             viewport={{ once: true }}
             className="text-center mb-20"
           >
-            <h2 className="text-3xl md:text-4xl tracking-[0.2em] uppercase mb-3">
+            <h2 className="mb-3 text-3xl tracking-[0.2em] uppercase text-black transition-colors duration-500 dark:text-white md:text-4xl">
               New Arrivals
             </h2>
-            <div className="flex items-center justify-center gap-4">
-              <div className="w-8 h-px bg-black"></div>
-              <Minus size={12} className="opacity-50" />
-              <div className="w-8 h-px bg-black"></div>
+            <div className="flex items-center justify-center gap-4 opacity-50">
+              <div className="h-px w-8 bg-black transition-colors duration-500 dark:bg-white"></div>
+              <Minus size={12} className="text-black transition-colors duration-500 dark:text-white" />
+              <div className="h-px w-8 bg-black transition-colors duration-500 dark:bg-white"></div>
             </div>
           </motion.div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-px bg-gray-200">
+          <div className="grid grid-cols-1 gap-px bg-gray-200 transition-colors duration-500 sm:grid-cols-2 lg:grid-cols-4 dark:bg-white/10">
             {newArrivals.map((product, index) => (
               <motion.div
                 key={product.id}
@@ -211,7 +227,7 @@ export function Home() {
           <div className="mt-16 text-center">
             <Link
               to="/shop"
-              className="inline-flex items-center gap-3 border-2 border-black text-black px-10 py-4 hover:bg-black hover:text-white transition-all duration-300 uppercase tracking-[0.2em] text-sm"
+              className="inline-flex items-center gap-3 border-2 border-black px-10 py-4 text-sm uppercase tracking-[0.2em] text-black transition-all duration-500 hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black"
             >
               View All
               <ArrowRight size={16} />
@@ -221,7 +237,7 @@ export function Home() {
       </section>
 
       {/* Design Principles */}
-      <section className="py-32 px-4 sm:px-6 lg:px-8 bg-black text-white">
+      <section className="bg-white px-4 py-32 text-black transition-all duration-700 dark:bg-black dark:text-white sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
             <motion.div
@@ -232,22 +248,18 @@ export function Home() {
               className="space-y-8"
             >
               <div className="flex items-center gap-4">
-                <div className="w-12 h-px bg-white"></div>
-                <Minus size={16} className="opacity-50" />
+                <div className="h-px w-12 bg-black transition-colors duration-500 dark:bg-white"></div>
+                <Minus size={16} className="text-black opacity-50 transition-colors duration-500 dark:text-white" />
               </div>
-              <h2 className="text-4xl md:text-5xl tracking-[0.2em] uppercase leading-tight">
-                Original
-                <br />
-                Design
+              <h2 className="text-4xl leading-tight tracking-[0.2em] uppercase text-black transition-colors duration-500 dark:text-white md:text-5xl">
+                Original Design
               </h2>
-              <p className="text-gray-400 leading-relaxed text-lg">
-                Every piece in our collection is crafted with intention. We
-                reject fast fashion in favor of enduring design that speaks to
-                those who value authenticity and craftsmanship.
+              <p className="text-lg leading-relaxed text-gray-600 opacity-80 transition-colors duration-500 dark:text-gray-300">
+                Every piece in our collection is crafted with intention. We reject fast fashion in favor of enduring design that speaks to those who value authenticity and craftsmanship.
               </p>
               <Link
                 to="/about"
-                className="inline-flex items-center gap-3 text-sm tracking-[0.2em] uppercase hover:translate-x-2 transition-transform duration-300"
+                className="inline-flex items-center gap-3 text-sm tracking-[0.2em] uppercase text-black transition-all duration-300 hover:translate-x-2 dark:text-white"
               >
                 Our Philosophy <ArrowRight size={16} />
               </Link>
@@ -270,7 +282,7 @@ export function Home() {
       </section>
 
       {/* Values Grid */}
-      <section className="py-32 px-4 sm:px-6 lg:px-8 bg-white">
+      <section className="py-32 px-4 sm:px-6 lg:px-8 transition-all duration-700 bg-black text-white">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-16">
             <motion.div
@@ -281,12 +293,12 @@ export function Home() {
               className="text-center space-y-6"
             >
               <div className="flex justify-center">
-                <div className="w-16 h-16 border-2 border-black flex items-center justify-center">
-                  <Minus size={24} />
+                <div className="w-16 h-16 border-2 border-white flex items-center justify-center transition-colors duration-500">
+                  <Minus size={24} className="text-white" />
                 </div>
               </div>
-              <h3 className="text-xl tracking-[0.2em] uppercase">Minimal</h3>
-              <p className="text-gray-600 leading-relaxed">
+              <h3 className="text-xl tracking-[0.2em] uppercase transition-colors duration-500 text-white">Minimal</h3>
+              <p className="leading-relaxed transition-colors duration-500 opacity-75 text-gray-300">
                 Clean lines and refined silhouettes that stand the test of time.
               </p>
             </motion.div>
@@ -299,12 +311,12 @@ export function Home() {
               className="text-center space-y-6"
             >
               <div className="flex justify-center">
-                <div className="w-16 h-16 border-2 border-black flex items-center justify-center">
-                  <Minus size={24} />
+                <div className="w-16 h-16 border-2 border-white flex items-center justify-center transition-colors duration-500">
+                  <Minus size={24} className="text-white" />
                 </div>
               </div>
-              <h3 className="text-xl tracking-[0.2em] uppercase">Original</h3>
-              <p className="text-gray-600 leading-relaxed">
+              <h3 className="text-xl tracking-[0.2em] uppercase transition-colors duration-500 text-white">Original</h3>
+              <p className="leading-relaxed transition-colors duration-500 opacity-75 text-gray-300">
                 Unique designs that reflect authentic creative vision.
               </p>
             </motion.div>
@@ -317,12 +329,12 @@ export function Home() {
               className="text-center space-y-6"
             >
               <div className="flex justify-center">
-                <div className="w-16 h-16 border-2 border-black flex items-center justify-center">
-                  <Minus size={24} />
+                <div className="w-16 h-16 border-2 border-white flex items-center justify-center transition-colors duration-500">
+                  <Minus size={24} className="text-white" />
                 </div>
               </div>
-              <h3 className="text-xl tracking-[0.2em] uppercase">Quality</h3>
-              <p className="text-gray-600 leading-relaxed">
+              <h3 className="text-xl tracking-[0.2em] uppercase transition-colors duration-500 text-white">Quality</h3>
+              <p className="leading-relaxed transition-colors duration-500 opacity-75 text-gray-300">
                 Premium materials and meticulous attention to detail.
               </p>
             </motion.div>
@@ -331,7 +343,7 @@ export function Home() {
       </section>
 
       {/* Reviews Section */}
-      <section className="py-32 px-4 sm:px-6 lg:px-8 bg-black text-white">
+      <section className="bg-white px-4 py-32 text-black transition-all duration-700 dark:bg-black dark:text-white sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -339,117 +351,87 @@ export function Home() {
             viewport={{ once: true }}
             className="text-center mb-20"
           >
-            <h2 className="text-3xl md:text-4xl tracking-[0.2em] uppercase mb-3">
+            <h2 className="mb-3 text-3xl tracking-[0.2em] uppercase text-black transition-colors duration-500 dark:text-white md:text-4xl">
               What They Say
             </h2>
             <div className="flex items-center justify-center gap-4">
-              <div className="w-8 h-px bg-white"></div>
-              <Minus size={12} className="opacity-50" />
-              <div className="w-8 h-px bg-white"></div>
+              <div className="h-px w-8 bg-black transition-colors duration-500 dark:bg-white"></div>
+              <Minus size={12} className="text-black opacity-50 transition-colors duration-500 dark:text-white" />
+              <div className="h-px w-8 bg-black transition-colors duration-500 dark:bg-white"></div>
             </div>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.1 }}
-              className="bg-white text-black p-8 space-y-6"
-            >
-              <div className="flex gap-1">
-                {[...Array(5)].map((_, i) => (
-                  <div key={i} className="w-4 h-4 bg-black"></div>
-                ))}
-              </div>
-              <p className="text-gray-700 leading-relaxed">
-                "The quality is exceptional. Every piece feels thoughtfully
-                designed and built to last. Finally, a brand that understands
-                minimalism."
-              </p>
-              <div className="flex items-center gap-4 pt-4 border-t border-gray-200">
-                <img
-                  src="https://images.unsplash.com/photo-1655249493799-9cee4fe983bb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwZXJzb24lMjBwb3J0cmFpdCUyMGhlYWRzaG90JTIwcHJvZmVzc2lvbmFsfGVufDF8fHx8MTc3NTE0MDIwM3ww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral"
-                  alt="Reviewer"
-                  className="w-12 h-12 object-cover"
-                />
-                <div>
-                  <p className="text-sm tracking-wider uppercase">Sarah Chen</p>
-                  <p className="text-xs text-gray-500 tracking-wider">
-                    Verified Customer
-                  </p>
-                </div>
-              </div>
-            </motion.div>
+          {featuredReviews.length > 0 ? (
+            <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
+              {featuredReviews.map((review, index) => {
+                const profile = getCustomerProfileByEmail(review.customerEmail);
 
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.2 }}
-              className="bg-white text-black p-8 space-y-6"
-            >
-              <div className="flex gap-1">
-                {[...Array(5)].map((_, i) => (
-                  <div key={i} className="w-4 h-4 bg-black"></div>
-                ))}
-              </div>
-              <p className="text-gray-700 leading-relaxed">
-                "I love how versatile the pieces are. Clean, timeless designs
-                that work for any occasion. The custom print service is
-                incredible."
+                return (
+                  <motion.div
+                    key={review.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: 0.1 * (index + 1) }}
+                    className="space-y-6 border-2 border-black bg-white p-8 transition-all duration-500 dark:border-white/15 dark:bg-neutral-950"
+                  >
+                    <div className="flex gap-1">
+                      {[...Array(review.rating)].map((_, starIndex) => (
+                        <div
+                          key={starIndex}
+                          className="h-4 w-4 bg-black transition-colors duration-500 dark:bg-white"
+                        ></div>
+                      ))}
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-sm uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                        {review.productName}
+                      </p>
+                      <p className="leading-relaxed text-black opacity-80 transition-colors duration-500 dark:text-white">
+                        "{review.comment}"
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-4 border-t border-black pt-4 dark:border-white/15">
+                      {profile?.profileImage ? (
+                        <img
+                          src={profile.profileImage}
+                          alt={review.customerName}
+                          className="h-12 w-12 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black text-sm uppercase tracking-wider text-white dark:bg-white dark:text-black">
+                          {review.customerName
+                            .split(" ")
+                            .map((name) => name[0])
+                            .join("")
+                            .slice(0, 2)}
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-sm tracking-wider uppercase text-black dark:text-white">
+                          {review.customerName}
+                        </p>
+                        <p className="text-xs tracking-wider text-gray-500 dark:text-gray-400">
+                          Verified Customer
+                        </p>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="mx-auto max-w-2xl text-center">
+              <p className="text-gray-600 transition-colors duration-500 dark:text-gray-300">
+                High-rated approved customer reviews will appear here once they start coming in.
               </p>
-              <div className="flex items-center gap-4 pt-4 border-t border-gray-200">
-                <img
-                  src="https://images.unsplash.com/photo-1758922584983-82ffd5720c6a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx3b21hbiUyMHBvcnRyYWl0JTIwcHJvZmVzc2lvbmFsJTIwbWluaW1hbGlzdHxlbnwxfHx8fDE3NzUxNDAyMDN8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral"
-                  alt="Reviewer"
-                  className="w-12 h-12 object-cover"
-                />
-                <div>
-                  <p className="text-sm tracking-wider uppercase">Maya Rodriguez</p>
-                  <p className="text-xs text-gray-500 tracking-wider">
-                    Verified Customer
-                  </p>
-                </div>
-              </div>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.3 }}
-              className="bg-white text-black p-8 space-y-6"
-            >
-              <div className="flex gap-1">
-                {[...Array(5)].map((_, i) => (
-                  <div key={i} className="w-4 h-4 bg-black"></div>
-                ))}
-              </div>
-              <p className="text-gray-700 leading-relaxed">
-                "Best clothing brand I've found in years. The attention to
-                detail is unmatched and the fit is perfect. Worth every penny."
-              </p>
-              <div className="flex items-center gap-4 pt-4 border-t border-gray-200">
-                <img
-                  src="https://images.unsplash.com/photo-1558730234-d8b2281b0d00?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtYW4lMjBwb3J0cmFpdCUyMHN0dWRpbyUyMGxpZ2h0aW5nfGVufDF8fHx8MTc3NTE0MDIwNHww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral"
-                  alt="Reviewer"
-                  className="w-12 h-12 object-cover"
-                />
-                <div>
-                  <p className="text-sm tracking-wider uppercase">James Park</p>
-                  <p className="text-xs text-gray-500 tracking-wider">
-                    Verified Customer
-                  </p>
-                </div>
-              </div>
-            </motion.div>
-          </div>
+            </div>
+          )}
         </div>
       </section>
 
       {/* Newsletter */}
-      <section className="py-32 px-4 sm:px-6 lg:px-8 bg-black text-white">
+      <section className="bg-white px-4 py-32 text-black transition-all duration-700 dark:bg-black dark:text-white sm:px-6 lg:px-8">
         <div className="max-w-2xl mx-auto text-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -459,14 +441,14 @@ export function Home() {
           >
             <div className="space-y-6">
               <div className="flex items-center justify-center gap-4">
-                <div className="w-8 h-px bg-white"></div>
-                <Minus size={12} className="opacity-50" />
-                <div className="w-8 h-px bg-white"></div>
+                <div className="h-px w-8 bg-black transition-colors duration-500 dark:bg-white"></div>
+                <Minus size={12} className="text-black opacity-50 transition-colors duration-500 dark:text-white" />
+                <div className="h-px w-8 bg-black transition-colors duration-500 dark:bg-white"></div>
               </div>
-              <h2 className="text-3xl md:text-4xl tracking-[0.2em] uppercase">
+              <h2 className="text-3xl tracking-[0.2em] uppercase text-black transition-colors duration-500 dark:text-white md:text-4xl">
                 Stay Updated
               </h2>
-              <p className="text-gray-400 max-w-md mx-auto">
+              <p className="mx-auto max-w-md text-gray-600 opacity-75 transition-colors duration-500 dark:text-gray-300">
                 Join our community for exclusive releases and design insights.
               </p>
             </div>
@@ -474,9 +456,9 @@ export function Home() {
               <input
                 type="email"
                 placeholder="Enter your email"
-                className="flex-1 bg-white text-black px-8 py-5 focus:outline-none uppercase tracking-widest text-sm placeholder:text-gray-400"
+                className="flex-1 px-8 py-5 focus:outline-none uppercase tracking-widest text-sm transition-all duration-500 bg-black text-white placeholder:text-gray-500"
               />
-              <button className="px-10 py-5 bg-white text-black hover:bg-gray-200 transition-colors uppercase tracking-[0.2em] text-sm whitespace-nowrap">
+              <button className="px-10 py-5 uppercase tracking-[0.2em] text-sm whitespace-nowrap transition-all duration-500 bg-black text-white hover:bg-gray-900">
                 Subscribe
               </button>
             </div>

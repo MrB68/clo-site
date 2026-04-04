@@ -1,18 +1,73 @@
-import { Outlet, Link, useLocation } from "react-router-dom";
-import { ShoppingCart, User, Menu, X, Search, LogOut } from "lucide-react";
+import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
+import { ShoppingCart, User, Menu, X, Search, LogOut, Moon, Sun } from "lucide-react";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useAuth } from "../contexts/AuthContext";
+import { useTheme } from "next-themes";
+
+const acceptedPaymentMethods = [
+  { name: "eSewa", accentClassName: "bg-green-500", textClassName: "text-green-300" },
+  { name: "IME Pay", accentClassName: "bg-red-500", textClassName: "text-red-300" },
+  { name: "Nepal Pay", accentClassName: "bg-blue-500", textClassName: "text-blue-300" },
+  { name: "Khalti", accentClassName: "bg-purple-500", textClassName: "text-fuchsia-300" },
+] as const;
+
+function PaymentLogoBadge({
+  label,
+  accentClassName,
+  textClassName,
+}: {
+  label: string;
+  accentClassName: string;
+  textClassName: string;
+}) {
+  const initials = label
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 backdrop-blur-sm">
+      <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${accentClassName}`}>
+        <svg viewBox="0 0 40 40" className="h-7 w-7" aria-hidden="true">
+          <rect x="4" y="4" width="32" height="32" rx="10" fill="currentColor" className={textClassName} />
+          <text
+            x="20"
+            y="24"
+            textAnchor="middle"
+            fontSize="12"
+            fontWeight="700"
+            fill="white"
+            fontFamily="Arial, sans-serif"
+          >
+            {initials}
+          </text>
+        </svg>
+      </div>
+      <div className="min-w-0">
+        <p className="text-sm font-medium tracking-wide text-white">{label}</p>
+        <p className="text-xs uppercase tracking-[0.18em] text-gray-400">Accepted</p>
+      </div>
+    </div>
+  );
+}
 
 export function Layout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [cartCount, setCartCount] = useState(0);
+  const [mounted, setMounted] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   const isHomePage = location.pathname === "/";
 
   const { user, signOut, isAuthenticated } = useAuth();
+  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -22,21 +77,73 @@ export function Layout() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // Track cart count from localStorage
+  useEffect(() => {
+    const updateCartCount = () => {
+      const cartItems = localStorage.getItem("cartItems");
+      if (cartItems) {
+        try {
+          const items = JSON.parse(cartItems);
+          const totalItems = Array.isArray(items)
+            ? items.reduce(
+                (sum, item) =>
+                  sum +
+                  (typeof item?.quantity === "number" && item.quantity > 0
+                    ? item.quantity
+                    : 1),
+                0
+              )
+            : 0;
+          setCartCount(totalItems);
+        } catch {
+          setCartCount(0);
+        }
+      } else {
+        setCartCount(0);
+      }
+    };
+
+    updateCartCount();
+    window.addEventListener("storage", updateCartCount);
+    window.addEventListener("cartUpdated", updateCartCount);
+
+    return () => {
+      window.removeEventListener("storage", updateCartCount);
+      window.removeEventListener("cartUpdated", updateCartCount);
+    };
+  }, []);
+
   useEffect(() => {
     setMobileMenuOpen(false);
     setSearchOpen(false);
     setUserMenuOpen(false);
   }, [location]);
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const toggleTheme = () => {
+    setTheme(theme === "dark" ? "light" : "dark");
+  };
+
+  const handleSearchSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    const trimmedQuery = searchTerm.trim();
+    navigate(trimmedQuery ? `/shop?search=${encodeURIComponent(trimmedQuery)}` : "/shop");
+    setSearchOpen(false);
+    setSearchTerm("");
+  };
+
   return (
-    <div className="min-h-screen bg-white text-black">
+    <div className="min-h-screen bg-background text-foreground transition-colors">
       {/* Navbar */}
       <motion.nav
         initial={{ y: -100 }}
         animate={{ y: 0 }}
         className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
           scrolled || !isHomePage
-            ? "bg-white shadow-sm"
+            ? "bg-background shadow-sm"
             : "bg-transparent text-white"
         }`}
       >
@@ -78,6 +185,15 @@ export function Layout() {
             {/* Desktop Icons */}
             <div className="hidden md:flex items-center gap-6">
               <button
+                onClick={toggleTheme}
+                className={`hover:opacity-70 transition-opacity ${
+                  scrolled || !isHomePage ? "text-black dark:text-white" : "text-white"
+                }`}
+                aria-label="Toggle theme"
+              >
+                {mounted && theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
+              </button>
+              <button
                 onClick={() => setSearchOpen(!searchOpen)}
                 className={`hover:opacity-70 transition-opacity ${
                   scrolled || !isHomePage ? "text-black" : "text-white"
@@ -100,13 +216,13 @@ export function Layout() {
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: 10 }}
-                      className="absolute right-0 top-full mt-4 w-48 bg-white border border-gray-200 shadow-lg"
+                      className="absolute right-0 top-full mt-4 w-48 bg-background border border-border shadow-lg"
                     >
                       <div className="py-2">
                         {isAuthenticated ? (
                           <>
                             <div className="px-6 py-3 border-b border-gray-200">
-                              <p className="text-sm font-medium tracking-wider text-black">
+                              <p className="text-sm font-medium tracking-wider text-foreground">
                                 {user?.name}
                               </p>
                               <p className="text-xs text-gray-500 tracking-wider">
@@ -115,13 +231,13 @@ export function Layout() {
                             </div>
                             <Link
                               to="/orders"
-                              className="block px-6 py-3 text-sm tracking-wider uppercase hover:bg-gray-50 transition-colors text-black"
+                              className="block px-6 py-3 text-sm tracking-wider uppercase hover:bg-muted transition-colors text-foreground"
                             >
                               Orders
                             </Link>
                             <Link
                               to="/profile"
-                              className="block px-6 py-3 text-sm tracking-wider uppercase hover:bg-gray-50 transition-colors text-black"
+                              className="block px-6 py-3 text-sm tracking-wider uppercase hover:bg-muted transition-colors text-foreground"
                             >
                               Profile
                             </Link>
@@ -131,7 +247,7 @@ export function Layout() {
                                 signOut();
                                 setUserMenuOpen(false);
                               }}
-                              className="w-full text-left px-6 py-3 text-sm tracking-wider uppercase hover:bg-gray-50 transition-colors text-red-600 flex items-center gap-2"
+                              className="w-full text-left px-6 py-3 text-sm tracking-wider uppercase hover:bg-muted transition-colors text-red-600 flex items-center gap-2"
                             >
                               <LogOut size={16} />
                               Sign Out
@@ -141,13 +257,13 @@ export function Layout() {
                           <>
                             <Link
                               to="/signin"
-                              className="block px-6 py-3 text-sm tracking-wider uppercase hover:bg-gray-50 transition-colors text-black"
+                              className="block px-6 py-3 text-sm tracking-wider uppercase hover:bg-muted transition-colors text-foreground"
                             >
                               Sign In
                             </Link>
                             <Link
                               to="/register"
-                              className="block px-6 py-3 text-sm tracking-wider uppercase hover:bg-gray-50 transition-colors text-black"
+                              className="block px-6 py-3 text-sm tracking-wider uppercase hover:bg-muted transition-colors text-foreground"
                             >
                               Register
                             </Link>
@@ -160,11 +276,16 @@ export function Layout() {
               </div>
               <Link
                 to="/cart"
-                className={`hover:opacity-70 transition-opacity ${
+                className={`hover:opacity-70 transition-opacity relative ${
                   scrolled || !isHomePage ? "text-black" : "text-white"
                 }`}
               >
                 <ShoppingCart size={20} />
+                {cartCount > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                    {cartCount}
+                  </span>
+                )}
               </Link>
             </div>
 
@@ -187,24 +308,38 @@ export function Layout() {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              className="bg-white border-t border-gray-200"
+              className="bg-background border-t border-border"
             >
               <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-                <div className="flex items-center gap-4">
+                <form
+                  onSubmit={handleSearchSubmit}
+                  className="flex flex-col gap-4 sm:flex-row sm:items-center"
+                >
                   <Search size={20} className="text-gray-400" />
                   <input
                     type="text"
                     placeholder="SEARCH PRODUCTS..."
                     autoFocus
+                    value={searchTerm}
+                    onChange={(event) => setSearchTerm(event.target.value)}
                     className="flex-1 bg-transparent border-b-2 border-gray-300 px-4 py-3 focus:outline-none focus:border-black transition-colors uppercase tracking-widest text-sm placeholder:text-gray-400"
                   />
-                  <button
-                    onClick={() => setSearchOpen(false)}
-                    className="text-black hover:opacity-70"
-                  >
-                    <X size={20} />
-                  </button>
-                </div>
+                  <div className="flex items-center gap-3 self-end sm:self-auto">
+                    <button
+                      type="submit"
+                      className="bg-black px-4 py-2 text-xs uppercase tracking-[0.2em] text-white transition-colors hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
+                    >
+                      Search
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSearchOpen(false)}
+                      className="text-foreground hover:opacity-70"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+                </form>
               </div>
             </motion.div>
           )}
@@ -217,7 +352,7 @@ export function Layout() {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              className="md:hidden bg-white border-t"
+              className="md:hidden bg-background border-t border-border"
             >
               <div className="px-4 py-6 space-y-4">
                 <Link
@@ -238,6 +373,13 @@ export function Layout() {
                 >
                   About
                 </Link>
+                <button
+                  onClick={toggleTheme}
+                  className="flex items-center gap-3 text-black dark:text-white text-sm tracking-widest uppercase"
+                >
+                  {mounted && theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
+                  {mounted && theme === "dark" ? "Light Mode" : "Dark Mode"}
+                </button>
                 <div className="pt-4 border-t space-y-4">
                   <button
                     onClick={() => {
@@ -265,8 +407,13 @@ export function Layout() {
                   </div>
                 </div>
                 <div className="flex items-center gap-6 pt-4 border-t">
-                  <Link to="/cart" className="text-black">
+                  <Link to="/cart" className="text-black relative">
                     <ShoppingCart size={20} />
+                    {cartCount > 0 && (
+                      <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                        {cartCount}
+                      </span>
+                    )}
                   </Link>
                 </div>
               </div>
@@ -283,36 +430,41 @@ export function Layout() {
       {/* Footer */}
       <footer className="bg-black text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-12">
+          <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-[1fr_0.9fr_0.9fr_1.2fr] lg:gap-12">
             {/* Brand */}
-            <div className="space-y-4">
+            <div className="group space-y-4 sm:col-span-2 lg:col-span-1">
               <h3 className="text-xl tracking-[0.3em] uppercase">clo</h3>
-              <p className="text-gray-400 text-sm">
+              <div className="space-y-2">
+              <p className="max-w-xs text-gray-400 text-sm leading-6">
                 Minimal. Original. Design.
               </p>
+                <p className="text-sm uppercase tracking-[0.24em] text-white/0 transition duration-300 group-hover:text-white/75">
+                  Extravagant
+                </p>
+              </div>
             </div>
 
             {/* Shop */}
             <div className="space-y-4">
               <h4 className="font-medium tracking-widest uppercase text-sm">Shop</h4>
-              <ul className="space-y-2 text-sm text-gray-400">
+              <ul className="space-y-3 text-sm text-gray-400">
                 <li>
-                  <Link to="/shop" className="hover:text-white transition-colors tracking-wider">
+                  <Link to="/shop" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">
                     All Products
                   </Link>
                 </li>
                 <li>
-                  <Link to="/custom" className="hover:text-white transition-colors tracking-wider">
+                  <Link to="/custom" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">
                     Custom Prints
                   </Link>
                 </li>
                 <li>
-                  <Link to="/shop?filter=new" className="hover:text-white transition-colors tracking-wider">
+                  <Link to="/shop?filter=new" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">
                     New Arrivals
                   </Link>
                 </li>
                 <li>
-                  <Link to="/shop" className="hover:text-white transition-colors tracking-wider">
+                  <Link to="/shop" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">
                     Collections
                   </Link>
                 </li>
@@ -322,24 +474,24 @@ export function Layout() {
             {/* Help */}
             <div className="space-y-4">
               <h4 className="font-medium tracking-widest uppercase text-sm">Help</h4>
-              <ul className="space-y-2 text-sm text-gray-400">
+              <ul className="space-y-3 text-sm text-gray-400">
                 <li>
-                  <a href="#" className="hover:text-white transition-colors tracking-wider">
+                  <a href="#" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">
                     Customer Service
                   </a>
                 </li>
                 <li>
-                  <Link to="/shipping" className="hover:text-white transition-colors tracking-wider">
+                  <Link to="/shipping" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">
                     Shipping & Returns
                   </Link>
                 </li>
                 <li>
-                  <Link to="/size-guide" className="hover:text-white transition-colors tracking-wider">
+                  <Link to="/size-guide" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">
                     Size Guide
                   </Link>
                 </li>
                 <li>
-                  <Link to="/contact" className="hover:text-white transition-colors tracking-wider">
+                  <Link to="/contact" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">
                     Contact Us
                   </Link>
                 </li>
@@ -347,28 +499,43 @@ export function Layout() {
             </div>
 
             {/* Newsletter */}
-            <div className="space-y-4">
+            <div className="space-y-4 sm:col-span-2 lg:col-span-1 lg:max-w-md">
               <h4 className="font-medium tracking-widest uppercase text-sm">Newsletter</h4>
-              <p className="text-sm text-gray-400">
+              <p className="max-w-md text-sm text-gray-400 leading-6">
                 Subscribe for exclusive offers and updates
               </p>
-              <div className="flex gap-px">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
                 <input
                   type="email"
                   placeholder="Email"
-                  className="flex-1 bg-white/10 border border-white/20 px-4 py-2 text-sm focus:outline-none focus:border-white/40 tracking-wider"
+                  className="min-w-0 flex-1 bg-white/10 border border-white/20 px-4 py-3 text-sm focus:outline-none focus:border-white/40 tracking-wider"
                 />
-                <button className="px-6 py-2 bg-white text-black hover:bg-gray-200 transition-colors text-sm tracking-widest uppercase">
+                <button className="w-full px-6 py-3 bg-white text-black hover:bg-gray-200 transition-colors text-sm tracking-widest uppercase sm:w-auto">
                   Join
                 </button>
+              </div>
+              <div className="space-y-4 pt-2">
+                <h5 className="text-xs font-medium uppercase tracking-[0.22em] text-gray-400">
+                  Accepted Payment Methods
+                </h5>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {acceptedPaymentMethods.map((method) => (
+                    <PaymentLogoBadge
+                      key={method.name}
+                      label={method.name}
+                      accentClassName={method.accentClassName}
+                      textClassName={method.textClassName}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
           </div>
 
           {/* Bottom */}
-          <div className="mt-12 pt-8 border-t border-white/10 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-gray-400">
+          <div className="mt-12 flex flex-col gap-4 border-t border-white/10 pt-8 text-center text-sm text-gray-400 md:flex-row md:items-center md:justify-between md:text-left">
             <p>© 2026 clo. All rights reserved.</p>
-            <div className="flex gap-6">
+            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 md:justify-end">
               <Link to="/privacy" className="hover:text-white transition-colors tracking-wider">
                 Privacy Policy
               </Link>

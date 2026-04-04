@@ -41,6 +41,8 @@
   --sidebar-ring: #000000;
 }
 
+
+
 .dark {
   --background: #000000;
   --foreground: #ffffff;
@@ -178,4 +180,218 @@
     font-weight: var(--font-weight-normal);
     line-height: 1.5;
   }
+}
+
+/* Animation for Welcome overlay */
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeInScale 0.6s ease-out;
+}
+
+/* Global theme transition styles */
+html {
+  transition: var(--theme-transition);
+}
+
+body {
+  background-color: var(--theme-bg-primary);
+  color: var(--theme-text-primary);
+  transition: var(--theme-transition);
+}
+
+.dark .bg-white {
+  background-color: #000000 !important;
+}
+
+.dark .bg-gray-50,
+.dark .bg-gray-100 {
+  background-color: #111111 !important;
+}
+
+.dark .text-black {
+  color: #ffffff !important;
+}
+
+.dark .text-gray-900 {
+  color: #f5f5f5 !important;
+}
+
+.dark .text-gray-700,
+.dark .text-gray-600,
+.dark .text-gray-500,
+.dark .text-gray-400 {
+  color: #b3b3b3 !important;
+}
+
+.dark .border-gray-100,
+.dark .border-gray-200,
+.dark .border-gray-300 {
+  border-color: #333333 !important;
+}
+
+.dark .border-black {
+  border-color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.dark .focus\:border-black:focus {
+  border-color: rgba(255, 255, 255, 0.95) !important;
+}
+
+.dark .hover\:text-black:hover {
+  color: #ffffff !important;
+}
+
+.dark .hover\:bg-gray-50:hover,
+.dark .hover\:bg-gray-100:hover,
+.dark .hover\:bg-gray-200:hover {
+  background-color: #171717 !important;
+}
+
+.dark .shadow-sm,
+.dark .shadow-lg,
+.dark .shadow-xl {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06) !important;
+}
+
+.admin-dark .bg-white {
+  background-color: #050505 !important;
+}
+
+.admin-dark .bg-gray-50,
+.admin-dark .bg-gray-100 {
+  background-color: #111111 !important;
+}
+
+.admin-dark .text-black {
+  color: #ffffff !important;
+}
+
+.admin-dark .text-gray-900 {
+  color: #f5f5f5 !important;
+}
+
+.admin-dark .text-gray-700,
+.admin-dark .text-gray-600,
+.admin-dark .text-gray-500,
+.admin-dark .text-gray-400 {
+  color: #b3b3b3 !important;
+}
+
+.admin-dark .border-gray-100,
+.admin-dark .border-gray-200,
+.admin-dark .border-gray-300,
+.admin-dark .border-black {
+  border-color: #333333 !important;
+}
+
+.admin-dark .shadow-sm,
+.admin-dark .shadow-lg,
+.admin-dark .shadow-xl {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
+}
+
+.admin-dark .hover\:text-black:hover {
+  color: #ffffff !important;
+}
+
+.admin-dark .hover\:bg-gray-50:hover,
+.admin-dark .hover\:bg-gray-100:hover,
+.admin-dark .hover\:bg-gray-200:hover {
+  background-color: #171717 !important;
+}
+
+.admin-dark .focus\:border-black:focus {
+  border-color: #ffffff !important;
+}
+
+.dark .admin-light .bg-white {
+  background-color: #ffffff !important;
+}
+
+.dark .admin-light .bg-gray-50 {
+  background-color: #f9fafb !important;
+}
+
+.dark .admin-light .bg-gray-100 {
+  background-color: #f3f4f6 !important;
+}
+
+.dark .admin-light .text-black,
+.dark .admin-light .text-gray-900 {
+  color: #111111 !important;
+}
+
+.dark .admin-light .text-gray-700 {
+  color: #374151 !important;
+}
+
+.dark .admin-light .text-gray-600 {
+  color: #4b5563 !important;
+}
+
+.dark .admin-light .text-gray-500,
+.dark .admin-light .text-gray-400 {
+  color: #6b7280 !important;
+}
+
+.dark .admin-light .border-gray-100,
+.dark .admin-light .border-gray-200,
+.dark .admin-light .border-gray-300 {
+  border-color: #d1d5db !important;
+}
+
+.dark .admin-light .border-black {
+  border-color: #000000 !important;
+}
+
+.dark .admin-light .shadow-sm,
+.dark .admin-light .shadow-lg,
+.dark .admin-light .shadow-xl {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08) !important;
+}
+
+.dark .admin-light .hover\:text-black:hover {
+  color: #000000 !important;
+}
+
+.dark .admin-light .hover\:bg-gray-50:hover {
+  background-color: #f9fafb !important;
+}
+
+.dark .admin-light .hover\:bg-gray-100:hover {
+  background-color: #f3f4f6 !important;
+}
+
+.dark .admin-light .hover\:bg-gray-200:hover {
+  background-color: #e5e7eb !important;
+}
+
+.dark .admin-light .focus\:border-black:focus {
+  border-color: #000000 !important;
+}
+
+/* Apply theme colors to common elements */
+.minimal-theme,
+.extravagant-theme {
+  a {
+    transition: var(--theme-transition);
+  }
+
+  button,
+  input,
+  textarea {
+    transition: var(--theme-transition);
+  }
+
+  border-color: var(--theme-border);
 }

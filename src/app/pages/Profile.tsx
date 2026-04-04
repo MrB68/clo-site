@@ -1,12 +1,34 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "motion/react";
-import { User, Mail, Calendar, ArrowLeft, LogOut } from "lucide-react";
+import { User, Mail, Calendar, ArrowLeft, LogOut, Camera } from "lucide-react";
+import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
+import {
+  getCustomerProfile,
+  saveCustomerProfile,
+  type CustomerProfileDetails,
+} from "../utils/customerProfile";
+import { nepalLocations } from "../utils/nepalLocations";
 
 export function Profile() {
   const { user, signOut } = useAuth();
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [savedDetails, setSavedDetails] = useState<CustomerProfileDetails>({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    province: "",
+    district: "",
+    city: "",
+    area: "",
+    wardNumber: "",
+    landmark: "",
+    address: "",
+    postalCode: "",
+    profileImage: "",
+  });
 
   if (!user) {
     return (
@@ -38,6 +60,92 @@ export function Profile() {
     setTimeout(() => {
       signOut();
     }, 500);
+  };
+
+  const derivedName = useMemo(() => {
+    const fullName = user.name.trim();
+    const parts = fullName.split(/\s+/);
+
+    return {
+      firstName: parts[0] ?? "",
+      lastName: parts.slice(1).join(" "),
+    };
+  }, [user.name]);
+
+  const provinceOptions = Object.keys(nepalLocations);
+  const districtOptions = savedDetails.province
+    ? nepalLocations[savedDetails.province]?.districts ?? []
+    : [];
+  const cityOptions = savedDetails.province
+    ? nepalLocations[savedDetails.province]?.cities ?? []
+    : [];
+
+  useEffect(() => {
+    const storedProfile = getCustomerProfile(user.id);
+
+    if (storedProfile) {
+      setSavedDetails(storedProfile);
+      return;
+    }
+
+    setSavedDetails((current) => ({
+      ...current,
+      firstName: derivedName.firstName,
+      lastName: derivedName.lastName,
+      email: user.email,
+    }));
+  }, [derivedName.firstName, derivedName.lastName, user.email, user.id]);
+
+  const handleDetailsChange = (
+    event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
+    const { name, value } = event.target;
+    setSavedDetails((current) => {
+      if (name === "province") {
+        return {
+          ...current,
+          province: value,
+          district: "",
+          city: "",
+          area: "",
+        };
+      }
+
+      return { ...current, [name]: value };
+    });
+  };
+
+  const handleProfileImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please upload an image file");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setSavedDetails((current) => ({
+        ...current,
+        profileImage: typeof reader.result === "string" ? reader.result : "",
+      }));
+      toast.success("Profile picture added");
+    };
+    reader.onerror = () => {
+      toast.error("Unable to read the selected image");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveDetails = () => {
+    saveCustomerProfile(user.id, {
+      ...savedDetails,
+      email: savedDetails.email.trim() || user.email,
+    });
+    toast.success("Profile details saved for checkout");
   };
 
   const formatDate = (dateString: string) => {
@@ -86,8 +194,27 @@ export function Profile() {
 
               <div className="space-y-6">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-black rounded-full flex items-center justify-center">
-                    <User size={24} className="text-white" />
+                  <div className="relative">
+                    <div className="w-16 h-16 overflow-hidden rounded-full bg-black flex items-center justify-center">
+                      {savedDetails.profileImage ? (
+                        <img
+                          src={savedDetails.profileImage}
+                          alt={user.name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <User size={28} className="text-white" />
+                      )}
+                    </div>
+                    <label className="absolute -bottom-1 -right-1 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-white text-black shadow-md transition hover:bg-gray-100">
+                      <Camera size={14} />
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleProfileImageChange}
+                        className="hidden"
+                      />
+                    </label>
                   </div>
                   <div>
                     <h3 className="font-medium tracking-wider">{user.name}</h3>
@@ -96,6 +223,9 @@ export function Profile() {
                     </p>
                   </div>
                 </div>
+                <p className="text-xs text-gray-500 tracking-wider uppercase">
+                  Click the camera icon to upload your profile picture.
+                </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
@@ -137,6 +267,193 @@ export function Profile() {
                       <span className="tracking-wider text-green-600">Active</span>
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-8 bg-white rounded-lg shadow-sm p-6">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold tracking-widest uppercase">
+                    Checkout Details
+                  </h2>
+                  <p className="text-sm text-gray-600 tracking-wider">
+                    Save your delivery information here to auto-fill checkout for this account.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSaveDetails}
+                  className="bg-black px-5 py-3 text-sm uppercase tracking-widest text-white transition-colors hover:bg-gray-800"
+                >
+                  Save Details
+                </button>
+              </div>
+
+              <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-500">
+                    First Name
+                  </label>
+                  <input
+                    type="text"
+                    name="firstName"
+                    value={savedDetails.firstName}
+                    onChange={handleDetailsChange}
+                    className="w-full rounded border border-gray-300 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-500">
+                    Last Name
+                  </label>
+                  <input
+                    type="text"
+                    name="lastName"
+                    value={savedDetails.lastName}
+                    onChange={handleDetailsChange}
+                    className="w-full rounded border border-gray-300 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-500">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={savedDetails.email}
+                    onChange={handleDetailsChange}
+                    className="w-full rounded border border-gray-300 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-500">
+                    Phone
+                  </label>
+                  <input
+                    type="text"
+                    name="phone"
+                    value={savedDetails.phone}
+                    onChange={handleDetailsChange}
+                    className="w-full rounded border border-gray-300 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-500">
+                    Province
+                  </label>
+                  <select
+                    name="province"
+                    value={savedDetails.province}
+                    onChange={handleDetailsChange}
+                    className="w-full rounded border border-gray-300 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                  >
+                    <option value="">Select Province</option>
+                    {provinceOptions.map((province) => (
+                      <option key={province} value={province}>
+                        {province}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-500">
+                    District
+                  </label>
+                  <select
+                    name="district"
+                    value={savedDetails.district}
+                    onChange={handleDetailsChange}
+                    className="w-full rounded border border-gray-300 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                    disabled={!savedDetails.province}
+                  >
+                    <option value="">Select District</option>
+                    {districtOptions.map((district) => (
+                      <option key={district} value={district}>
+                        {district}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-500">
+                    City / Municipality
+                  </label>
+                  <select
+                    name="city"
+                    value={savedDetails.city}
+                    onChange={handleDetailsChange}
+                    className="w-full rounded border border-gray-300 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                    disabled={!savedDetails.province}
+                  >
+                    <option value="">Select City / Municipality</option>
+                    {cityOptions.map((city) => (
+                      <option key={city} value={city}>
+                        {city}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-500">
+                    Area / Tole
+                  </label>
+                  <input
+                    type="text"
+                    name="area"
+                    value={savedDetails.area}
+                    onChange={handleDetailsChange}
+                    className="w-full rounded border border-gray-300 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-500">
+                    Ward Number
+                  </label>
+                  <input
+                    type="text"
+                    name="wardNumber"
+                    value={savedDetails.wardNumber}
+                    onChange={handleDetailsChange}
+                    className="w-full rounded border border-gray-300 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-500">
+                    Landmark
+                  </label>
+                  <input
+                    type="text"
+                    name="landmark"
+                    value={savedDetails.landmark}
+                    onChange={handleDetailsChange}
+                    className="w-full rounded border border-gray-300 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-500">
+                    House / Street Address
+                  </label>
+                  <input
+                    type="text"
+                    name="address"
+                    value={savedDetails.address}
+                    onChange={handleDetailsChange}
+                    className="w-full rounded border border-gray-300 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-500">
+                    Postal Code
+                  </label>
+                  <input
+                    type="text"
+                    name="postalCode"
+                    value={savedDetails.postalCode}
+                    onChange={handleDetailsChange}
+                    className="w-full rounded border border-gray-300 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                  />
                 </div>
               </div>
             </div>

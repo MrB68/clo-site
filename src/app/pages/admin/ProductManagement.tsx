@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "motion/react";
-import { Plus, Edit, Trash2, Package, Image, Star, Eye, EyeOff, Upload, X } from "lucide-react";
+import { Plus, Edit, Trash2, Package, Image, Star, Eye, EyeOff, Upload, X, Check, AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Textarea } from "../../components/ui/textarea";
@@ -11,7 +11,9 @@ import { Label } from "../../components/ui/label";
 import { Switch } from "../../components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "../../components/ui/alert-dialog";
+import { toast } from "sonner";
 import { products as defaultProducts } from "../../data/products";
+import { addRecycleBinItem, appendAdminAuditLog, getAdminSession } from "../../utils/admin";
 
 interface Product {
   id: string;
@@ -37,12 +39,23 @@ interface Product {
   updatedAt: string;
 }
 
+function normalizeProductForStore(product: Product): Product {
+  const normalizedImages = product.images ?? [];
+
+  return {
+    ...product,
+    images: normalizedImages,
+    image: normalizedImages[0] || product.image || "",
+  };
+}
+
 interface FormData {
   name: string;
   price: string;
   originalPrice: string;
   description: string;
   category: string;
+  style: "minimal" | "extravagant";
   images: string[];
   stock: string;
   featured: boolean;
@@ -62,6 +75,7 @@ const sizes = ["XS", "S", "M", "L", "XL", "XXL"];
 const colors = ["Black", "White", "Red", "Blue", "Green", "Yellow", "Purple", "Pink", "Gray", "Brown"];
 
 export function ProductManagement() {
+  const adminSession = getAdminSession();
   const [products, setProducts] = useState<Product[]>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -75,6 +89,7 @@ export function ProductManagement() {
     originalPrice: "",
     description: "",
     category: "",
+    style: "minimal",
     images: [],
     stock: "",
     featured: false,
@@ -125,12 +140,42 @@ export function ProductManagement() {
   }, []);
 
   const saveProducts = (updatedProducts: Product[]) => {
-    setProducts(updatedProducts);
-    localStorage.setItem('mainProducts', JSON.stringify(updatedProducts));
-    // Also update the admin-specific storage for consistency
-    localStorage.setItem('adminProducts', JSON.stringify(updatedProducts));
-    // Dispatch custom event to notify main app of product updates
-    window.dispatchEvent(new CustomEvent('productsUpdated'));
+    try {
+      const normalizedProducts = updatedProducts.map(normalizeProductForStore);
+
+      setProducts(normalizedProducts);
+      localStorage.setItem('mainProducts', JSON.stringify(normalizedProducts));
+      // Also update the admin-specific storage for consistency
+      localStorage.setItem('adminProducts', JSON.stringify(normalizedProducts));
+      
+      // Dispatch custom event to notify main app of product updates
+      // with multiple triggers to ensure it works across tabs/windows
+      window.dispatchEvent(new CustomEvent('productsUpdated', { 
+        detail: { timestamp: Date.now(), productCount: updatedProducts.length } 
+      }));
+      
+      // Also trigger storage event for cross-window communication
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: 'mainProducts',
+        newValue: JSON.stringify(normalizedProducts),
+        oldValue: null,
+        storageArea: localStorage,
+        url: window.location.href
+      }));
+      
+      toast.success('Changes saved successfully! Updates will appear on the live site immediately.', {
+        description: 'All product changes have been persisted.',
+        duration: 3000,
+        icon: <Check className="w-4 h-4" />,
+      });
+    } catch (error) {
+      console.error('Error saving products:', error);
+      toast.error('Failed to save changes', {
+        description: 'There was an error saving your product changes. Please try again.',
+        duration: 4000,
+        icon: <AlertCircle className="w-4 h-4" />,
+      });
+    }
   };
 
   const resetForm = () => {
@@ -140,6 +185,7 @@ export function ProductManagement() {
       originalPrice: "",
       description: "",
       category: "",
+      style: "minimal",
       images: [],
       stock: "",
       featured: false,
@@ -160,6 +206,8 @@ export function ProductManagement() {
       originalPrice: formData.originalPrice ? parseFloat(formData.originalPrice) : undefined,
       description: formData.description,
       category: formData.category,
+      style: formData.style,
+      image: formData.images[0] || "",
       images: formData.images,
       stock: parseInt(formData.stock),
       featured: formData.featured,
@@ -176,6 +224,18 @@ export function ProductManagement() {
 
     const updatedProducts = [...products, newProduct];
     saveProducts(updatedProducts);
+    if (adminSession) {
+      appendAdminAuditLog({
+        adminId: adminSession.id,
+        adminName: adminSession.name,
+        adminEmail: adminSession.email,
+        branch: adminSession.branch,
+        action: "added",
+        entityType: "product",
+        entityName: newProduct.name,
+        details: `Created a new ${newProduct.style ?? "minimal"} product.`,
+      });
+    }
     setIsAddDialogOpen(false);
     resetForm();
   };
@@ -190,6 +250,8 @@ export function ProductManagement() {
       originalPrice: formData.originalPrice ? parseFloat(formData.originalPrice) : undefined,
       description: formData.description,
       category: formData.category,
+      style: formData.style,
+      image: formData.images[0] || editingProduct.image || "",
       images: formData.images,
       stock: parseInt(formData.stock),
       featured: formData.featured,
@@ -203,13 +265,47 @@ export function ProductManagement() {
 
     const updatedProducts = products.map(p => p.id === editingProduct.id ? updatedProduct : p);
     saveProducts(updatedProducts);
+    if (adminSession) {
+      appendAdminAuditLog({
+        adminId: adminSession.id,
+        adminName: adminSession.name,
+        adminEmail: adminSession.email,
+        branch: adminSession.branch,
+        action: "edited",
+        entityType: "product",
+        entityName: updatedProduct.name,
+        details: `Updated product details and inventory settings.`,
+      });
+    }
     setEditingProduct(null);
     resetForm();
   };
 
   const handleDeleteProduct = (productId: string) => {
+    const deletedProduct = products.find((product) => product.id === productId);
     const updatedProducts = products.filter(p => p.id !== productId);
     saveProducts(updatedProducts);
+    if (deletedProduct && adminSession) {
+      addRecycleBinItem({
+        entityType: "product",
+        entityId: deletedProduct.id,
+        entityName: deletedProduct.name,
+        payload: deletedProduct,
+        deletedByName: adminSession.name,
+        deletedByEmail: adminSession.email,
+        branch: adminSession.branch,
+      });
+      appendAdminAuditLog({
+        adminId: adminSession.id,
+        adminName: adminSession.name,
+        adminEmail: adminSession.email,
+        branch: adminSession.branch,
+        action: "deleted",
+        entityType: "product",
+        entityName: deletedProduct.name,
+        details: `Moved product to recycle bin.`,
+      });
+    }
   };
 
   const startEdit = (product: Product) => {
@@ -220,6 +316,7 @@ export function ProductManagement() {
       originalPrice: product.originalPrice?.toString() || "",
       description: product.description,
       category: product.category,
+      style: product.style || "minimal",
       images: product.images,
       stock: product.stock.toString(),
       featured: product.featured,
@@ -236,6 +333,19 @@ export function ProductManagement() {
       p.id === productId ? { ...p, featured: !p.featured, updatedAt: new Date().toISOString() } : p
     );
     saveProducts(updatedProducts);
+    const updatedProduct = updatedProducts.find((product) => product.id === productId);
+    if (updatedProduct && adminSession) {
+      appendAdminAuditLog({
+        adminId: adminSession.id,
+        adminName: adminSession.name,
+        adminEmail: adminSession.email,
+        branch: adminSession.branch,
+        action: updatedProduct.featured ? "featured" : "unfeatured",
+        entityType: "product",
+        entityName: updatedProduct.name,
+        details: `Changed featured visibility.`,
+      });
+    }
   };
 
   const updateStock = (productId: string, newStock: number) => {
@@ -259,31 +369,67 @@ export function ProductManagement() {
     }
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const fileToOptimizedDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = () => {
+        const image = new window.Image();
+        image.onload = () => {
+          const canvas = document.createElement("canvas");
+          const maxDimension = 1400;
+          const scale = Math.min(
+            1,
+            maxDimension / image.width,
+            maxDimension / image.height
+          );
+
+          canvas.width = Math.max(1, Math.round(image.width * scale));
+          canvas.height = Math.max(1, Math.round(image.height * scale));
+
+          const context = canvas.getContext("2d");
+          if (!context) {
+            reject(new Error("Unable to process image"));
+            return;
+          }
+
+          context.drawImage(image, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL("image/jpeg", 0.82));
+        };
+
+        image.onerror = () => reject(new Error("Unable to load uploaded image"));
+        image.src = reader.result as string;
+      };
+
+      reader.onerror = () => reject(new Error("Unable to read uploaded image"));
+      reader.readAsDataURL(file);
+    });
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files) return;
 
     const maxFileSize = 5 * 1024 * 1024; // 5MB limit
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
 
-    Array.from(files).forEach(file => {
+    for (const file of Array.from(files)) {
       if (file.size > maxFileSize) {
         alert(`File "${file.name}" is too large. Maximum size is 5MB.`);
-        return;
+        continue;
       }
 
       if (!allowedTypes.includes(file.type)) {
         alert(`File "${file.name}" is not a supported image type. Please use JPEG, PNG, WebP, or GIF.`);
-        return;
+        continue;
       }
 
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const dataUrl = e.target?.result as string;
+      try {
+        const dataUrl = await fileToOptimizedDataUrl(file);
         setFormData(prev => ({ ...prev, images: [...prev.images, dataUrl] }));
-      };
-      reader.readAsDataURL(file);
-    });
+      } catch {
+        alert(`File "${file.name}" could not be processed. Please try another image.`);
+      }
+    }
 
     // Clear the input
     event.target.value = '';
@@ -318,36 +464,70 @@ export function ProductManagement() {
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Product Management</h2>
           <p className="text-gray-600 dark:text-gray-400">Manage your product catalog, inventory, and features</p>
         </div>
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="flex items-center gap-2">
-              <Plus size={16} />
-              Add Product
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-4xl max-h-[95vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Add New Product</DialogTitle>
-            </DialogHeader>
-            <ProductForm
-              formData={formData}
-              setFormData={setFormData}
-              onSubmit={handleAddProduct}
-              onCancel={() => {
-                setIsAddDialogOpen(false);
-                resetForm();
-              }}
-              addImageUrl={addImageUrl}
-              handleFileUpload={handleFileUpload}
-              removeImage={removeImage}
-              toggleSize={toggleSize}
-              toggleColor={toggleColor}
-              submitLabel="Add Product"
-              imageUrlInput={imageUrlInput}
-              setImageUrlInput={setImageUrlInput}
-            />
-          </DialogContent>
-        </Dialog>
+        <div className="flex gap-3">
+          <Button 
+            variant="outline" 
+            onClick={() => {
+              // Manually refresh products from localStorage
+              const savedProducts = localStorage.getItem('mainProducts');
+              if (savedProducts) {
+                const parsedProducts = JSON.parse(savedProducts);
+                setProducts(parsedProducts.map((p: any) => ({
+                  ...p,
+                  images: p.images || (p.image ? [p.image] : []),
+                  stock: p.stock || 10,
+                  featured: p.featured || false,
+                  tags: p.tags || [],
+                  material: p.material || "",
+                  careInstructions: p.careInstructions || "",
+                  rating: p.rating || 0,
+                  reviews: p.reviews || 0,
+                  createdAt: p.createdAt || new Date().toISOString(),
+                  updatedAt: new Date().toISOString()
+                })));
+                toast.success('Products refreshed from storage');
+              }
+            }}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw size={16} />
+            Sync Products
+          </Button>
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="flex items-center gap-2">
+                <Plus size={16} />
+                Add Product
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0 sm:p-0">
+              <div className="overflow-y-auto flex-1">
+                <div className="p-6 sm:p-8">
+                  <DialogHeader className="mb-6">
+                    <DialogTitle>Add New Product</DialogTitle>
+                  </DialogHeader>
+                  <ProductForm
+                    formData={formData}
+                    setFormData={setFormData}
+                    onSubmit={handleAddProduct}
+                    onCancel={() => {
+                      setIsAddDialogOpen(false);
+                      resetForm();
+                    }}
+                    addImageUrl={addImageUrl}
+                    handleFileUpload={handleFileUpload}
+                    removeImage={removeImage}
+                    toggleSize={toggleSize}
+                    toggleColor={toggleColor}
+                    submitLabel="Add Product"
+                    imageUrlInput={imageUrlInput}
+                    setImageUrlInput={setImageUrlInput}
+                  />
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Filters */}
@@ -363,7 +543,7 @@ export function ProductManagement() {
             <SelectValue placeholder="All Categories" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Categories</SelectItem>
+            <SelectItem value="All">All Categories</SelectItem>
             {categories.map(category => (
               <SelectItem key={category} value={category}>{category}</SelectItem>
             ))}
@@ -387,6 +567,7 @@ export function ProductManagement() {
                     <CardTitle className="text-xl line-clamp-2">{product.name}</CardTitle>
                     <div className="flex items-center gap-2 mt-1">
                       <Badge variant="secondary">{product.category}</Badge>
+                      <Badge variant="outline">{product.style || "minimal"}</Badge>
                       {product.featured && <Badge variant="default">Featured</Badge>}
                     </div>
                   </div>
@@ -516,29 +697,33 @@ export function ProductManagement() {
 
       {/* Edit Product Dialog */}
       <Dialog open={!!editingProduct} onOpenChange={(open) => !open && setEditingProduct(null)}>
-        <DialogContent className="max-w-4xl max-h-[95vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit Product</DialogTitle>
-          </DialogHeader>
-          {editingProduct && (
-            <ProductForm
-              formData={formData}
-              setFormData={setFormData}
-              onSubmit={handleEditProduct}
-              onCancel={() => {
-                setEditingProduct(null);
-                resetForm();
-              }}
-              addImageUrl={addImageUrl}
-              handleFileUpload={handleFileUpload}
-              removeImage={removeImage}
-              toggleSize={toggleSize}
-              toggleColor={toggleColor}
-              submitLabel="Update Product"
-              imageUrlInput={imageUrlInput}
-              setImageUrlInput={setImageUrlInput}
-            />
-          )}
+        <DialogContent className="w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0 sm:p-0">
+          <div className="overflow-y-auto flex-1">
+            <div className="p-6 sm:p-8">
+              <DialogHeader className="mb-6">
+                <DialogTitle>Edit Product</DialogTitle>
+              </DialogHeader>
+              {editingProduct && (
+                <ProductForm
+                  formData={formData}
+                  setFormData={setFormData}
+                  onSubmit={handleEditProduct}
+                  onCancel={() => {
+                    setEditingProduct(null);
+                    resetForm();
+                  }}
+                  addImageUrl={addImageUrl}
+                  handleFileUpload={handleFileUpload}
+                  removeImage={removeImage}
+                  toggleSize={toggleSize}
+                  toggleColor={toggleColor}
+                  submitLabel="Update Product"
+                  imageUrlInput={imageUrlInput}
+                  setImageUrlInput={setImageUrlInput}
+                />
+              )}
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
@@ -577,7 +762,7 @@ function ProductForm({
   return (
     <div className="space-y-6">
       {/* Basic Information Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-2">
           <Label htmlFor="name">Product Name</Label>
           <Input
@@ -601,10 +786,27 @@ function ProductForm({
             </SelectContent>
           </Select>
         </div>
+        <div className="space-y-2">
+          <Label htmlFor="style">Style Section</Label>
+          <Select
+            value={formData.style}
+            onValueChange={(value: "minimal" | "extravagant") =>
+              setFormData((prev) => ({ ...prev, style: value }))
+            }
+          >
+            <SelectTrigger className="text-base">
+              <SelectValue placeholder="Select style section" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="minimal">Minimal</SelectItem>
+              <SelectItem value="extravagant">Extravagant</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Pricing Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-2">
           <Label htmlFor="price">Price ($)</Label>
           <Input
@@ -645,7 +847,7 @@ function ProductForm({
       </div>
 
       {/* Stock and Featured Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-2">
           <Label htmlFor="stock">Stock Quantity</Label>
           <Input
@@ -699,16 +901,17 @@ function ProductForm({
           ))}
 
           {/* URL Input Section */}
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row gap-3">
             <Input
               value={imageUrlInput}
               onChange={(e) => setImageUrlInput(e.target.value)}
               placeholder="Enter image URL (https://...)"
-              className="flex-1 text-base"
+              className="flex-1 text-base min-w-0"
             />
-            <Button variant="outline" onClick={addImageUrl} disabled={!imageUrlInput.trim()} className="px-6">
+            <Button variant="outline" onClick={addImageUrl} disabled={!imageUrlInput.trim()} className="px-4 sm:px-6 flex-shrink-0">
               <Image size={16} className="mr-2" />
-              Add URL
+              <span className="hidden sm:inline">Add URL</span>
+              <span className="sm:hidden">Add</span>
             </Button>
           </div>
 
@@ -736,7 +939,7 @@ function ProductForm({
       </div>
 
       {/* Sizes and Colors Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-3">
           <Label className="text-base font-medium">Available Sizes</Label>
           <div className="flex flex-wrap gap-2">
@@ -746,7 +949,7 @@ function ProductForm({
                 variant={formData.sizes.includes(size) ? "default" : "outline"}
                 size="sm"
                 onClick={() => toggleSize(size)}
-                className="min-w-12"
+                className="flex-shrink-0 px-3 py-2 text-sm"
               >
                 {size}
               </Button>
@@ -763,7 +966,7 @@ function ProductForm({
                 variant={formData.colors.includes(color) ? "default" : "outline"}
                 size="sm"
                 onClick={() => toggleColor(color)}
-                className="min-w-16"
+                className="flex-shrink-0 px-4 py-2 text-sm"
               >
                 {color}
               </Button>
@@ -773,26 +976,26 @@ function ProductForm({
       </div>
 
       {/* Additional Details Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="space-y-2">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="space-y-2 min-w-0">
           <Label htmlFor="material" className="text-base font-medium">Material</Label>
           <Input
             id="material"
             value={formData.material}
             onChange={(e) => setFormData(prev => ({ ...prev, material: e.target.value }))}
             placeholder="e.g., Cotton, Silk, Leather"
-            className="text-base"
+            className="text-base w-full break-words"
           />
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-2 min-w-0">
           <Label htmlFor="tags" className="text-base font-medium">Tags (comma-separated)</Label>
           <Input
             id="tags"
             value={formData.tags}
             onChange={(e) => setFormData(prev => ({ ...prev, tags: e.target.value }))}
             placeholder="e.g., summer, casual, trendy"
-            className="text-base"
+            className="text-base w-full break-words"
           />
         </div>
       </div>

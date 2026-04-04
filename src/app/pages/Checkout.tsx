@@ -1,0 +1,1015 @@
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { motion } from "motion/react";
+import { ArrowLeft, CheckCircle2 } from "lucide-react";
+import { toast } from "sonner";
+import { useAuth } from "../contexts/AuthContext";
+import { useProducts } from "../contexts/ProductsContext";
+import { getPromoCodes, type DiscountOption } from "../utils/promoCodes";
+import { appendStoredOrder } from "../utils/orders";
+import { getCustomerProfile } from "../utils/customerProfile";
+import { nepalLocations } from "../utils/nepalLocations";
+
+interface StoredCartItem {
+  productId?: string | { id?: string };
+  quantity?: number;
+  selectedSize?: string;
+  selectedColor?: string;
+  size?: string;
+  color?: string;
+  product?: {
+    id?: string;
+    sizes?: string[];
+    colors?: string[];
+  };
+}
+
+interface CheckoutItem {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  size: string;
+  color: string;
+  image: string;
+}
+
+interface CheckoutFormData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  province: string;
+  district: string;
+  city: string;
+  area: string;
+  wardNumber: string;
+  landmark: string;
+  address: string;
+  postalCode: string;
+  paymentMethod: "esewa" | "nepalpay" | "cod";
+}
+
+type CheckoutField =
+  | "firstName"
+  | "lastName"
+  | "email"
+  | "phone"
+  | "province"
+  | "district"
+  | "city"
+  | "area"
+  | "wardNumber"
+  | "landmark"
+  | "address"
+  | "postalCode";
+
+type CheckoutFieldErrors = Partial<Record<CheckoutField, string>>;
+
+function getStoredCartItems(): Array<{
+  productId: string;
+  quantity: number;
+  selectedSize: string;
+  selectedColor: string;
+}> {
+  const savedCart = localStorage.getItem("cartItems");
+  if (!savedCart) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(savedCart);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed
+      .map((item: StoredCartItem) => {
+        const productId =
+          typeof item.productId === "string"
+            ? item.productId
+            : item.productId?.id ?? item.product?.id;
+
+        if (!productId) {
+          return null;
+        }
+
+        return {
+          productId,
+          quantity:
+            typeof item.quantity === "number" && item.quantity > 0
+              ? item.quantity
+              : 1,
+          selectedSize:
+            item.selectedSize ?? item.size ?? item.product?.sizes?.[0] ?? "One Size",
+          selectedColor:
+            item.selectedColor ?? item.color ?? item.product?.colors?.[0] ?? "Default",
+        };
+      })
+      .filter(
+        (
+          item
+        ): item is {
+          productId: string;
+          quantity: number;
+          selectedSize: string;
+          selectedColor: string;
+        } => item !== null
+      );
+  } catch {
+    return [];
+  }
+}
+
+export function Checkout() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { products } = useProducts();
+  const [step, setStep] = useState<"shipping" | "payment" | "review" | "success">("shipping");
+  const [formData, setFormData] = useState<CheckoutFormData>({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    province: "",
+    district: "",
+    address: "",
+    city: "",
+    area: "",
+    wardNumber: "",
+    landmark: "",
+    postalCode: "",
+    paymentMethod: "esewa",
+  });
+  const [storedCartItems, setStoredCartItems] = useState(() => getStoredCartItems());
+  const [promoCode, setPromoCode] = useState("");
+  const [appliedDiscountCode, setAppliedDiscountCode] = useState("");
+  const [promoCodeError, setPromoCodeError] = useState("");
+  const [shippingErrors, setShippingErrors] = useState<CheckoutFieldErrors>({});
+  const [discountOptions, setDiscountOptions] = useState<DiscountOption[]>(() =>
+    getPromoCodes()
+  );
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    const storedProfile = getCustomerProfile(user.id);
+    const nameParts = user.name.trim().split(/\s+/);
+
+    setFormData((current) => ({
+      ...current,
+      firstName:
+        storedProfile?.firstName ||
+        current.firstName ||
+        nameParts[0] ||
+        "",
+      lastName:
+        storedProfile?.lastName ||
+        current.lastName ||
+        nameParts.slice(1).join(" "),
+      email: storedProfile?.email || current.email || user.email,
+      phone: storedProfile?.phone || current.phone,
+      province: storedProfile?.province || current.province,
+      district: storedProfile?.district || current.district,
+      city: storedProfile?.city || current.city,
+      area: storedProfile?.area || current.area,
+      wardNumber: storedProfile?.wardNumber || current.wardNumber,
+      landmark: storedProfile?.landmark || current.landmark,
+      address: storedProfile?.address || current.address,
+      postalCode: storedProfile?.postalCode || current.postalCode,
+    }));
+  }, [user]);
+
+  useEffect(() => {
+    const syncCart = () => {
+      setStoredCartItems(getStoredCartItems());
+    };
+
+    syncCart();
+    window.addEventListener("cartUpdated", syncCart);
+    window.addEventListener("storage", syncCart);
+
+    return () => {
+      window.removeEventListener("cartUpdated", syncCart);
+      window.removeEventListener("storage", syncCart);
+    };
+  }, []);
+
+  useEffect(() => {
+    const syncPromoCodes = () => {
+      setDiscountOptions(getPromoCodes());
+    };
+
+    syncPromoCodes();
+    window.addEventListener("promoCodesUpdated", syncPromoCodes);
+    window.addEventListener("storage", syncPromoCodes);
+
+    return () => {
+      window.removeEventListener("promoCodesUpdated", syncPromoCodes);
+      window.removeEventListener("storage", syncPromoCodes);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    const syncProfile = () => {
+      const storedProfile = getCustomerProfile(user.id);
+      if (!storedProfile) {
+        return;
+      }
+
+      setFormData((current) => ({
+        ...current,
+        ...storedProfile,
+      }));
+    };
+
+    window.addEventListener("customerProfileUpdated", syncProfile);
+    window.addEventListener("storage", syncProfile);
+
+    return () => {
+      window.removeEventListener("customerProfileUpdated", syncProfile);
+      window.removeEventListener("storage", syncProfile);
+    };
+  }, [user]);
+
+  const cartItems: CheckoutItem[] = storedCartItems
+    .map((item) => {
+      const product = products.find((entry) => entry.id === item.productId);
+
+      if (!product) {
+        return null;
+      }
+
+      return {
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        quantity: item.quantity,
+        size: item.selectedSize,
+        color: item.selectedColor,
+        image: product.image ?? "",
+      };
+    })
+    .filter((item): item is CheckoutItem => item !== null);
+
+  const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const baseShipping = subtotal > 100 ? 0 : 500; // NPR
+  const appliedDiscount = discountOptions.find(
+    (option) => option.code === appliedDiscountCode
+  );
+  const visibleDiscountOptions = discountOptions.filter(
+    (option) => option.showInCheckout
+  );
+  const discountAmount = appliedDiscount
+    ? appliedDiscount.type === "percent"
+      ? Math.round(subtotal * (appliedDiscount.value / 100))
+      : appliedDiscount.type === "flat"
+        ? Math.min(appliedDiscount.value, subtotal)
+        : baseShipping
+    : 0;
+  const shipping =
+    appliedDiscount?.type === "shipping" ? 0 : baseShipping;
+  // const tax = Math.round(subtotal * 0.13); // Re-enable when VAT is integrated
+  const tax = 0;
+  const total = Math.max(0, subtotal + shipping + tax - discountAmount);
+  const assignedBranch =
+    formData.province === "Gandaki"
+      ? "Gandaki Branch"
+      : formData.province === "Bagmati"
+        ? "Bagmati Branch"
+        : "Head Office";
+
+  const provinceOptions = Object.keys(nepalLocations);
+  const districtOptions = formData.province
+    ? nepalLocations[formData.province]?.districts ?? []
+    : [];
+  const cityOptions = formData.province
+    ? nepalLocations[formData.province]?.cities ?? []
+    : [];
+  const cashOnDeliveryDistricts = new Set(["Kathmandu", "Lalitpur", "Bhaktapur"]);
+  const isCashOnDeliveryAvailable = cashOnDeliveryDistricts.has(formData.district);
+
+  useEffect(() => {
+    if (!isCashOnDeliveryAvailable && formData.paymentMethod === "cod") {
+      setFormData((current) => ({
+        ...current,
+        paymentMethod: "esewa",
+      }));
+    }
+  }, [formData.paymentMethod, isCashOnDeliveryAvailable]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    if (shippingErrors[name as CheckoutField]) {
+      setShippingErrors((prev) => ({ ...prev, [name]: "" }));
+    }
+
+    setFormData((prev) => {
+      if (name === "province") {
+        return {
+          ...prev,
+          province: value,
+          district: "",
+          city: "",
+          area: "",
+        };
+      }
+
+      return { ...prev, [name]: value };
+    });
+  };
+
+  const validateShippingForm = () => {
+    const nextErrors: CheckoutFieldErrors = {};
+
+    if (!formData.firstName.trim()) nextErrors.firstName = "First name is required.";
+    if (!formData.lastName.trim()) nextErrors.lastName = "Last name is required.";
+
+    if (!formData.email.trim()) {
+      nextErrors.email = "Email is required.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      nextErrors.email = "Enter a valid email address.";
+    }
+
+    if (!formData.phone.trim()) {
+      nextErrors.phone = "Phone number is required.";
+    } else if (!/^9\d{9}$/.test(formData.phone)) {
+      nextErrors.phone = "Enter a valid Nepali mobile number.";
+    }
+
+    if (!formData.province) nextErrors.province = "Select a province.";
+    if (!formData.district) nextErrors.district = "Select a district.";
+    if (!formData.city) nextErrors.city = "Select a city or municipality.";
+    if (!formData.area.trim()) nextErrors.area = "Area / Tole is required.";
+
+    if (!formData.wardNumber.trim()) {
+      nextErrors.wardNumber = "Ward number is required.";
+    } else {
+      const wardNumber = Number(formData.wardNumber);
+      if (!Number.isInteger(wardNumber) || wardNumber < 1 || wardNumber > 32) {
+        nextErrors.wardNumber = "Ward number must be between 1 and 32.";
+      }
+    }
+
+    if (!formData.address.trim()) nextErrors.address = "House / Street address is required.";
+    if (!formData.landmark.trim()) nextErrors.landmark = "Nearest landmark is required.";
+
+    if (formData.postalCode.trim() && !/^\d{5}$/.test(formData.postalCode)) {
+      nextErrors.postalCode = "Postal code must be a 5-digit number.";
+    }
+
+    setShippingErrors(nextErrors);
+
+    if (Object.keys(nextErrors).length > 0) {
+      toast.error("Please correct the highlighted checkout fields");
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleShippingSubmit = () => {
+    if (validateShippingForm()) {
+      setStep("payment");
+    }
+  };
+
+  const applyDiscountCode = (code: string) => {
+    const normalizedCode = code.trim().toUpperCase();
+    const matchedDiscount = discountOptions.find(
+      (option) => option.code === normalizedCode
+    );
+
+    if (!normalizedCode) {
+      setPromoCodeError("Please enter a promo code.");
+      toast.error("Enter a promo code");
+      return;
+    }
+
+    if (!matchedDiscount) {
+      setPromoCodeError(
+        "This promo code is not available. Please use one of the available codes."
+      );
+      toast.error("Invalid promo code");
+      return;
+    }
+
+    setPromoCodeError("");
+    setAppliedDiscountCode(matchedDiscount.code);
+    setPromoCode(matchedDiscount.code);
+    toast.success(`${matchedDiscount.label} applied`);
+  };
+
+  const removeDiscountCode = () => {
+    setAppliedDiscountCode("");
+    setPromoCode("");
+    setPromoCodeError("");
+    toast.success("Discount removed");
+  };
+
+  const handlePaymentSubmit = () => {
+    if (cartItems.length === 0) {
+      toast.error("Your cart is empty");
+      navigate("/shop");
+      return;
+    }
+
+    if (formData.paymentMethod === "esewa") {
+      // eSewa integration
+      initiateEsewaPayment();
+    } else if (formData.paymentMethod === "nepalpay") {
+      // Nepal Pay QR
+      setStep("review");
+    } else {
+      // COD
+      setStep("review");
+    }
+  };
+
+  const initiateEsewaPayment = () => {
+    const esewaConfig = {
+      amt: total,
+      psc: 0,
+      pdc: 0,
+      txAmt: 0,
+      tAmt: total,
+      pid: `ORDER-${Date.now()}`,
+      scd: "EPAYTEST", // Test merchant code
+      cc: "cc",
+      csf: "csf",
+    };
+
+    // In production, this would redirect to eSewa gateway
+    void esewaConfig;
+    toast.success("Redirecting to eSewa payment...");
+    setStep("success");
+  };
+
+  const finalizeOrder = () => {
+    const formattedShippingAddress = [
+      `${formData.address}, Ward ${formData.wardNumber}`,
+      `${formData.area}, ${formData.city}`,
+      `${formData.district}, ${formData.province}`,
+      `Landmark: ${formData.landmark}`,
+      formData.postalCode ? `Postal Code: ${formData.postalCode}` : "",
+      `Phone: ${formData.phone}`,
+    ]
+      .filter(Boolean)
+      .join(", ");
+
+    appendStoredOrder({
+      id: `ORD-${Date.now()}`,
+      customerName: `${formData.firstName} ${formData.lastName}`.trim(),
+      customerEmail: formData.email,
+      date: new Date().toISOString(),
+      status: "pending",
+      total,
+      items: cartItems.map((item) => ({
+        id: item.id,
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+      })),
+      source: "website",
+      shippingAddress: formattedShippingAddress,
+      phone: formData.phone,
+      branch: assignedBranch,
+    });
+
+    localStorage.removeItem("cartItems");
+    window.dispatchEvent(new Event("cartUpdated"));
+    setStoredCartItems([]);
+    setStep("success");
+  };
+
+  if (products.length === 0) {
+    return <div className="pt-20 text-center">Loading...</div>;
+  }
+
+  if (cartItems.length === 0 && step !== "success") {
+    return (
+      <div className="pt-20 min-h-screen flex items-center justify-center px-4">
+        <div className="text-center space-y-4">
+          <h2 className="text-3xl font-semibold">Your checkout is empty</h2>
+          <p className="text-gray-600">Add items to your cart before proceeding.</p>
+          <button
+            type="button"
+            onClick={() => window.location.assign("/shop")}
+            className="inline-flex items-center justify-center bg-black text-white px-8 py-4"
+          >
+            Go to Shop
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pt-20 min-h-screen bg-white">
+      {/* Header */}
+      <div className="bg-black text-white py-8 sm:py-12 px-4">
+        <div className="max-w-7xl mx-auto">
+          <button
+            onClick={() => navigate(-1)}
+            className="flex items-center gap-2 mb-4 hover:opacity-70 transition"
+          >
+            <ArrowLeft size={18} />
+            Back
+          </button>
+          <h1 className="text-3xl sm:text-4xl tracking-wider">CHECKOUT</h1>
+        </div>
+      </div>
+
+      {/* Progress indicator */}
+      <div className="border-b">
+        <div className="max-w-7xl mx-auto px-4 py-6 flex justify-between items-center text-xs sm:text-sm">
+          {[
+            { key: "shipping", label: "Shipping" },
+            { key: "payment", label: "Payment" },
+            { key: "review", label: "Review" },
+          ].map((s, idx) => (
+            <div key={s.key} className="flex items-center gap-2">
+              <div
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition ${
+                  (step === s.key || ["shipping", "payment", "review"].indexOf(step) > idx)
+                    ? "bg-black text-white"
+                    : "bg-gray-200 text-gray-600"
+                }`}
+              >
+                {["shipping", "payment", "review"].indexOf(step) > idx ? <CheckCircle2 size={18} /> : idx + 1}
+              </div>
+              <span className="hidden sm:inline">{s.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 py-8 sm:py-12 grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left - Form */}
+        <div className="lg:col-span-2 space-y-8">
+          {/* Shipping Form */}
+          {step === "shipping" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+              <h2 className="text-2xl font-semibold">Shipping Information</h2>
+              <p className="text-sm text-gray-600">Fields marked with <span className="text-red-600">*</span> are required.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="mb-2 block text-sm">First Name <span className="text-red-600">*</span></label>
+                  <input
+                    type="text"
+                    name="firstName"
+                    placeholder="First Name"
+                    value={formData.firstName}
+                    onChange={handleInputChange}
+                    className={`w-full border px-4 py-3 text-sm focus:outline-none transition ${shippingErrors.firstName ? "border-red-500" : "border-gray-300 focus:border-black"}`}
+                  />
+                  {shippingErrors.firstName && <p className="mt-1 text-sm text-red-600">{shippingErrors.firstName}</p>}
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm">Last Name <span className="text-red-600">*</span></label>
+                  <input
+                    type="text"
+                    name="lastName"
+                    placeholder="Last Name"
+                    value={formData.lastName}
+                    onChange={handleInputChange}
+                    className={`w-full border px-4 py-3 text-sm focus:outline-none transition ${shippingErrors.lastName ? "border-red-500" : "border-gray-300 focus:border-black"}`}
+                  />
+                  {shippingErrors.lastName && <p className="mt-1 text-sm text-red-600">{shippingErrors.lastName}</p>}
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="mb-2 block text-sm">Email <span className="text-red-600">*</span></label>
+                  <input
+                    type="email"
+                    name="email"
+                    placeholder="Email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    className={`w-full border px-4 py-3 text-sm focus:outline-none transition ${shippingErrors.email ? "border-red-500" : "border-gray-300 focus:border-black"}`}
+                  />
+                  {shippingErrors.email && <p className="mt-1 text-sm text-red-600">{shippingErrors.email}</p>}
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="mb-2 block text-sm">Phone Number <span className="text-red-600">*</span></label>
+                  <input
+                    type="tel"
+                    name="phone"
+                    placeholder="98XXXXXXXX"
+                    value={formData.phone}
+                    onChange={handleInputChange}
+                    inputMode="numeric"
+                    maxLength={10}
+                    className={`w-full border px-4 py-3 text-sm focus:outline-none transition ${shippingErrors.phone ? "border-red-500" : "border-gray-300 focus:border-black"}`}
+                  />
+                  {shippingErrors.phone && <p className="mt-1 text-sm text-red-600">{shippingErrors.phone}</p>}
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm">Province <span className="text-red-600">*</span></label>
+                  <select
+                    name="province"
+                    value={formData.province}
+                    onChange={handleInputChange}
+                    className={`w-full border px-4 py-3 text-sm focus:outline-none transition bg-white ${shippingErrors.province ? "border-red-500" : "border-gray-300 focus:border-black"}`}
+                  >
+                    <option value="">Select Province</option>
+                    {provinceOptions.map((province) => (
+                      <option key={province} value={province}>{province}</option>
+                    ))}
+                  </select>
+                  {shippingErrors.province && <p className="mt-1 text-sm text-red-600">{shippingErrors.province}</p>}
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm">District <span className="text-red-600">*</span></label>
+                  <select
+                    name="district"
+                    value={formData.district}
+                    onChange={handleInputChange}
+                    disabled={!formData.province}
+                    className={`w-full border px-4 py-3 text-sm focus:outline-none transition bg-white disabled:bg-gray-100 ${shippingErrors.district ? "border-red-500" : "border-gray-300 focus:border-black"}`}
+                  >
+                    <option value="">Select District</option>
+                    {districtOptions.map((district) => (
+                      <option key={district} value={district}>{district}</option>
+                    ))}
+                  </select>
+                  {shippingErrors.district && <p className="mt-1 text-sm text-red-600">{shippingErrors.district}</p>}
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm">City / Municipality <span className="text-red-600">*</span></label>
+                  <select
+                    name="city"
+                    value={formData.city}
+                    onChange={handleInputChange}
+                    disabled={!formData.province}
+                    className={`w-full border px-4 py-3 text-sm focus:outline-none transition bg-white ${shippingErrors.city ? "border-red-500" : "border-gray-300 focus:border-black"}`}
+                  >
+                    <option value="">Select City / Municipality</option>
+                    {cityOptions.map((city) => (
+                      <option key={city} value={city}>{city}</option>
+                    ))}
+                  </select>
+                  {shippingErrors.city && <p className="mt-1 text-sm text-red-600">{shippingErrors.city}</p>}
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm">Area / Tole <span className="text-red-600">*</span></label>
+                  <input
+                    type="text"
+                    name="area"
+                    placeholder="Area / Tole"
+                    value={formData.area}
+                    onChange={handleInputChange}
+                    className={`w-full border px-4 py-3 text-sm focus:outline-none transition ${shippingErrors.area ? "border-red-500" : "border-gray-300 focus:border-black"}`}
+                  />
+                  {shippingErrors.area && <p className="mt-1 text-sm text-red-600">{shippingErrors.area}</p>}
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm">Ward No. <span className="text-red-600">*</span></label>
+                  <input
+                    type="number"
+                    name="wardNumber"
+                    placeholder="Ward No."
+                    min="1"
+                    max="32"
+                    value={formData.wardNumber}
+                    onChange={handleInputChange}
+                    className={`w-full border px-4 py-3 text-sm focus:outline-none transition ${shippingErrors.wardNumber ? "border-red-500" : "border-gray-300 focus:border-black"}`}
+                  />
+                  {shippingErrors.wardNumber && <p className="mt-1 text-sm text-red-600">{shippingErrors.wardNumber}</p>}
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm">Postal Code</label>
+                  <input
+                    type="text"
+                    name="postalCode"
+                    placeholder="Postal Code"
+                    value={formData.postalCode}
+                    onChange={handleInputChange}
+                    inputMode="numeric"
+                    maxLength={5}
+                    className={`w-full border px-4 py-3 text-sm focus:outline-none transition ${shippingErrors.postalCode ? "border-red-500" : "border-gray-300 focus:border-black"}`}
+                  />
+                  {shippingErrors.postalCode && <p className="mt-1 text-sm text-red-600">{shippingErrors.postalCode}</p>}
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="mb-2 block text-sm">House / Street Address <span className="text-red-600">*</span></label>
+                  <input
+                    type="text"
+                    name="address"
+                    placeholder="House / Street Address"
+                    value={formData.address}
+                    onChange={handleInputChange}
+                    className={`w-full border px-4 py-3 text-sm focus:outline-none transition ${shippingErrors.address ? "border-red-500" : "border-gray-300 focus:border-black"}`}
+                  />
+                  {shippingErrors.address && <p className="mt-1 text-sm text-red-600">{shippingErrors.address}</p>}
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="mb-2 block text-sm">Nearest Landmark <span className="text-red-600">*</span></label>
+                  <input
+                    type="text"
+                    name="landmark"
+                    placeholder="Nearest Landmark"
+                    value={formData.landmark}
+                    onChange={handleInputChange}
+                    className={`w-full border px-4 py-3 text-sm focus:outline-none transition ${shippingErrors.landmark ? "border-red-500" : "border-gray-300 focus:border-black"}`}
+                  />
+                  {shippingErrors.landmark && <p className="mt-1 text-sm text-red-600">{shippingErrors.landmark}</p>}
+                </div>
+              </div>
+              <button
+                onClick={handleShippingSubmit}
+                className="w-full bg-black text-white py-4 font-medium hover:bg-gray-900 transition text-sm sm:text-base"
+              >
+                Continue to Payment
+              </button>
+            </motion.div>
+          )}
+
+          {/* Payment Methods */}
+          {step === "payment" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+              <h2 className="text-2xl font-semibold">Payment Method</h2>
+              {!isCashOnDeliveryAvailable ? (
+                <p className="rounded border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+                  Cash on Delivery is available only for Kathmandu, Lalitpur, and Bhaktapur.
+                  Orders outside these districts must use online payment.
+                </p>
+              ) : null}
+              <div className="space-y-4">
+                {/* eSewa */}
+                <label className="p-4 sm:p-6 cursor-pointer transition">
+                  <div className="flex items-center gap-4">
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="esewa"
+                      checked={formData.paymentMethod === "esewa"}
+                      onChange={handleInputChange}
+                      className="w-4 h-4 cursor-pointer"
+                    />
+                    <div>
+                      <p className="font-semibold text-sm sm:text-base">eSewa</p>
+                      <p className="text-gray-600 text-xs sm:text-sm">Fast and secure mobile wallet</p>
+                    </div>
+                  </div>
+                </label>
+
+                {/* Nepal Pay QR */}
+                <label className="p-4 sm:p-6 cursor-pointer transition">
+                  <div className="flex items-center gap-4">
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="nepalpay"
+                      checked={formData.paymentMethod === "nepalpay"}
+                      onChange={handleInputChange}
+                      className="w-4 h-4 cursor-pointer"
+                    />
+                    <div>
+                      <p className="font-semibold text-sm sm:text-base">Nepal Pay QR</p>
+                      <p className="text-gray-600 text-xs sm:text-sm">Scan QR code with your bank app</p>
+                    </div>
+                  </div>
+                </label>
+
+                {/* Cash on Delivery */}
+                {isCashOnDeliveryAvailable ? (
+                  <label className="p-4 sm:p-6 cursor-pointer transition">
+                    <div className="flex items-center gap-4">
+                      <input
+                        type="radio"
+                        name="paymentMethod"
+                        value="cod"
+                        checked={formData.paymentMethod === "cod"}
+                        onChange={handleInputChange}
+                        className="w-4 h-4 cursor-pointer"
+                      />
+                      <div>
+                        <p className="font-semibold text-sm sm:text-base">Cash on Delivery</p>
+                        <p className="text-gray-600 text-xs sm:text-sm">Pay when you receive your order</p>
+                      </div>
+                    </div>
+                  </label>
+                ) : null}
+              </div>
+
+              {/* Nepal Pay QR Display */}
+              {formData.paymentMethod === "nepalpay" && (
+                <div className="border-2 border-yellow-500 bg-yellow-50 p-6 text-center rounded">
+                  <p className="text-sm text-gray-700 mb-4">Scan this QR code with your bank app:</p>
+                  <div className="bg-white p-4 w-48 h-48 mx-auto border-2 border-gray-300 flex items-center justify-center">
+                    <div className="text-xs text-gray-500">
+                      <p>QR Code Placeholder</p>
+                      <p className="text-xs text-gray-400 mt-2">Merchant: CLO Store</p>
+                      <p className="text-xs text-gray-400">Amount: NPR {total.toLocaleString("en-NP")}</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-600 mt-4">Amount: NPR {total.toLocaleString("en-NP")}</p>
+                </div>
+              )}
+
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setStep("shipping")}
+                  className="flex-1 border-2 border-black text-black py-4 font-medium hover:bg-black hover:text-white transition text-sm sm:text-base"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={handlePaymentSubmit}
+                  className="flex-1 bg-black text-white py-4 font-medium hover:bg-gray-900 transition text-sm sm:text-base"
+                >
+                  {formData.paymentMethod === "esewa" ? "Pay with eSewa" : "Continue"}
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Review & Place Order */}
+          {step === "review" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+              <h2 className="text-2xl font-semibold">Order Review</h2>
+              <div className="border-t pt-6 space-y-4">
+                <h3 className="font-semibold">Shipping Details:</h3>
+                <p className="text-sm text-gray-600">
+                  {formData.firstName} {formData.lastName}
+                  <br />
+                  {formData.address}
+                  <br />
+                  Ward {formData.wardNumber}, {formData.area}
+                  <br />
+                  {formData.city}, {formData.district}, {formData.province}
+                  <br />
+                  Landmark: {formData.landmark}
+                  <br />
+                  Postal Code: {formData.postalCode}
+                  <br />
+                  {formData.phone}
+                </p>
+              </div>
+              <button
+                onClick={finalizeOrder}
+                className="w-full bg-black text-white py-4 font-medium hover:bg-gray-900 transition text-sm sm:text-base"
+              >
+                Place Order
+              </button>
+            </motion.div>
+          )}
+
+          {/* Success */}
+          {step === "success" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12 space-y-6">
+              <div className="text-6xl text-green-500">✓</div>
+              <h2 className="text-3xl sm:text-4xl font-semibold">Order Confirmed!</h2>
+              <p className="text-gray-600 text-sm sm:text-base">Your order has been placed successfully. You'll receive a confirmation email shortly.</p>
+              <button
+                onClick={() => navigate("/")}
+                className="mx-auto block bg-black text-white px-8 py-3 font-medium hover:bg-gray-900 transition text-sm sm:text-base"
+              >
+                Continue Shopping
+              </button>
+            </motion.div>
+          )}
+        </div>
+
+        {/* Right - Order Summary */}
+        <div className="lg:col-span-1">
+          <div className="sticky top-32 bg-gray-50 p-6 sm:p-8 space-y-6">
+            <h2 className="text-xl font-semibold">Order Summary</h2>
+
+            {/* Items */}
+            <div className="space-y-4 max-h-64 overflow-y-auto border-b pb-6">
+              {cartItems.map((item) => (
+                <div key={item.id} className="flex gap-3">
+                  <img src={item.image} alt={item.name} className="w-16 h-16 object-cover" />
+                  <div className="flex-1 text-sm">
+                    <p className="font-medium line-clamp-2">{item.name}</p>
+                    <p className="text-gray-600">Qty: {item.quantity}</p>
+                    <p className="font-medium">NPR {(item.price * item.quantity).toLocaleString("en-NP")}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-4 border-b pb-6">
+              <div className="space-y-3">
+                <p className="text-sm font-medium">Promo Code</p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={promoCode}
+                    onChange={(e) => {
+                      setPromoCode(e.target.value);
+                      if (promoCodeError) {
+                        setPromoCodeError("");
+                      }
+                    }}
+                    placeholder="Enter promo code"
+                    className="flex-1 border border-gray-300 bg-white px-4 py-3 text-sm focus:outline-none focus:border-black transition"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => applyDiscountCode(promoCode)}
+                    className="bg-black px-4 py-3 text-sm font-medium text-white hover:bg-gray-900 transition"
+                  >
+                    Apply
+                  </button>
+                </div>
+                {promoCodeError && (
+                  <p className="text-sm text-red-600">{promoCodeError}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Available Promo Codes</p>
+                {visibleDiscountOptions.length > 0 ? (
+                  <div className="grid gap-2">
+                    {visibleDiscountOptions.map((option) => (
+                      <button
+                        key={option.code}
+                        type="button"
+                        onClick={() => applyDiscountCode(option.code)}
+                        className={`flex items-center justify-between border px-4 py-3 text-left text-sm transition ${
+                          appliedDiscountCode === option.code
+                            ? "border-black bg-black text-white"
+                            : "border-gray-300 bg-white hover:border-black"
+                        }`}
+                      >
+                        <span>{option.label}</span>
+                        <span className="text-xs opacity-80">{option.description}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="rounded border border-dashed border-gray-300 bg-white px-4 py-3 text-sm text-gray-600">
+                    No promo codes are currently available to display.
+                  </p>
+                )}
+                <p className="text-xs text-gray-500">
+                  You can also enter a custom promo code manually if one was shared with you by the team.
+                </p>
+              </div>
+
+              {appliedDiscount && (
+                <div className="flex items-center justify-between rounded bg-white px-4 py-3 text-sm">
+                  <div>
+                    <p className="font-medium">{appliedDiscount.label} applied</p>
+                    <p className="text-gray-600">{appliedDiscount.code}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={removeDiscountCode}
+                    className="text-sm underline hover:no-underline"
+                  >
+                    Remove
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Totals */}
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-600">Subtotal:</span>
+                <span>NPR {subtotal.toLocaleString("en-NP")}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Shipping:</span>
+                <span>{shipping === 0 ? "FREE" : `NPR ${shipping.toLocaleString("en-NP")}`}</span>
+              </div>
+              {appliedDiscount && (
+                <div className="flex justify-between text-green-700">
+                  <span>Discount:</span>
+                  <span>- NPR {discountAmount.toLocaleString("en-NP")}</span>
+                </div>
+              )}
+              {/*
+              <div className="flex justify-between">
+                <span className="text-gray-600">Tax (13%):</span>
+                <span>NPR {tax.toLocaleString("en-NP")}</span>
+              </div>
+              */}
+              <div className="border-t pt-3 flex justify-between text-base font-bold">
+                <span>Total:</span>
+                <span>NPR {total.toLocaleString("en-NP")}</span>
+              </div>
+            </div>
+
+            {/* Info */}
+            <div className="bg-white p-4 rounded text-xs text-gray-600 space-y-2">
+              <p>✓ Secure checkout</p>
+              <p>✓ No Returns only exchange within 2 days</p>
+              <p>✓ Same day delivery in Kathmandu</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

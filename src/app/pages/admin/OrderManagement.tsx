@@ -1,24 +1,11 @@
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { Search, Filter, Eye, Edit, Truck, CheckCircle, XCircle, Clock, Package } from "lucide-react";
+import { Search, Eye, Edit, Truck, CheckCircle, XCircle, Clock, Package, Printer } from "lucide-react";
+import { toast } from "sonner";
+import { getStoredOrders, saveStoredOrders, type StoredOrder } from "../../utils/orders";
+import { appendAdminAuditLog, getAdminSession } from "../../utils/admin";
 
-interface Order {
-  id: string;
-  customerName: string;
-  customerEmail: string;
-  date: string;
-  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
-  total: number;
-  items: Array<{
-    id: string;
-    name: string;
-    quantity: number;
-    price: number;
-  }>;
-  source: 'website' | 'instagram' | 'facebook' | 'tiktok';
-  shippingAddress: string;
-  trackingNumber?: string;
-}
+type Order = StoredOrder;
 
 const mockOrders: Order[] = [
   {
@@ -29,6 +16,7 @@ const mockOrders: Order[] = [
     status: "delivered",
     total: 33117,
     source: "website",
+    branch: "Bagmati Branch",
     shippingAddress: "123 Main St, Kathmandu, Nepal",
     trackingNumber: "TK123456789",
     items: [
@@ -43,6 +31,7 @@ const mockOrders: Order[] = [
     status: "shipped",
     total: 21147,
     source: "instagram",
+    branch: "Gandaki Branch",
     shippingAddress: "456 Oak Ave, Pokhara, Nepal",
     trackingNumber: "TK987654321",
     items: [
@@ -57,6 +46,7 @@ const mockOrders: Order[] = [
     status: "processing",
     total: 159000,
     source: "facebook",
+    branch: "Bagmati Branch",
     shippingAddress: "789 Pine Rd, Lalitpur, Nepal",
     items: [
       { id: "1", name: "Classic Black Jacket", quantity: 1, price: 39867 },
@@ -71,6 +61,7 @@ const mockOrders: Order[] = [
     status: "pending",
     total: 398000,
     source: "tiktok",
+    branch: "Bagmati Branch",
     shippingAddress: "321 Elm St, Bhaktapur, Nepal",
     items: [
       { id: "9", name: "Runway Collection Piece", quantity: 1, price: 398000 }
@@ -84,6 +75,7 @@ const mockOrders: Order[] = [
     status: "cancelled",
     total: 46417,
     source: "website",
+    branch: "Bagmati Branch",
     shippingAddress: "654 Cedar Ln, Kathmandu, Nepal",
     items: [
       { id: "5", name: "Premium Denim Jacket", quantity: 1, price: 46417 }
@@ -92,15 +84,43 @@ const mockOrders: Order[] = [
 ];
 
 export function OrderManagement() {
-  const [orders, setOrders] = useState<Order[]>(mockOrders);
-  const [filteredOrders, setFilteredOrders] = useState<Order[]>(mockOrders);
+  const [orders, setOrders] = useState<Order[]>(() => {
+    const storedOrders = getStoredOrders();
+    return storedOrders.length > 0 ? storedOrders : mockOrders;
+  });
+  const [filteredOrders, setFilteredOrders] = useState<Order[]>(() => {
+    const storedOrders = getStoredOrders();
+    return storedOrders.length > 0 ? storedOrders : mockOrders;
+  });
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [remarksDraft, setRemarksDraft] = useState<Record<string, string>>({});
+  const [exchangeResponseDraft, setExchangeResponseDraft] = useState("");
+  const adminSession = getAdminSession();
+
+  useEffect(() => {
+    const syncOrders = () => {
+      const storedOrders = getStoredOrders();
+      setOrders(storedOrders.length > 0 ? storedOrders : mockOrders);
+    };
+
+    window.addEventListener("ordersUpdated", syncOrders);
+    window.addEventListener("storage", syncOrders);
+
+    return () => {
+      window.removeEventListener("ordersUpdated", syncOrders);
+      window.removeEventListener("storage", syncOrders);
+    };
+  }, []);
 
   useEffect(() => {
     let filtered = orders;
+
+    if (adminSession && adminSession.branch !== "Head Office") {
+      filtered = filtered.filter((order) => order.branch === adminSession.branch);
+    }
 
     // Search filter
     if (searchTerm) {
@@ -122,13 +142,196 @@ export function OrderManagement() {
     }
 
     setFilteredOrders(filtered);
-  }, [orders, searchTerm, statusFilter, sourceFilter]);
+  }, [adminSession, orders, searchTerm, statusFilter, sourceFilter]);
 
   const updateOrderStatus = (orderId: string, newStatus: Order['status']) => {
-    setOrders(prevOrders =>
-      prevOrders.map(order =>
+    setOrders((prevOrders) => {
+      const updatedOrders = prevOrders.map((order) =>
         order.id === orderId ? { ...order, status: newStatus } : order
-      )
+      );
+
+      saveStoredOrders(updatedOrders);
+      const updatedOrder = updatedOrders.find((order) => order.id === orderId);
+      if (adminSession && updatedOrder) {
+        appendAdminAuditLog({
+          adminId: adminSession.id,
+          adminName: adminSession.name,
+          adminEmail: adminSession.email,
+          branch: adminSession.branch,
+          action: "updated order status",
+          entityType: "order",
+          entityName: updatedOrder.id,
+          details: `Changed status to ${newStatus}.`,
+        });
+      }
+      return updatedOrders;
+    });
+  };
+
+  const openOrderModal = (order: Order) => {
+    setSelectedOrder(order);
+    setRemarksDraft(
+      Object.fromEntries(order.items.map((item) => [item.id, item.adminRemark ?? ""]))
+    );
+    setExchangeResponseDraft(order.exchangeRequest?.adminMessage ?? "");
+  };
+
+  const handlePrintOrder = (order: Order) => {
+    const printWindow = window.open("", "_blank", "width=900,height=700");
+    if (!printWindow) {
+      toast.error("Unable to open the print window.");
+      return;
+    }
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Print ${order.id}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 24px; color: #111; }
+            h1, h2 { margin-bottom: 8px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+            th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+            th { background: #f5f5f5; }
+            .meta { margin-bottom: 20px; }
+            .meta p { margin: 4px 0; }
+          </style>
+        </head>
+        <body>
+          <h1>Order ${order.id}</h1>
+          <div class="meta">
+            <p><strong>Customer:</strong> ${order.customerName}</p>
+            <p><strong>Email:</strong> ${order.customerEmail}</p>
+            <p><strong>Date:</strong> ${formatDate(order.date)}</p>
+            <p><strong>Status:</strong> ${order.status}</p>
+            <p><strong>Address:</strong> ${order.shippingAddress}</p>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Quantity</th>
+                <th>Price</th>
+                <th>Remark</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${order.items
+                .map(
+                  (item) => `
+                    <tr>
+                      <td>${item.name}</td>
+                      <td>${item.quantity}</td>
+                      <td>NPR ${item.price.toLocaleString()}</td>
+                      <td>${item.adminRemark || "-"}</td>
+                    </tr>`
+                )
+                .join("")}
+            </tbody>
+          </table>
+          <p style="margin-top: 20px;"><strong>Total:</strong> NPR ${order.total.toLocaleString()}</p>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+
+    if (adminSession) {
+      appendAdminAuditLog({
+        adminId: adminSession.id,
+        adminName: adminSession.name,
+        adminEmail: adminSession.email,
+        branch: adminSession.branch,
+        action: "printed",
+        entityType: "order",
+        entityName: order.id,
+        details: "Printed order summary.",
+      });
+    }
+  };
+
+  const handleSaveRemarks = () => {
+    if (!selectedOrder) {
+      return;
+    }
+
+    setOrders((prevOrders) => {
+      const updatedOrders = prevOrders.map((order) =>
+        order.id === selectedOrder.id
+          ? {
+              ...order,
+              items: order.items.map((item) => ({
+                ...item,
+                adminRemark: remarksDraft[item.id]?.trim() ?? "",
+              })),
+            }
+          : order
+      );
+
+      const updatedOrder = updatedOrders.find((order) => order.id === selectedOrder.id) ?? null;
+      saveStoredOrders(updatedOrders);
+      setSelectedOrder(updatedOrder);
+
+      if (adminSession && updatedOrder) {
+        appendAdminAuditLog({
+          adminId: adminSession.id,
+          adminName: adminSession.name,
+          adminEmail: adminSession.email,
+          branch: adminSession.branch,
+          action: "updated",
+          entityType: "order",
+          entityName: updatedOrder.id,
+          details: "Saved item-specific admin remarks.",
+        });
+      }
+
+      return updatedOrders;
+    });
+
+    toast.success("Order remarks saved.");
+  };
+
+  const handleExchangeDecision = (orderId: string, decision: "approved" | "rejected") => {
+    setOrders((prevOrders) => {
+      const updatedOrders = prevOrders.map((order) =>
+        order.id === orderId && order.exchangeRequest
+          ? {
+              ...order,
+              status: decision === "approved" ? "exchange_requested" : "delivered",
+              exchangeRequest: {
+                ...order.exchangeRequest,
+                status: decision,
+                adminMessage: exchangeResponseDraft.trim(),
+                reviewedAt: new Date().toISOString(),
+                reviewedBy: adminSession?.name || "Admin",
+              },
+            }
+          : order
+      );
+
+      const updatedOrder = updatedOrders.find((order) => order.id === orderId) ?? null;
+      saveStoredOrders(updatedOrders);
+      setSelectedOrder(updatedOrder);
+
+      if (adminSession && updatedOrder) {
+        appendAdminAuditLog({
+          adminId: adminSession.id,
+          adminName: adminSession.name,
+          adminEmail: adminSession.email,
+          branch: adminSession.branch,
+          action: decision === "approved" ? "approved" : "rejected",
+          entityType: "exchange request",
+          entityName: updatedOrder.id,
+          details: `${decision === "approved" ? "Approved" : "Rejected"} exchange request.`,
+        });
+      }
+
+      return updatedOrders;
+    });
+
+    toast.success(
+      decision === "approved" ? "Exchange request approved." : "Exchange request rejected."
     );
   };
 
@@ -144,6 +347,10 @@ export function OrderManagement() {
         return <CheckCircle size={16} className="text-green-500" />;
       case "cancelled":
         return <XCircle size={16} className="text-red-500" />;
+      case "returned":
+        return <XCircle size={16} className="text-orange-500" />;
+      case "exchange_requested":
+        return <Edit size={16} className="text-cyan-600" />;
     }
   };
 
@@ -159,6 +366,10 @@ export function OrderManagement() {
         return "text-green-600 bg-green-100";
       case "cancelled":
         return "text-red-600 bg-red-100";
+      case "returned":
+        return "text-orange-600 bg-orange-100";
+      case "exchange_requested":
+        return "text-cyan-700 bg-cyan-100";
     }
   };
 
@@ -191,6 +402,11 @@ export function OrderManagement() {
           {filteredOrders.length} of {orders.length} orders
         </div>
       </div>
+      {adminSession && adminSession.branch !== "Head Office" ? (
+        <p className="text-sm text-gray-600">
+          Showing orders assigned to {adminSession.branch}.
+        </p>
+      ) : null}
 
       {/* Filters */}
       <div className="bg-white p-6 rounded-lg shadow-sm">
@@ -217,6 +433,8 @@ export function OrderManagement() {
             <option value="shipped">Shipped</option>
             <option value="delivered">Delivered</option>
             <option value="cancelled">Cancelled</option>
+            <option value="returned">Returned</option>
+            <option value="exchange_requested">Exchange Request</option>
           </select>
 
           <select
@@ -316,6 +534,8 @@ export function OrderManagement() {
                         <option value="shipped">Shipped</option>
                         <option value="delivered">Delivered</option>
                         <option value="cancelled">Cancelled</option>
+                        <option value="returned">Returned</option>
+                        <option value="exchange_requested">Exchange Request</option>
                       </select>
                     </div>
                   </td>
@@ -325,13 +545,25 @@ export function OrderManagement() {
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => setSelectedOrder(order)}
+                        onClick={() => openOrderModal(order)}
                         className="text-blue-600 hover:text-blue-900 transition-colors"
+                        title="View Order"
                       >
                         <Eye size={16} />
                       </button>
-                      <button className="text-green-600 hover:text-green-900 transition-colors">
+                      <button
+                        onClick={() => openOrderModal(order)}
+                        className="text-green-600 hover:text-green-900 transition-colors"
+                        title="Edit Remarks"
+                      >
                         <Edit size={16} />
+                      </button>
+                      <button
+                        onClick={() => handlePrintOrder(order)}
+                        className="text-gray-700 hover:text-black transition-colors"
+                        title="Print Order"
+                      >
+                        <Printer size={16} />
                       </button>
                     </div>
                   </td>
@@ -395,12 +627,31 @@ export function OrderManagement() {
                 <h4 className="font-medium mb-4 tracking-wider uppercase">Items</h4>
                 <div className="space-y-3">
                   {selectedOrder.items.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between py-2 border-b border-gray-100">
+                    <div key={item.id} className="py-3 border-b border-gray-100">
+                      <div className="flex items-center justify-between gap-4">
                       <div>
                         <p className="font-medium tracking-wider">{item.name}</p>
                         <p className="text-sm text-gray-600 tracking-wider">Qty: {item.quantity}</p>
                       </div>
                       <p className="font-medium tracking-wider">NPR {item.price.toLocaleString()}</p>
+                      </div>
+                      <div className="mt-3">
+                        <label className="mb-2 block text-xs uppercase tracking-wider text-gray-500">
+                          Admin Remark For This Product
+                        </label>
+                        <textarea
+                          value={remarksDraft[item.id] ?? ""}
+                          onChange={(event) =>
+                            setRemarksDraft((current) => ({
+                              ...current,
+                              [item.id]: event.target.value,
+                            }))
+                          }
+                          rows={2}
+                          className="w-full rounded border border-gray-300 px-3 py-2 text-sm tracking-wider focus:border-black focus:outline-none"
+                          placeholder="Add handling notes or remarks for this product in the order"
+                        />
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -408,6 +659,92 @@ export function OrderManagement() {
                   <span className="font-semibold tracking-wider uppercase">Total</span>
                   <span className="font-semibold tracking-wider">NPR {selectedOrder.total.toLocaleString()}</span>
                 </div>
+              </div>
+              {selectedOrder.exchangeRequest ? (
+                <div className="space-y-4 border-t border-gray-200 pt-4">
+                  <div>
+                    <h4 className="font-medium mb-2 tracking-wider uppercase">Exchange Request</h4>
+                    <p className="text-sm tracking-wider text-gray-700">
+                      {selectedOrder.exchangeRequest.reason}
+                    </p>
+                    <p className="mt-2 text-xs uppercase tracking-wider text-gray-500">
+                      Status: {selectedOrder.exchangeRequest.status.replace("_", " ")}
+                    </p>
+                    {selectedOrder.exchangeRequest.reviewedBy ? (
+                      <p className="mt-1 text-xs uppercase tracking-wider text-gray-500">
+                        Reviewed by {selectedOrder.exchangeRequest.reviewedBy}
+                      </p>
+                    ) : null}
+                    {selectedOrder.exchangeRequest.adminMessage ? (
+                      <div className="mt-3 rounded border border-gray-200 bg-gray-50 p-3">
+                        <p className="text-xs uppercase tracking-wider text-gray-500">
+                          Message to Customer
+                        </p>
+                        <p className="mt-2 text-sm text-gray-700">
+                          {selectedOrder.exchangeRequest.adminMessage}
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                  {selectedOrder.exchangeRequest.images.length > 0 ? (
+                    <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                      {selectedOrder.exchangeRequest.images.map((image, index) => (
+                        <img
+                          key={`${selectedOrder.id}-exchange-${index}`}
+                          src={image}
+                          alt={`Exchange request ${index + 1}`}
+                          className="h-28 w-full rounded object-cover"
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+                  {selectedOrder.exchangeRequest.status === "pending" ? (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="mb-2 block text-xs uppercase tracking-wider text-gray-500">
+                          Message to Customer
+                        </label>
+                        <textarea
+                          value={exchangeResponseDraft}
+                          onChange={(event) => setExchangeResponseDraft(event.target.value)}
+                          rows={4}
+                          className="w-full rounded border border-gray-300 px-3 py-2 text-sm tracking-wider focus:border-black focus:outline-none"
+                          placeholder="Add a note explaining the approval or denial of this exchange request"
+                        />
+                      </div>
+                      <div className="flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        onClick={() => handleExchangeDecision(selectedOrder.id, "approved")}
+                        className="px-4 py-2 bg-green-600 text-white hover:bg-green-700 transition-colors tracking-wider uppercase text-sm"
+                      >
+                        Approve Exchange
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleExchangeDecision(selectedOrder.id, "rejected")}
+                        className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 transition-colors tracking-wider uppercase text-sm"
+                      >
+                        Reject Exchange
+                      </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+              <div className="flex justify-end gap-3 border-t border-gray-200 pt-4">
+                <button
+                  onClick={() => handlePrintOrder(selectedOrder)}
+                  className="px-4 py-2 bg-gray-100 text-gray-800 hover:bg-gray-200 transition-colors tracking-wider uppercase text-sm"
+                >
+                  Print Order
+                </button>
+                <button
+                  onClick={handleSaveRemarks}
+                  className="px-4 py-2 bg-black text-white hover:bg-gray-800 transition-colors tracking-wider uppercase text-sm"
+                >
+                  Save Remarks
+                </button>
               </div>
             </div>
           </motion.div>

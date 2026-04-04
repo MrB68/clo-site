@@ -17,10 +17,10 @@ export function ProductCard({ product }: ProductCardProps) {
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
-      className="group relative bg-white"
+      className="group relative border border-black/10 bg-white transition-colors duration-300 dark:border-white/10 dark:bg-neutral-950"
     >
       <Link to={`/product/${product?.id}`}>
-        <div className="relative overflow-hidden bg-white aspect-3/4">
+        <div className="relative aspect-3/4 overflow-hidden bg-neutral-100 transition-colors duration-300 dark:bg-neutral-900">
           <img
             src={product?.image}
             alt={product?.name}
@@ -36,19 +36,19 @@ export function ProductCard({ product }: ProductCardProps) {
           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-500" />
         </div>
 
-        <div className="p-6 space-y-3 border-t border-gray-200">
+        <div className="space-y-3 border-t border-black/10 p-6 transition-colors duration-300 dark:border-white/10">
           <div className="flex items-start justify-between gap-4">
-            <h3 className="text-sm tracking-widest uppercase">
+            <h3 className="text-sm tracking-widest uppercase text-black transition-colors duration-300 dark:text-white">
               {product?.name || "Unnamed Product"}
             </h3>
 
             {/* ✅ Fixed price */}
-            <p className="text-sm tracking-wider whitespace-nowrap">
+            <p className="whitespace-nowrap text-sm tracking-wider text-black transition-colors duration-300 dark:text-white">
               {formatPrice(product?.price)}
             </p>
           </div>
 
-          <p className="text-xs text-gray-500 uppercase tracking-[0.2em]">
+          <p className="text-xs uppercase tracking-[0.2em] text-gray-500 transition-colors duration-300 dark:text-gray-400">
             {product?.category || "Unknown"}
           </p>
         </div>
@@ -57,7 +57,7 @@ export function ProductCard({ product }: ProductCardProps) {
       <motion.button
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
-        className="absolute top-4 right-4 bg-white border border-black p-3 opacity-0 group-hover:opacity-100 transition-all duration-300"
+        className="absolute top-4 right-4 border border-black bg-white p-3 opacity-0 transition-all duration-300 group-hover:opacity-100 dark:border-white dark:bg-neutral-950 dark:text-white"
       >
         <Plus size={16} />
       </motion.button>

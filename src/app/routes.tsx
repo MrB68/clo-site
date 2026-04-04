@@ -5,6 +5,7 @@ import { Shop } from "./pages/Shop";
 import { ProductDetail } from "./pages/ProductDetail";
 import { About } from "./pages/About";
 import { Cart } from "./pages/Cart";
+import { Checkout } from "./pages/Checkout";
 import { CustomDesign } from "./pages/CustomDesign";
 import { AdminDashboard } from "./pages/admin/AdminDashboard";
 import { SignIn } from "./pages/SignIn";
@@ -25,6 +26,7 @@ export const router = createBrowserRouter([
       { path: "product/:id", Component: ProductDetail },
       { path: "about", Component: About },
       { path: "cart", Component: Cart },
+      { path: "checkout", Component: Checkout },
       { path: "custom", Component: CustomDesign },
       { path: "signin", Component: SignIn },
       { path: "register", Component: Register },

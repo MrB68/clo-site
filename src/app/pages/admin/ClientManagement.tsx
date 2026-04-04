@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { Search, Mail, Phone, MapPin, Calendar, DollarSign, ShoppingBag, Star, MessageSquare } from "lucide-react";
+import { getStoredOrders, type StoredOrder } from "../../utils/orders";
+import { getAdminSession } from "../../utils/admin";
+import { getCustomerProfileByEmail } from "../../utils/customerProfile";
 
 interface Client {
   id: string;
@@ -17,86 +20,103 @@ interface Client {
   avatar?: string;
 }
 
-const mockClients: Client[] = [
-  {
-    id: "1",
-    name: "Sarah Johnson",
-    email: "sarah.j@email.com",
-    phone: "+977 9801234567",
-    address: "123 Main St, Kathmandu, Nepal",
-    totalSpent: 89264,
-    orderCount: 3,
-    firstPurchaseDate: "2023-08-15",
-    lastPurchaseDate: "2024-01-15",
-    status: "vip",
-    notes: "Loyal customer, prefers minimalist style",
-    avatar: "https://images.unsplash.com/photo-1494790108755-2616b612b786?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxmZW1hbGUlMjBwb3J0cmFpdHxlbnwxfHx8fDE3NzUwNDY2NjB8MA&ixlib=rb-4.1.0&q=80&w=1080"
-  },
-  {
-    id: "2",
-    name: "Mike Chen",
-    email: "mike.chen@email.com",
-    phone: "+977 9812345678",
-    address: "456 Oak Ave, Pokhara, Nepal",
-    totalSpent: 54311,
-    orderCount: 2,
-    firstPurchaseDate: "2023-11-20",
-    lastPurchaseDate: "2024-01-14",
-    status: "regular",
-    notes: "Interested in streetwear",
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtYWxlJTIwcG9ydHJhaXR8ZW58MXx8fHwxNzc1MDQ2NjYwfDA&ixlib=rb-4.1.0&q=80&w=1080"
-  },
-  {
-    id: "3",
-    name: "Emma Davis",
-    email: "emma.davis@email.com",
-    phone: "+977 9823456789",
-    address: "789 Pine Rd, Lalitpur, Nepal",
-    totalSpent: 237147,
-    orderCount: 5,
-    firstPurchaseDate: "2023-06-10",
-    lastPurchaseDate: "2024-01-13",
-    status: "vip",
-    notes: "High-value customer, fashion enthusiast",
-    avatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxmZW1hbGUlMjBwb3J0cmFpdCUyMHNtaWxpbmd8ZW58MXx8fHwxNzc1MDQ2NjYxfDA&ixlib=rb-4.1.0&q=80&w=1080"
-  },
-  {
-    id: "4",
-    name: "Alex Rodriguez",
-    email: "alex.rodriguez@email.com",
-    phone: "+977 9834567890",
-    address: "321 Elm St, Bhaktapur, Nepal",
-    totalSpent: 398000,
-    orderCount: 1,
-    firstPurchaseDate: "2024-01-12",
-    lastPurchaseDate: "2024-01-12",
-    status: "new",
-    notes: "First purchase, potential VIP",
-    avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtYWxlJTIwcG9ydHJhaXQlMjBidXNpbmVzc3xlbnwxfHx8fDE3NzUwNDY2NjF8MA&ixlib=rb-4.1.0&q=80&w=1080"
-  },
-  {
-    id: "5",
-    name: "Lisa Wang",
-    email: "lisa.wang@email.com",
-    phone: "+977 9845678901",
-    address: "654 Cedar Ln, Kathmandu, Nepal",
-    totalSpent: 121381,
-    orderCount: 4,
-    firstPurchaseDate: "2023-09-05",
-    lastPurchaseDate: "2024-01-11",
-    status: "regular",
-    notes: "Prefers accessories and basics",
-    avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxmZW1hbGUlMjBwb3J0cmFpdCUyMGhhcHB5fGVufDF8fHx8MTc3NTA0NjY2MXww&ixlib=rb-4.1.0&q=80&w=1080"
+function getClientStatus(orderCount: number, totalSpent: number): Client["status"] {
+  if (orderCount <= 1) {
+    return "new";
   }
-];
+
+  if (orderCount >= 4 || totalSpent >= 120000) {
+    return "vip";
+  }
+
+  return "regular";
+}
+
+function buildClientNotes(clientOrders: StoredOrder[]) {
+  const latestOrder = clientOrders[0];
+  if (!latestOrder) {
+    return "";
+  }
+
+  const latestItems = latestOrder.items.map((item) => item.name).join(", ");
+  return `Recent order items: ${latestItems}`;
+}
+
+function buildClientsFromOrders(orders: StoredOrder[]) {
+  const groupedOrders = new Map<string, StoredOrder[]>();
+
+  orders.forEach((order) => {
+    const key = order.customerEmail.toLowerCase();
+    const existingOrders = groupedOrders.get(key) ?? [];
+    groupedOrders.set(key, [...existingOrders, order]);
+  });
+
+  return Array.from(groupedOrders.entries()).map(([email, clientOrders]) => {
+    const sortedOrders = [...clientOrders].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+    const firstOrder = sortedOrders[sortedOrders.length - 1];
+    const latestOrder = sortedOrders[0];
+    const totalSpent = sortedOrders.reduce((sum, order) => sum + order.total, 0);
+    const orderCount = sortedOrders.length;
+
+    return {
+      id: email,
+      name: latestOrder.customerName,
+      email: latestOrder.customerEmail,
+      phone: latestOrder.phone,
+      address: latestOrder.shippingAddress,
+      totalSpent,
+      orderCount,
+      firstPurchaseDate: firstOrder.date,
+      lastPurchaseDate: latestOrder.date,
+      status: getClientStatus(orderCount, totalSpent),
+      notes: buildClientNotes(sortedOrders),
+      avatar: getCustomerProfileByEmail(latestOrder.customerEmail)?.profileImage || "",
+    } satisfies Client;
+  });
+}
+
+function getClientInitials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+}
 
 export function ClientManagement() {
-  const [clients, setClients] = useState<Client[]>(mockClients);
-  const [filteredClients, setFilteredClients] = useState<Client[]>(mockClients);
+  const adminSession = getAdminSession();
+  const [clients, setClients] = useState<Client[]>([]);
+  const [filteredClients, setFilteredClients] = useState<Client[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [showClientModal, setShowClientModal] = useState(false);
+
+  useEffect(() => {
+    const syncClients = () => {
+      const storedOrders = getStoredOrders();
+      const visibleOrders =
+        adminSession && adminSession.branch !== "Head Office"
+          ? storedOrders.filter((order) => order.branch === adminSession.branch)
+          : storedOrders;
+
+      setClients(buildClientsFromOrders(visibleOrders));
+    };
+
+    syncClients();
+    window.addEventListener("ordersUpdated", syncClients);
+    window.addEventListener("customerProfileUpdated", syncClients);
+    window.addEventListener("storage", syncClients);
+
+    return () => {
+      window.removeEventListener("ordersUpdated", syncClients);
+      window.removeEventListener("customerProfileUpdated", syncClients);
+      window.removeEventListener("storage", syncClients);
+    };
+  }, [adminSession]);
 
   useEffect(() => {
     let filtered = clients;
@@ -159,6 +179,11 @@ export function ClientManagement() {
           {filteredClients.length} of {clients.length} clients
         </div>
       </div>
+      {adminSession && adminSession.branch !== "Head Office" ? (
+        <p className="text-sm text-gray-600">
+          Showing customers with orders assigned to {adminSession.branch}.
+        </p>
+      ) : null}
 
       {/* Filters */}
       <div className="bg-white p-6 rounded-lg shadow-sm">
@@ -265,11 +290,17 @@ export function ClientManagement() {
           >
             <div className="p-6">
               <div className="flex items-start gap-4 mb-4">
-                <img
-                  src={client.avatar || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtYWxlJTIwcG9ydHJhaXQlMjBidXNpbmVzc3xlbnwxfHx8fDE3NzUwNDY2NjF8MA&ixlib=rb-4.1.0&q=80&w=1080"}
-                  alt={client.name}
-                  className="w-12 h-12 rounded-full object-cover"
-                />
+                {client.avatar ? (
+                  <img
+                    src={client.avatar}
+                    alt={client.name}
+                    className="w-12 h-12 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black text-sm font-semibold tracking-wider text-white">
+                    {getClientInitials(client.name)}
+                  </div>
+                )}
                 <div className="flex-1">
                   <h3 className="font-semibold tracking-wider">{client.name}</h3>
                   <p className="text-sm text-gray-600 tracking-wider">{client.email}</p>
@@ -299,7 +330,7 @@ export function ClientManagement() {
                   setSelectedClient(client);
                   setShowClientModal(true);
                 }}
-                className="w-full mt-4 px-4 py-2 bg-black text-white hover:bg-gray-800 transition-colors tracking-wider uppercase text-sm"
+                className="mt-4 w-full bg-black px-4 py-2 text-sm uppercase tracking-wider text-white transition-colors hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
               >
                 View Details
               </button>
@@ -319,11 +350,17 @@ export function ClientManagement() {
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <img
-                    src={selectedClient.avatar || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtYWxlJTIwcG9ydHJhaXQlMjBidXNpbmVzc3xlbnwxfHx8fDE3NzUwNDY2NjF8MA&ixlib=rb-4.1.0&q=80&w=1080"}
-                    alt={selectedClient.name}
-                    className="w-16 h-16 rounded-full object-cover"
-                  />
+                  {selectedClient.avatar ? (
+                    <img
+                      src={selectedClient.avatar}
+                      alt={selectedClient.name}
+                      className="w-16 h-16 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-black text-lg font-semibold tracking-wider text-white">
+                      {getClientInitials(selectedClient.name)}
+                    </div>
+                  )}
                   <div>
                     <h3 className="text-xl font-semibold tracking-wider">{selectedClient.name}</h3>
                     <p className="text-gray-600 tracking-wider">{selectedClient.email}</p>
