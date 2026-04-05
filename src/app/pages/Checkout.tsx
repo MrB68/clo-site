@@ -127,6 +127,11 @@ export function Checkout() {
   const { user } = useAuth();
   const { products } = useProducts();
   const [step, setStep] = useState<"shipping" | "payment" | "review" | "success">("shipping");
+  const [orderPlaced, setOrderPlaced] = useState(false);
+
+  useEffect(() => {
+    setStep("shipping");
+  }, []);
   const [formData, setFormData] = useState<CheckoutFormData>({
     firstName: "",
     lastName: "",
@@ -456,6 +461,11 @@ export function Checkout() {
   };
 
   const handlePaymentSubmit = () => {
+    if (!user) {
+      toast.error("Please sign in to continue checkout");
+      navigate("/signin");
+      return;
+    }
     if (cartItems.length === 0) {
       toast.error("Your cart is empty");
       navigate("/shop");
@@ -474,26 +484,65 @@ export function Checkout() {
     }
   };
 
-  const initiateEsewaPayment = () => {
-    const esewaConfig = {
-      amt: total,
-      psc: 0,
-      pdc: 0,
-      txAmt: 0,
-      tAmt: total,
-      pid: `ORDER-${Date.now()}`,
-      scd: "EPAYTEST", // Test merchant code
-      cc: "cc",
-      csf: "csf",
-    };
+  const initiateEsewaPayment = async () => {
+    try {
+      const transaction_uuid = `ORDER-${Date.now()}`;
+      const product_code = "EPAYTEST";
 
-    // In production, this would redirect to eSewa gateway
-    void esewaConfig;
-    toast.success("Redirecting to eSewa payment...");
-    setStep("success");
+      const response = await fetch("/api/esewa", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          total_amount: total,
+          transaction_uuid,
+          product_code,
+        }),
+      });
+
+      const { signature } = await response.json();
+
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = "https://rc-epay.esewa.com.np/api/epay/main/v2/form";
+
+      const fields: Record<string, string> = {
+        amount: total.toString(),
+        tax_amount: "0",
+        total_amount: total.toString(),
+        transaction_uuid,
+        product_code,
+        product_service_charge: "0",
+        product_delivery_charge: "0",
+        success_url: `${window.location.origin}/payment-success`,
+        failure_url: `${window.location.origin}/payment-failure`,
+        signed_field_names: "total_amount,transaction_uuid,product_code",
+        signature,
+      };
+
+      Object.entries(fields).forEach(([key, value]) => {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = key;
+        input.value = value;
+        form.appendChild(input);
+      });
+
+      document.body.appendChild(form);
+      form.submit();
+    } catch (err) {
+      console.error(err);
+      toast.error("Payment initialization failed");
+    }
   };
 
   const finalizeOrder = async () => {
+    if (!user) {
+      toast.error("Please sign in to place an order");
+      navigate("/signin");
+      return;
+    }
     try {
       const formattedShippingAddress = [
         `${formData.address}, Ward ${formData.wardNumber}`,
@@ -539,6 +588,7 @@ export function Checkout() {
       setStoredCartItems([]);
 
       toast.success("Order placed successfully");
+      setOrderPlaced(true);
       setStep("success");
     } catch (err) {
       console.error(err);
@@ -551,6 +601,7 @@ export function Checkout() {
   }
 
   if (cartItems.length === 0 && step !== "success") {
+    setStep("shipping");
     return (
       <div className="pt-20 min-h-screen flex items-center justify-center px-4">
         <div className="text-center space-y-4">
@@ -921,7 +972,7 @@ export function Checkout() {
           )}
 
           {/* Success */}
-          {step === "success" && (
+          {step === "success" && orderPlaced && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12 space-y-6">
               <div className="text-6xl text-green-500">✓</div>
               <h2 className="text-3xl sm:text-4xl font-semibold">Order Confirmed!</h2>

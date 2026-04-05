@@ -75,23 +75,12 @@ export function Cart() {
   );
 
   useEffect(() => {
-    const loadCart = () => {
-      setCartItems(normalizeCartItems(localStorage.getItem("cartItems")));
-    };
-
-    loadCart();
-    window.addEventListener("cartUpdated", loadCart);
-    window.addEventListener("storage", loadCart);
-
-    return () => {
-      window.removeEventListener("cartUpdated", loadCart);
-      window.removeEventListener("storage", loadCart);
-    };
+    const newItems = normalizeCartItems(localStorage.getItem("cartItems"));
+    setCartItems(newItems);
   }, []);
 
   useEffect(() => {
     localStorage.setItem("cartItems", JSON.stringify(cartItems));
-    window.dispatchEvent(new Event("cartUpdated"));
   }, [cartItems]);
 
   const populatedCartItems = cartItems
@@ -125,7 +114,7 @@ export function Cart() {
     (sum, item) => sum + item.product.price * item.quantity,
     0
   );
-  const totalItemCount = populatedCartItems.reduce(
+  const totalItemCount = cartItems.reduce(
     (sum, item) => sum + item.quantity,
     0
   );
@@ -133,47 +122,48 @@ export function Cart() {
   const shipping = subtotal > 100 ? 0 : 500;
   const total = subtotal + shipping;
 
-  const placeOrder = async () => {
-    try {
-      const orderItems = populatedCartItems.map(item => ({
-        productId: item.product.id,
-        name: item.product.name,
-        price: item.product.price,
-        quantity: item.quantity,
-        size: item.selectedSize,
-        color: item.selectedColor,
-      }));
-
-      const { error } = await supabase.from("orders").insert([
-        {
-          items: orderItems,
-          total: total,
-          status: "pending",
-        }
-      ]);
-
-      if (error) {
-        console.error(error);
-        alert("Order failed");
-        return;
-      }
-
-      setCartItems([]);
-      localStorage.removeItem("cartItems");
-
-      alert("Order placed successfully");
-      navigate("/");
-
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  // const placeOrder = async () => {
+  //   try {
+  //     const orderItems = populatedCartItems.map(item => ({
+  //       productId: item.product.id,
+  //       name: item.product.name,
+  //       price: item.product.price,
+  //       quantity: item.quantity,
+  //       size: item.selectedSize,
+  //       color: item.selectedColor,
+  //     }));
+  //
+  //     const { error } = await supabase.from("orders").insert([
+  //       {
+  //         items: orderItems,
+  //         total: total,
+  //         status: "pending",
+  //       }
+  //     ]);
+  //
+  //     if (error) {
+  //       console.error(error);
+  //       alert("Order failed");
+  //       return;
+  //     }
+  //
+  //     setCartItems([]);
+  //     localStorage.removeItem("cartItems");
+  //     window.dispatchEvent(new Event("storage"));
+  //
+  //     alert("Order placed successfully");
+  //     navigate("/");
+  //
+  //   } catch (err) {
+  //     console.error(err);
+  //   }
+  // };
 
   if (!products || products.length === 0) {
     return <div className="pt-20 text-center">Loading...</div>;
   }
 
-  if (populatedCartItems.length === 0) {
+  if (cartItems.length === 0) {
     return (
       <div className="min-h-screen bg-white pt-20 text-black transition-colors duration-300 dark:bg-black dark:text-white">
         <div className="max-w-7xl mx-auto px-4 py-24 text-center space-y-6">
@@ -293,7 +283,7 @@ export function Cart() {
 
           <button
             type="button"
-            onClick={placeOrder}
+            onClick={() => navigate("/checkout")}
             className="w-full bg-black py-4 text-white transition hover:bg-gray-900 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
           >
             Checkout
