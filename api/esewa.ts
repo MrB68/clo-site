@@ -6,7 +6,10 @@ export default function handler(req: any, res: any) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { total_amount, transaction_uuid, product_code } = req.body;
+  const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+  const { total_amount, transaction_uuid, product_code } = body;
+
+  console.log("REQ BODY:", req.body);
 
   // ❗ Safety check
   if (!total_amount || !transaction_uuid || !product_code) {
@@ -26,6 +29,9 @@ export default function handler(req: any, res: any) {
     .createHmac("sha256", secret)
     .update(message)
     .digest("base64");
+
+  console.log("MESSAGE:", message);
+  console.log("SIGNATURE:", signature);
 
   return res.status(200).json({ signature });
 }
