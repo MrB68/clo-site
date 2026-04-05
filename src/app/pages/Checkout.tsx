@@ -495,7 +495,7 @@ export function Checkout() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          total_amount: total,
+          total_amount: subtotal + shipping,
           transaction_uuid,
           product_code,
         }),
@@ -508,9 +508,9 @@ export function Checkout() {
       form.action = "https://rc-epay.esewa.com.np/api/epay/main/v2/form";
 
       const fields: Record<string, string> = {
-        amount: total.toString(),
+        amount: subtotal.toString(),
         tax_amount: "0",
-        total_amount: total.toString(),
+        total_amount: (subtotal + shipping).toString(),
         transaction_uuid,
         product_code,
         product_service_charge: "0",

@@ -6,14 +6,13 @@ export default function handler(req: any, res: any) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { total_amount, transaction_uuid } = req.body;
+  const { total_amount, transaction_uuid, product_code } = req.body;
 
   // ❗ Safety check
-  if (!total_amount || !transaction_uuid) {
+  if (!total_amount || !transaction_uuid || !product_code) {
     return res.status(400).json({ error: "Missing parameters" });
   }
 
-  const product_code = "EPAYTEST";
 
   const message = `total_amount=${total_amount},transaction_uuid=${transaction_uuid},product_code=${product_code}`;
 
