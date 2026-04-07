@@ -4,25 +4,30 @@ import { ProductCard } from "../components/ProductCard";
 export default function BestSellers() {
   const { products } = useProducts();
 
-  // 🔥 Sort by real sales
   const sorted = [...products]
     .map((p: any) => {
+      // Try ALL possible sales-related fields
       const salesValue =
         p.orders_count ??
         p.sales_count ??
         p.sold ??
+        p.total_orders ??
+        p.orderCount ??
         0;
+
+      const sales = Number(salesValue);
 
       return {
         ...p,
-        sales: isNaN(Number(salesValue)) ? 0 : Number(salesValue),
+        sales: isNaN(sales) ? 0 : sales,
       };
     })
-    .filter((p: any) => p.sales > 0) // only real best sellers
-    .sort((a: any, b: any) => b.sales - a.sales)
-    .slice(0, 24);
+    .sort((a: any, b: any) => b.sales - a.sales);
 
-  const finalProducts = sorted.length > 0 ? sorted : products.slice(0, 24);
+  // Ensure we always show top items even if sales = 0
+  const finalProducts = sorted.slice(0, 24);
+
+  console.log("Best Sellers Data:", sorted);
 
   return (
     <div className="pt-20">
@@ -44,7 +49,7 @@ export default function BestSellers() {
               
 
               {/* 🔥 SOLD BADGE */}
-              {product.sales > 0 && (
+              {product.sales !== undefined && (
                 <span className="absolute top-12 right-3 bg-black/80 text-white text-xs px-2 py-1 z-10">
                   {product.sales} sold
                 </span>
