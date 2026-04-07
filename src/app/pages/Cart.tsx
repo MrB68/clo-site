@@ -206,7 +206,7 @@ export function Cart() {
     0
   );
 
-  const shipping = subtotal === 0 ? 0 : subtotal > 100 ? 0 : 500;
+  const shipping = cartItems.length === 0 ? 0 : subtotal > 100 ? 0 : 500;
   const total = subtotal + shipping;
 
   const hasInvalidQty = populatedCartItems.some(

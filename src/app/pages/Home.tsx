@@ -112,7 +112,7 @@ export function Home() {
             <h2 className="text-4xl tracking-[0.2em] uppercase text-white md:text-5xl">
               Less is More
             </h2>
-            <p className="mx-auto max-w-2xl text-base leading-relaxed text-gray-600 transition-colors duration-500 dark:text-gray-300 md:text-lg">
+            <p className="mx-auto max-w-2xl text-base leading-relaxed text-gray-300 md:text-lg">
               We believe in the power of simplicity. Each piece is thoughtfully designed to transcend trends, focusing on clean lines, quality materials, and timeless aesthetics.
             </p>
           </motion.div>
@@ -208,7 +208,7 @@ export function Home() {
             </div>
           </motion.div>
 
-          <div className="grid grid-cols-1 gap-px bg-gray-200 transition-colors duration-500 sm:grid-cols-2 lg:grid-cols-4 dark:bg-white/10">
+          <div className="grid grid-cols-1 gap-px bg-white/10 sm:grid-cols-2 lg:grid-cols-4">
             {newArrivals.map((product, index) => (
               <motion.div
                 key={product.id}
@@ -422,7 +422,7 @@ export function Home() {
             </div>
           ) : (
             <div className="mx-auto max-w-2xl text-center">
-              <p className="text-gray-600 transition-colors duration-500 dark:text-gray-300">
+              <p className="text-gray-300">
                 High-rated approved customer reviews will appear here once they start coming in.
               </p>
             </div>
