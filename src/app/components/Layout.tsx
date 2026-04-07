@@ -130,18 +130,6 @@ export function Layout() {
               </Link>
             </div>
             
-            {/* add this line to link to custom design page */}
-            {
-              /*  {<Link
-                to="/custom"
-                className={`relative group tracking-widest uppercase text-sm ${scrolled || !isHomePage ? "text-black" : "text-white"}`}
-              >
-                Custom 
-                <span className="absolute left-0 -bottom-1 w-0 h-[1px] bg-current transition-all duration-300 group-hover:w-full"></span>
-              </Link>}
-            }
-            */}
-            
             
             
             {/* Desktop Icons */}
@@ -306,12 +294,14 @@ export function Layout() {
                 >
                   Shop
                 </Link>
+                {/*
                 <Link
                   to="/custom"
                   className="block text-black hover:opacity-70 transition-opacity tracking-widest uppercase text-sm"
                 >
                   Custom Prints
                 </Link>
+                */}
                 <Link
                   to="/about"
                   className="block text-black hover:opacity-70 transition-opacity tracking-widest uppercase text-sm"
@@ -475,7 +465,7 @@ export function Layout() {
               <h4 className="font-medium tracking-widest uppercase text-sm">Shop</h4>
               <ul className="space-y-3 text-sm text-gray-400">
                 <li><Link to="/shop" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">All Products</Link></li>
-                <li><Link to="/custom" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">Custom Prints</Link></li>
+                {/* Custom Prints removed */}
                 <li><Link to="/shop?filter=new" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">New Arrivals</Link></li>
                 <li><Link to="/collections" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">Collections</Link></li>
                 <li><Link to="/sale" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">Sale</Link></li>
@@ -535,12 +525,14 @@ export function Layout() {
                 </div>
 
                 {/* eSewa */}
+                {/*
                 <div className="flex items-center gap-2 bg-white/5 px-3 py-2 rounded-lg">
                   <img
                     src="/icons/ESEWA.png"
                     alt="eSewa"
                     className="w-18 h-7 text-white group-hover:text-green-400" />
-                  </div>
+                </div>
+                */}
 
                 {/* Khalti */}
                 {/* 

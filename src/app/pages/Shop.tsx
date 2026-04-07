@@ -142,7 +142,7 @@ if (sortBy === "featured") {
   }, [searchParams, searchQuery]);
 
   return (
-    <div className="bg-white pt-20 text-black transition-colors duration-300 dark:bg-black dark:text-white">
+    <div className="bg-black pt-20 text-white">
       {/* Header */}
       <div className="bg-black text-white py-16 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
@@ -181,14 +181,14 @@ if (sortBy === "featured") {
 
           {/* Filters - Desktop */}
           <div className="hidden lg:block w-56 shrink-0">
-            <div className="sticky top-24 space-y-10 border border-black/10 p-6 bg-white/70 backdrop-blur-xl dark:bg-neutral-950/70 shadow-xl">
+            <div className="sticky top-24 space-y-10 border border-black/10 p-6 bg-neutral-950/70 backdrop-blur-xl shadow-xl">
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-light tracking-[0.35em] uppercase text-xs">Filters</h3>
                   {hasActiveFilters && (
                     <button
                       onClick={clearFilters}
-                      className="text-[10px] tracking-[0.3em] uppercase text-gray-400 hover:text-black dark:hover:text-white transition-colors"
+                      className="text-[10px] tracking-[0.3em] uppercase text-gray-400 hover:text-black transition-colors"
                     >
                       Clear all
                     </button>
@@ -197,7 +197,7 @@ if (sortBy === "featured") {
 
                 {/* Category */}
                 <div className="space-y-3 mb-6">
-                  <h4 className="text-[10px] uppercase tracking-[0.35em] text-gray-400 dark:text-gray-500">
+                  <h4 className="text-[10px] uppercase tracking-[0.35em] text-gray-400">
                     Category
                   </h4>
                   {["All", ...categories].map((category) => (
@@ -206,7 +206,7 @@ if (sortBy === "featured") {
                         type="radio"
                         checked={selectedCategory === category}
                         onChange={() => setSelectedCategory(category)}
-                        className="w-4 h-4 accent-black dark:accent-white"
+                        className="w-4 h-4 accent-black"
                       />
                       <span className="text-sm capitalize tracking-wide group-hover:opacity-100 opacity-80 transition">{category}</span>
                     </label>
@@ -215,7 +215,7 @@ if (sortBy === "featured") {
 
                 {/* Size */}
                 <div className="space-y-3 mb-6">
-                  <h4 className="text-[10px] uppercase tracking-[0.35em] text-gray-400 dark:text-gray-500">
+                  <h4 className="text-[10px] uppercase tracking-[0.35em] text-gray-400">
                     Size
                   </h4>
                   {["All", "XS", "S", "M", "L", "XL"].map((size) => (
@@ -224,7 +224,7 @@ if (sortBy === "featured") {
                         type="radio"
                         checked={selectedSize === size}
                         onChange={() => setSelectedSize(size)}
-                        className="w-4 h-4 accent-black dark:accent-white"
+                        className="w-4 h-4 accent-black"
                       />
                       <span className="text-sm tracking-wide group-hover:opacity-100 opacity-80 transition">{size}</span>
                     </label>
@@ -233,7 +233,7 @@ if (sortBy === "featured") {
 
                 {/* Price */}
                 <div className="space-y-4">
-                  <h4 className="text-[10px] uppercase tracking-[0.35em] text-gray-400 dark:text-gray-500">
+                  <h4 className="text-[10px] uppercase tracking-[0.35em] text-gray-400">
                     Price
                   </h4>
 
@@ -294,11 +294,11 @@ if (sortBy === "featured") {
               </button>
 
               <div className="flex items-center gap-2">
-                <label className="text-xs tracking-[0.2em] uppercase text-gray-600 dark:text-gray-400">Sort:</label>
+                <label className="text-xs tracking-[0.2em] uppercase text-gray-400">Sort:</label>
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
-                  className="bg-transparent border border-black px-5 py-2 text-[10px] tracking-[0.3em] uppercase transition-all focus:border-black focus:outline-none dark:border-white dark:text-white"
+                  className="bg-transparent border border-white px-5 py-2 text-[10px] tracking-[0.3em] uppercase text-white transition-all focus:border-white focus:outline-none"
                 >
                   <option value="all">All</option>
                   <option value="featured">Featured</option>
@@ -315,7 +315,7 @@ if (sortBy === "featured") {
                 {filteredProducts.map((product) => (
                   <div
                     key={product.id}
-                    className="group bg-white dark:bg-neutral-950 p-5 transition-all duration-500 hover:shadow-2xl hover:scale-[1.02] border border-black/5 dark:border-white/10"
+                    className="group bg-neutral-950 p-5 transition-all duration-500 hover:shadow-2xl hover:scale-[1.02] border border-white/10"
                   >
                     <ProductCard product={product} />
                   </div>
@@ -323,7 +323,7 @@ if (sortBy === "featured") {
               </div>
             ) : (
               <div className="text-center py-24">
-                <p className="tracking-wider text-gray-500 dark:text-gray-400">
+                <p className="tracking-wider text-gray-400">
                   No products found matching your filters.
                 </p>
                 <button
@@ -346,7 +346,7 @@ if (sortBy === "featured") {
             animate={{ x: 0 }}
             exit={{ x: "-100%" }}
             onClick={(e) => e.stopPropagation()}
-            className="h-full w-72 overflow-y-auto bg-white p-6 text-black transition-colors duration-300 dark:bg-neutral-950 dark:text-white"
+            className="h-full w-72 overflow-y-auto bg-neutral-950 p-6 text-white"
           >
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-medium tracking-widest uppercase">Filters</h3>
@@ -357,7 +357,7 @@ if (sortBy === "featured") {
 
             {/* Style Toggle in Mobile */}
             <div className="mb-8">
-              <h4 className="mb-3 text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
+              <h4 className="mb-3 text-xs uppercase tracking-[0.2em] text-gray-400">
                 Style
               </h4>
               <StyleToggle
@@ -372,7 +372,7 @@ if (sortBy === "featured") {
                   clearFilters();
                   setFiltersOpen(false);
                 }}
-                className="mb-6 text-xs tracking-wider uppercase text-gray-500 transition-colors hover:text-black dark:text-gray-400 dark:hover:text-white"
+                className="mb-6 text-xs tracking-wider uppercase text-gray-400 transition-colors hover:text-black"
               >
                 Clear all filters
               </button>
@@ -380,7 +380,7 @@ if (sortBy === "featured") {
 
             {/* Category Filter */}
             <div className="space-y-3 mb-6">
-              <h4 className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
+              <h4 className="text-xs uppercase tracking-[0.2em] text-gray-400">
                 Category
               </h4>
               {["All", ...categories].map((category) => (
@@ -402,7 +402,7 @@ if (sortBy === "featured") {
 
             {/* Size Filter */}
             <div className="space-y-3 mb-6">
-              <h4 className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
+              <h4 className="text-xs uppercase tracking-[0.2em] text-gray-400">
                 Size
               </h4>
               {["All", "XS", "S", "M", "L", "XL"].map((size) => (
@@ -424,12 +424,12 @@ if (sortBy === "featured") {
 
             {/* Price Filter */}
             <div className="space-y-4 mb-6">
-              <h4 className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
+              <h4 className="text-xs uppercase tracking-[0.2em] text-gray-400">
                 Price
               </h4>
 
               <div className="px-1">
-                <div className="flex justify-between text-xs text-gray-500 mb-2">
+                <div className="flex justify-between text-xs text-gray-400 mb-2">
                   <span>NPR {(Math.round(priceRange[0] / 1000) * 1000).toLocaleString()}</span>
                   <span>NPR {(Math.round(priceRange[1] / 1000) * 1000).toLocaleString()}</span>
                 </div>
@@ -476,7 +476,7 @@ if (sortBy === "featured") {
 
             <button
               onClick={() => setFiltersOpen(false)}
-              className="w-full bg-black py-3 text-sm tracking-[0.2em] uppercase text-white transition-colors hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
+              className="w-full bg-black py-3 text-sm tracking-[0.2em] uppercase text-white transition-colors hover:bg-gray-800"
             >
               Apply Filters
             </button>

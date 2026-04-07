@@ -17,13 +17,13 @@ export default function SizeGuide() {
   const recommended = getRecommendedSize();
 
   return (
-    <div className="pt-28 px-6 max-w-6xl mx-auto space-y-16 text-black dark:text-white">
+    <div className="pt-28 px-6 max-w-6xl mx-auto space-y-16 text-white bg-black min-h-screen">
       {/* Header */}
       <div className="space-y-5 text-center">
         <h1 className="text-4xl md:text-5xl tracking-[0.25em] uppercase font-semibold">
           Size Guide
         </h1>
-        <p className="text-gray-500 dark:text-gray-400 text-sm max-w-xl mx-auto leading-relaxed">
+        <p className="text-gray-400 text-sm max-w-xl mx-auto leading-relaxed">
           Find your perfect fit with our sizing recommendations.
         </p>
       </div>
@@ -46,10 +46,10 @@ export default function SizeGuide() {
         ].map((item, i) => (
           <div
             key={i}
-            className="border border-gray-200 dark:border-neutral-700 rounded-2xl p-6 space-y-3 bg-white dark:bg-neutral-900 hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
+            className="border border-white/10 rounded-2xl p-6 space-y-3 bg-neutral-900 hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
           >
             <h3 className="font-semibold tracking-wide">{item.title}</h3>
-            <p className="text-sm text-gray-600 dark:text-gray-300">
+            <p className="text-sm text-gray-300">
               {item.desc}
             </p>
           </div>
@@ -57,7 +57,7 @@ export default function SizeGuide() {
       </div>
 
       {/* Size Calculator */}
-      <div className="border border-gray-200 dark:border-neutral-700 rounded-2xl p-6 bg-white dark:bg-neutral-900 space-y-6">
+      <div className="border border-white/10 rounded-2xl p-6 bg-neutral-900 space-y-6">
         <h2 className="text-lg font-semibold tracking-wide text-center">Size Calculator</h2>
 
         <div className="grid md:grid-cols-2 gap-4">
@@ -66,7 +66,7 @@ export default function SizeGuide() {
             placeholder="Height (cm)"
             value={height}
             onChange={(e) => setHeight(e.target.value === '' ? '' : Number(e.target.value))}
-            className="p-3 rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-sm outline-none"
+            className="p-3 rounded-xl border border-white/10 bg-neutral-800 text-sm text-white outline-none"
           />
 
           <input
@@ -74,7 +74,7 @@ export default function SizeGuide() {
             placeholder="Weight (kg)"
             value={weight}
             onChange={(e) => setWeight(e.target.value === '' ? '' : Number(e.target.value))}
-            className="p-3 rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-sm outline-none"
+            className="p-3 rounded-xl border border-white/10 bg-neutral-800 text-sm text-white outline-none"
           />
         </div>
 
@@ -84,7 +84,7 @@ export default function SizeGuide() {
               Recommended Size: <span className="font-semibold">{recommended}</span>
             </p>
           ) : (
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <p className="text-sm text-gray-400">
               Enter your height and weight to get a recommendation
             </p>
           )}
@@ -93,22 +93,22 @@ export default function SizeGuide() {
 
       {/* Size Table */}
       <div className="overflow-x-auto">
-        <table className="w-full text-sm border border-gray-200 dark:border-neutral-700 rounded-xl overflow-hidden">
-          <thead className="bg-gray-100 dark:bg-neutral-800">
+        <table className="w-full text-sm border border-white/10 rounded-xl overflow-hidden">
+          <thead className="bg-neutral-800">
             <tr>
               <th className="p-3 text-left font-medium">Size</th>
               <th className="p-3 text-left font-medium">Chest (in)</th>
               <th className="p-3 text-left font-medium">Length (in)</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200 dark:divide-neutral-700">
+          <tbody className="divide-y divide-neutral-700">
             {[
               { size: "S", chest: "36–38", length: "26" },
               { size: "M", chest: "38–40", length: "27" },
               { size: "L", chest: "40–42", length: "28" },
               { size: "XL", chest: "42–44", length: "29" }
             ].map((row, i) => (
-              <tr key={i} className="bg-white dark:bg-neutral-900">
+              <tr key={i} className="bg-neutral-900">
                 <td className="p-3">{row.size}</td>
                 <td className="p-3">{row.chest}</td>
                 <td className="p-3">{row.length}</td>
@@ -119,9 +119,9 @@ export default function SizeGuide() {
       </div>
 
       {/* Tips Section */}
-      <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-neutral-900 dark:to-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-2xl p-6 space-y-3">
+      <div className="bg-neutral-900 border border-white/10 rounded-2xl p-6 space-y-3">
         <h2 className="text-lg font-semibold">Sizing Tips</h2>
-        <ul className="text-sm text-gray-600 dark:text-gray-300 space-y-2">
+        <ul className="text-sm text-gray-300 space-y-2">
           <li>• Measure your chest for best accuracy</li>
           <li>• Compare with your favorite fitting clothing</li>
           <li>• When in doubt, size up for comfort</li>
