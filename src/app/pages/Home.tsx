@@ -17,9 +17,11 @@ export function Home() {
     .filter((review) => review.rating > 4)
     .slice(0, 3);
 
-  // Force dark mode class on html
+  // Force dark mode class on html and body, enforce background for Vercel
   useEffect(() => {
     document.documentElement.classList.add("dark");
+    document.body.style.backgroundColor = "#000000";
+    document.body.style.color = "#ffffff";
   }, []);
 
   // Fetch reviews
@@ -50,7 +52,7 @@ export function Home() {
   }, []);
 
   return (
-    <div className="bg-black text-white min-h-screen">
+    <div className="bg-black text-white min-h-screen w-full" style={{ backgroundColor: "#000000", color: "#ffffff" }}>
       {/* Hero Section */}
       <section className="relative h-screen">
         <div className="absolute inset-0 bg-black">
