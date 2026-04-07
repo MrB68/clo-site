@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "motion/react";
 import { ArrowLeft, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
@@ -48,7 +48,7 @@ interface CheckoutFormData {
   landmark: string;
   address: string;
   postalCode: string;
-  paymentMethod: "esewa" | "nepalpay" | "cod";
+  paymentMethod: "esewa" | "cod";
 }
 
 type CheckoutField =
@@ -124,10 +124,31 @@ function getStoredCartItems(): Array<{
 
 export function Checkout() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const { user } = useAuth();
+const orderCodeFromUrl = params.get("order_id");
+const customOrderId = params.get("orderId");
+const isCustomOrder = params.get("custom") === "true";
+
+// ✅ STRICT payment validation
+const paymentStatus = params.get("payment") || (window.location.pathname.includes("payment-success") ? "success" : null);
+const paidOrderIdFromUrl = params.get("orderId") || params.get("order_id");
+const storedPaidOrderId = localStorage.getItem("paidOrderId");
+
+const isPaymentSuccess =
+  paymentStatus === "success" &&
+  (paidOrderIdFromUrl || storedPaidOrderId || orderCodeFromUrl);
+  const [orderProcessed, setOrderProcessed] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+  }, [user]);
+
   const { products } = useProducts();
   const [step, setStep] = useState<"shipping" | "payment" | "review" | "success">("shipping");
   const [orderPlaced, setOrderPlaced] = useState(false);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+
 
   useEffect(() => {
     setStep("shipping");
@@ -216,11 +237,11 @@ export function Checkout() {
       // map DB → UI format
       const mapped = (data || []).map((p: any) => ({
         code: p.code,
-        label: p.label,
-        description: p.description,
-        type: p.type,
-        value: p.value,
-        showInCheckout: p.show_in_checkout,
+        label: p.label ?? p.code ?? "PROMO",
+        description: p.description ?? "",
+        type: p.type ?? p.discount_type ?? "percent",
+        value: Number(p.value ?? p.discount_value ?? 0),
+        showInCheckout: p.show_in_checkout ?? false,
       }));
 
       setDiscountOptions(mapped);
@@ -256,6 +277,7 @@ export function Checkout() {
   }, [user]);
 
   const cartItems: CheckoutItem[] = storedCartItems
+  
     .map((item) => {
       const product = products.find((entry) => entry.id === item.productId);
 
@@ -275,21 +297,74 @@ export function Checkout() {
     })
     .filter((item): item is CheckoutItem => item !== null);
 
-  const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const baseShipping = subtotal > 100 ? 0 : 500; // NPR
-  const appliedDiscount = discountOptions.find(
-    (option) => option.code === appliedDiscountCode
-  );
+    // 🔥 CUSTOM ORDER SUPPORT
+const isCustomCheckout = params.get("custom") === "true";
+
+const customOrder = isCustomCheckout
+  ? JSON.parse(localStorage.getItem("customCheckoutOrder") || "null")
+  : null;
+
+const checkoutItems: CheckoutItem[] = isCustomCheckout
+  ? [
+      {
+        id: customOrder?.id || "custom",
+        name: "Custom Design Order",
+        price:
+          customOrder?.approved_price ??
+          customOrder?.total ??
+          0,
+        quantity: 1,
+        size: "Custom",
+        color: "Custom",
+        // ✅ FIX: show uploaded custom design image
+        image:
+          customOrder?.design_images?.[0] ||
+          customOrder?.image_urls?.[0] ||
+          customOrder?.image_url ||
+          "",
+      },
+    ]
+  : cartItems;
+
+  const subtotal = checkoutItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const valleyDistricts = ["Kathmandu", "Lalitpur", "Bhaktapur"];
+
+  let baseShipping = 0;
+
+  if (valleyDistricts.includes(formData.district)) {
+    baseShipping = 0;
+  } else {
+    baseShipping = subtotal > 5000 ? 500 : 1000;
+  }
+  const appliedDiscount = discountOptions?.length
+  ? discountOptions.find(
+      (option) =>
+        option.code?.toUpperCase() === appliedDiscountCode?.toUpperCase()
+    )
+  : null;
   const visibleDiscountOptions = discountOptions.filter(
     (option) => option.showInCheckout
   );
-  const discountAmount = appliedDiscount
-    ? appliedDiscount.type === "percent"
-      ? Math.round(subtotal * (appliedDiscount.value / 100))
-      : appliedDiscount.type === "flat"
-        ? Math.min(appliedDiscount.value, subtotal)
-        : baseShipping
-    : 0;
+  const discountAmount = (() => {
+    if (!appliedDiscount) return 0;
+
+    const value = parseFloat(appliedDiscount.value) || 0;
+    const type = appliedDiscount.type;
+
+    if (type === "percent") {
+      return Math.round(subtotal * (value / 100));
+    }
+
+    if (type === "flat") {
+      return Math.min(value, subtotal);
+    }
+
+    if (type === "shipping") {
+      return baseShipping;
+    }
+
+    return 0;
+  })();
   const shipping =
     appliedDiscount?.type === "shipping" ? 0 : baseShipping;
   // const tax = Math.round(subtotal * 0.13); // Re-enable when VAT is integrated
@@ -309,9 +384,11 @@ export function Checkout() {
   const cityOptions = formData.province
     ? nepalLocations[formData.province]?.cities ?? []
     : [];
-  const cashOnDeliveryDistricts = new Set(["Kathmandu", "Lalitpur", "Bhaktapur"]);
-  const isCashOnDeliveryAvailable = cashOnDeliveryDistricts.has(formData.district);
-
+  //const cashOnDeliveryDistricts = new Set(["Kathmandu", "Lalitpur", "Bhaktapur"]);
+  //const isCashOnDeliveryAvailable = cashOnDeliveryDistricts.has(formData.district);
+  // 🔥 TEMP: allow COD everywhere (disabled restriction for deployment)
+  const isCashOnDeliveryAvailable = true;
+/*//temporary disable COD restriction for deployment, re-enable when ready    
   useEffect(() => {
     if (!isCashOnDeliveryAvailable && formData.paymentMethod === "cod") {
       setFormData((current) => ({
@@ -320,7 +397,7 @@ export function Checkout() {
       }));
     }
   }, [formData.paymentMethod, isCashOnDeliveryAvailable]);
-
+*/
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     if (shippingErrors[name as CheckoutField]) {
@@ -392,6 +469,12 @@ export function Checkout() {
   };
 
   const handleShippingSubmit = () => {
+    // 🚫 Block if not signed in
+    if (!user) {
+      toast.error("Please sign in to continue checkout");
+      return;
+    }
+
     if (validateShippingForm()) {
       setStep("payment");
     }
@@ -406,11 +489,19 @@ export function Checkout() {
       return;
     }
 
-    const { data, error } = await supabase
-      .from("promo_codes")
-      .select("*")
-      .eq("code", normalizedCode)
-      .single();
+    let data: any = null;
+    let error: any = null;
+    try {
+      const res = await supabase
+        .from("promo_codes")
+        .select("*")
+        .eq("code", normalizedCode)
+        .single();
+      data = res.data;
+      error = res.error;
+    } catch (e) {
+      console.warn("Promo fetch failed", e);
+    }
 
     if (error || !data) {
       setPromoCodeError("Invalid promo code");
@@ -420,14 +511,39 @@ export function Checkout() {
 
     // 🔒 STEP 2: prevent reuse
     if (user) {
-      const { data: usage } = await supabase
-        .from("promo_usages")
-        .select("*")
-        .eq("promo_code", normalizedCode)
-        .eq("user_id", user.id)
-        .single();
+      if (!user?.id || !user?.email) {
+        console.warn("User info missing for promo validation");
+      }
+      // Safer user_id check
+      let usage: any[] = [];
+      try {
+        let res = await supabase
+          .from("promo_usages")
+          .select("id")
+          .eq("promo_code", normalizedCode)
+          .eq("user_id", user.id);
+        usage = res.error ? [] : res.data || [];
+      } catch (e) {
+        console.warn("Promo usage check skipped (user_id)");
+      }
 
-      if (usage) {
+      // Fallback: check by email if not found by user_id
+      let usageByEmail: any[] = [];
+      if (user.email) {
+        try {
+          let res = await supabase
+            .from("promo_usages")
+            .select("id")
+            .eq("promo_code", normalizedCode)
+            .eq("customeremail", user.email?.toLowerCase());
+          usageByEmail = res.error ? [] : res.data || [];
+        } catch (e) {
+          console.warn("Promo usage check skipped (email)");
+        }
+      }
+
+      const finalUsage = [...(usage || []), ...usageByEmail];
+      if (finalUsage.length > 0) {
         setPromoCodeError("You have already used this promo code");
         toast.error("Promo already used");
         return;
@@ -446,11 +562,55 @@ export function Checkout() {
       return;
     }
 
+    // 🔒 STEP 3: enforce per-user usage limit using orders table
+    if (user?.id && data.user_usage_limit) {
+      try {
+        const { data: userOrders, error: userOrderErr } = await supabase
+          .from("orders")
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("promo_code", normalizedCode);
+
+        if (!userOrderErr) {
+          const usageCount = userOrders?.length || 0;
+
+          if (usageCount >= data.user_usage_limit) {
+            setPromoCodeError(`You can only use this promo ${data.user_usage_limit} times`);
+            toast.error("Promo usage limit reached for this user");
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn("User promo usage check failed", err);
+      }
+    }
+
+    // 🔒 STEP 4: enforce global usage via orders table (source of truth)
+    try {
+      const { data: allOrders, error: globalErr } = await supabase
+        .from("orders")
+        .select("id")
+        .eq("promo_code", normalizedCode);
+
+      if (!globalErr) {
+        const totalUsage = allOrders?.length || 0;
+
+        if (data.usage_limit && totalUsage >= data.usage_limit) {
+          setPromoCodeError("Promo usage limit reached");
+          toast.error("Promo limit reached");
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn("Global promo usage check failed", err);
+    }
+
     setPromoCodeError("");
     setAppliedDiscountCode(data.code);
+    console.log("APPLIED PROMO FULL:", data);
     setPromoCode(data.code);
 
-    toast.success(`${data.label} applied`);
+    toast.success(`${data.label ?? data.code ?? "Promo"} applied`);
   };
 
   const removeDiscountCode = () => {
@@ -461,147 +621,606 @@ export function Checkout() {
   };
 
   const handlePaymentSubmit = () => {
+    if (isProcessingPayment) return;
+
     if (!user) {
       toast.error("Please sign in to continue checkout");
-      navigate("/signin");
       return;
     }
-    if (cartItems.length === 0) {
+
+    if (checkoutItems.length === 0) {
       toast.error("Your cart is empty");
       navigate("/shop");
       return;
     }
 
+    setIsProcessingPayment(true);
+
     if (formData.paymentMethod === "esewa") {
-      // eSewa integration
       initiateEsewaPayment();
-    } else if (formData.paymentMethod === "nepalpay") {
-      // Nepal Pay QR
-      setStep("review");
-    } else {
-      // COD
-      setStep("review");
-    }
-  };
-
-  const initiateEsewaPayment = async () => {
-    try {
-      const transaction_uuid = `ORDER-${Date.now()}`;
-      const product_code = "EPAYTEST";
-
-      const response = await fetch("/api/esewa", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          total_amount: subtotal + shipping,
-          transaction_uuid,
-          product_code,
-        }),
-      });
-
-      const { signature } = await response.json();
-
-      const form = document.createElement("form");
-      form.method = "POST";
-      form.action = "https://rc-epay.esewa.com.np/api/epay/main/v2/form";
-
-      const fields: Record<string, string> = {
-        amount: subtotal.toString(),
-        tax_amount: "0",
-        total_amount: (subtotal + shipping).toString(),
-        transaction_uuid,
-        product_code,
-        product_service_charge: "0",
-        product_delivery_charge: "0",
-        success_url: `${window.location.origin}/payment-success`,
-        failure_url: `${window.location.origin}/payment-failure`,
-        signed_field_names: "total_amount,transaction_uuid,product_code",
-        signature,
-      };
-
-      Object.entries(fields).forEach(([key, value]) => {
-        const input = document.createElement("input");
-        input.type = "hidden";
-        input.name = key;
-        input.value = value;
-        form.appendChild(input);
-      });
-
-      document.body.appendChild(form);
-      form.submit();
-    } catch (err) {
-      console.error(err);
-      toast.error("Payment initialization failed");
-    }
-  };
-
-  const finalizeOrder = async () => {
-    if (!user) {
-      toast.error("Please sign in to place an order");
-      navigate("/signin");
       return;
     }
-    try {
-      const formattedShippingAddress = [
-        `${formData.address}, Ward ${formData.wardNumber}`,
-        `${formData.area}, ${formData.city}`,
-        `${formData.district}, ${formData.province}`,
-        `Landmark: ${formData.landmark}`,
-        formData.postalCode ? `Postal Code: ${formData.postalCode}` : "",
-        `Phone: ${formData.phone}`,
-      ]
-        .filter(Boolean)
-        .join(", ");
 
-      const { error } = await supabase.from("orders").insert([
-        {
-          customer_name: `${formData.firstName} ${formData.lastName}`.trim(),
-          customer_email: formData.email,
-          customer_id: user?.id || null,
-          total: total,
-          items: cartItems,
-          address: formattedShippingAddress,
-          status: "pending",
-        },
-      ]);
+    // if (formData.paymentMethod === "nepalpay") {
+    //   initiateNepalPayPayment();
+    //   return;
+    // }
 
-      if (error) {
-        console.error(error);
-        toast.error("Order failed");
+    setStep("review");
+    setIsProcessingPayment(false);
+  };
+
+// const initiateNepalPayPayment = async () => {
+//   try {
+//     const transaction_uuid = `ORDER-${Date.now()}`;
+//
+//     const response = await fetch("http://localhost:3000/nepalpay/initiate", {
+//       method: "POST",
+//       headers: {
+//         "Content-Type": "application/json",
+//       },
+//       body: JSON.stringify({
+//         amount: total,
+//         order_id: transaction_uuid,
+//       }),
+//     });
+//
+//     const data = await response.json();
+//
+//     if (!data.qr_code_url) {
+//       throw new Error("QR not generated");
+//     }
+//
+//     window.open(data.qr_code_url, "_blank");
+//
+//     setStep("review");
+//     setIsProcessingPayment(false);
+//
+//   } catch (err) {
+//     console.error(err);
+//     toast.error("NepalPay initiation failed");
+//     setIsProcessingPayment(false);
+//   }
+// };
+
+ const initiateEsewaPayment = async () => {
+  try {
+    const totalRounded = Math.round(total);
+    const transaction_uuid: string =
+      isCustomOrder && customOrderId
+        ? customOrderId
+        : crypto.randomUUID();
+    const product_code = "EPAYTEST";
+
+    // 🔒 STOCK VALIDATION (prevent overselling)
+    for (const item of cartItems) {
+      const { data: product, error: stockErr } = await supabase
+        .from("products")
+        .select("stock")
+        .eq("id", item.id)
+        .single();
+
+      if (stockErr || !product) {
+        toast.error(`Failed to verify stock for ${item.name}`);
+        setIsProcessingPayment(false);
         return;
       }
 
-      // Track promo usage if discount code applied and user present
-      if (appliedDiscountCode && user) {
-        await supabase.from("promo_usages").insert([
-          {
-            promo_code: appliedDiscountCode,
-            user_id: user.id,
+      const currentStock = Number(product.stock || 0);
+      if (currentStock < item.quantity) {
+        toast.error(`Only ${currentStock} left for ${item.name}`);
+        setIsProcessingPayment(false);
+        return;
+      }
+    }
+
+    // 🔥 STORE ORDER SNAPSHOT BEFORE ESEWA REDIRECT
+    localStorage.setItem(
+      "pendingOrderData",
+      JSON.stringify({
+        transaction_uuid,
+        items: checkoutItems,
+        pricing: {
+          subtotal,
+          discount_amount: discountAmount || 0,
+          promo_code: appliedDiscountCode || null,
+          shipping_cost: shipping || 0,
+          total: totalRounded,
+        },
+        customer: {
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          phone: formData.phone,
+          address: formData.address,
+          area: formData.area,
+          city: formData.city,
+          district: formData.district,
+          province: formData.province,
+          wardNumber: formData.wardNumber,
+          landmark: formData.landmark,
+          postalCode: formData.postalCode,
+        },
+      })
+    );
+
+    // ✅ GET SIGNATURE
+    const response = await fetch("http://localhost:3000/api/esewa", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        total_amount: totalRounded,
+        transaction_uuid,
+        product_code,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!data.signature) {
+      throw new Error("Signature missing");
+    }
+
+    // ✅ REDIRECT TO ESEWA
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = "https://rc-epay.esewa.com.np/api/epay/main/v2/form";
+    form.target = "_self";
+
+    const fields = {
+      amount: totalRounded.toString(),
+      tax_amount: "0",
+      total_amount: totalRounded.toString(),
+      transaction_uuid,
+      product_code,
+      product_service_charge: "0",
+      product_delivery_charge: "0",
+      success_url: `${window.location.origin}/checkout?payment=success&order_id=${transaction_uuid}&method=esewa`,
+      failure_url: `${window.location.origin}/payment-failure`,
+      signed_field_names: "total_amount,transaction_uuid,product_code",
+      signature: data.signature,
+    };
+
+    Object.entries(fields).forEach(([key, value]) => {
+      const input = document.createElement("input");
+      input.type = "hidden";
+      input.name = key;
+      input.value = value;
+      form.appendChild(input);
+    });
+
+    // Store order ID in localStorage before redirect
+    if (transaction_uuid) {
+      localStorage.setItem("paidOrderId", transaction_uuid);
+    }
+
+    document.body.appendChild(form);
+    form.submit();
+
+    // If redirect fails, reset processing after timeout
+    setTimeout(() => {
+      setIsProcessingPayment(false);
+    }, 5000);
+
+  } catch (err) {
+    console.error(err);
+    toast.error("Payment failed");
+    setIsProcessingPayment(false);
+  }
+};
+
+  const finalizeOrder = async () => {
+    if (orderProcessed && formData.paymentMethod !== "esewa") {
+      console.log("🚫 Order already processed, skipping");
+      return;
+    }
+    try {
+      // 🔥 USE STORED DATA IN finalizeOrder (CRITICAL FIX)
+      let storedOrder = JSON.parse(localStorage.getItem("pendingOrderData") || "null");
+
+      // 🔥 FIX: rebuild snapshot if missing (handles eSewa redirect/state loss)
+      if (!storedOrder || !storedOrder.pricing || !storedOrder.customer) {
+        console.warn("⚠️ Missing snapshot → rebuilding from current state");
+
+        storedOrder = {
+          transaction_uuid:
+            orderCodeFromUrl ||
+            paidOrderIdFromUrl ||
+            localStorage.getItem("paidOrderId") ||
+            `ORDER-${Date.now()}`,
+
+          items: checkoutItems,
+
+          pricing: {
+            subtotal,
+            discount_amount: discountAmount || 0,
+            promo_code: appliedDiscountCode || null,
+            shipping_cost: shipping || 0,
+            total,
           },
-        ]);
+
+          customer: {
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            email: formData.email,
+            phone: formData.phone,
+            address: formData.address,
+            area: formData.area,
+            city: formData.city,
+            district: formData.district,
+            province: formData.province,
+            wardNumber: formData.wardNumber,
+            landmark: formData.landmark,
+            postalCode: formData.postalCode,
+          },
+        };
+
+        // restore snapshot so rest of flow stays consistent
+        localStorage.setItem("pendingOrderData", JSON.stringify(storedOrder));
+      }
+      const pricing = storedOrder.pricing || {};
+      const customer = storedOrder.customer || {};
+
+      // 🔒 FINAL PROMO ENFORCEMENT (server-truth via orders table)
+      if (pricing.promo_code) {
+        const normalizedCode = String(pricing.promo_code).trim().toUpperCase();
+
+        try {
+          // fetch promo config
+          const { data: promo, error: promoErr } = await supabase
+            .from("promo_codes")
+            .select("code, usage_limit, user_usage_limit, expiry_date")
+            .eq("code", normalizedCode)
+            .single();
+
+          if (promoErr || !promo) {
+            toast.error("Promo invalid or unavailable");
+            return;
+          }
+
+          // expiry check
+          if (promo.expiry_date && new Date(promo.expiry_date) < new Date()) {
+            toast.error("Promo expired");
+            return;
+          }
+
+          // global usage via orders table
+          const { data: allOrders, error: globalErr } = await supabase
+            .from("orders")
+            .select("id")
+            .eq("promo_code", normalizedCode);
+
+          if (!globalErr) {
+            const totalUsage = allOrders?.length || 0;
+            if (promo.usage_limit && totalUsage >= promo.usage_limit) {
+              toast.error("Promo usage limit reached");
+              return;
+            }
+          }
+
+          // per-user usage via orders table
+          if (user?.id && promo.user_usage_limit) {
+            const { data: userOrders, error: userErr } = await supabase
+              .from("orders")
+              .select("id")
+              .eq("user_id", user.id)
+              .eq("promo_code", normalizedCode);
+
+            if (!userErr) {
+              const usageCount = userOrders?.length || 0;
+              if (usageCount >= promo.user_usage_limit) {
+                toast.error("Promo usage limit reached for this user");
+                return;
+              }
+            }
+          }
+        } catch (e) {
+          console.warn("Finalize promo enforcement failed", e);
+        }
+      }
+      const storedForm = storedOrder?.formData || {};
+
+      // --- SAFETY LOGS ---
+      let orderId =
+        paidOrderIdFromUrl ||
+        orderCodeFromUrl ||
+        localStorage.getItem("paidOrderId") ||
+        customOrderId;
+
+      // 🔥 FIX: fallback to stored pending order
+      if (!orderId) {
+        const stored = JSON.parse(localStorage.getItem("pendingOrderData") || "{}");
+
+        if (stored?.transaction_uuid) {
+          orderId = stored.transaction_uuid;
+        }
       }
 
+      // 🔥 FINAL FALLBACK (never fail order creation)
+      if (!orderId) {
+        console.warn("⚠️ No orderId found → generating fallback");
+        orderId = `ORDER-${Date.now()}`;
+      }
+
+      orderId = String(orderId).split("?")[0];
+      console.log("FINALIZE ORDER TRIGGERED");
+      console.log("ORDER ID USED:", orderId);
+      console.log("STORED ORDER DATA:", storedOrder);
+
+      // ✅ fallback for COD / NepalPay
+      if (formData.paymentMethod === "cod" && !isCustomOrder) {
+        // --- Ensure snapshot exists before COD insert ---
+        if (!localStorage.getItem("pendingOrderData")) {
+          localStorage.setItem(
+            "pendingOrderData",
+            JSON.stringify({
+              transaction_uuid: orderId,
+              items: checkoutItems,
+              pricing: {
+                subtotal,
+                discount_amount: discountAmount || 0,
+                promo_code: appliedDiscountCode || null,
+                shipping_cost: shipping || 0,
+                total,
+              },
+              customer: {
+                firstName: formData.firstName,
+                lastName: formData.lastName,
+                email: formData.email,
+                phone: formData.phone,
+                address: formData.address,
+                area: formData.area,
+                city: formData.city,
+                district: formData.district,
+                province: formData.province,
+                wardNumber: formData.wardNumber,
+                landmark: formData.landmark,
+                postalCode: formData.postalCode,
+              },
+            })
+          );
+        }
+
+        console.log("CREATING COD ORDER");
+        const orderCode = `ORDER-${Date.now()}`;
+        orderId = crypto.randomUUID();
+
+        const formattedShippingAddress = [
+          `${customer.address}, Ward ${customer.wardNumber}`,
+          `${customer.area}, ${customer.city}`,
+          `${customer.district}, ${customer.province}`,
+          `Landmark: ${customer.landmark}`,
+          customer.postalCode ? `Postal Code: ${customer.postalCode}` : "",
+          `Phone: ${customer.phone}`,
+        ].filter(Boolean).join(", ");
+
+        // Ensure user is not null before accessing user?.id
+        if (!user) {
+          toast.error("Please sign in to continue checkout");
+          return;
+        }
+        const { error } = await supabase.from("orders").insert([
+          {
+            id: orderId,
+            order_code: orderCode,
+            user_id: user?.id || null,
+
+            customer_name: `${customer.firstName || ""} ${customer.lastName || ""}`,
+            customer_email: (customer.email || "").toLowerCase(),
+
+            // 🔥 ADD COMPLETE BILL DATA
+            subtotal: pricing.subtotal || 0,
+            discount_amount: pricing.discount_amount || 0,
+            promo_code: pricing.promo_code || null,
+            shipping_cost: pricing.shipping_cost || 0,
+            total: pricing.total || 0,
+            items: JSON.parse(JSON.stringify(storedOrder.items || checkoutItems)),
+
+            address: formattedShippingAddress,
+            status: "pending",
+            payment_status: "pending",
+            payment_method: "cod",
+
+            branch: assignedBranch,
+            created_at: new Date().toISOString(),
+          },
+        ]);
+        if (error) {
+          console.error("SUPABASE INSERT ERROR:", error);
+          throw error;
+        }
+        // Set processed after successful insert
+        setOrderProcessed(true);
+      }
+      else if (formData.paymentMethod === "cod") {
+        console.log("COD already handled");
+      }
+
+      // ✅ CREATE ORDER ONLY AFTER SUCCESSFUL ESEWA PAYMENT
+      if (isPaymentSuccess && !isCustomOrder) {
+        // 🔒 ensure user is available (critical for My Orders)
+        let activeUser = user;
+
+        if (!activeUser?.id) {
+          const { data } = await supabase.auth.getUser();
+          activeUser = data?.user as any;
+        }
+
+        if (!activeUser?.id) {
+          console.error("❌ User not found during eSewa finalize — aborting");
+          toast.error("Session expired. Please login again.");
+          return;
+        }
+        // 🔒 PREVENT DUPLICATE ORDER CREATION (safer limit(1) to avoid cache issues)
+        const { data: existingOrders } = await supabase
+          .from("orders")
+          .select("id")
+          .eq("order_code", orderId)
+          .limit(1);
+
+        const existingOrder = existingOrders && existingOrders.length > 0 ? existingOrders[0] : null;
+
+        if (existingOrder) {
+          console.log("⚠️ Order already exists — skipping insert");
+          setOrderProcessed(true);
+          return;
+        }
+
+        const formattedShippingAddress = [
+          `${customer.address}, Ward ${customer.wardNumber}`,
+          `${customer.area}, ${customer.city}`,
+          `${customer.district}, ${customer.province}`,
+          `Landmark: ${customer.landmark}`,
+          customer.postalCode ? `Postal Code: ${customer.postalCode}` : "",
+          `Phone: ${customer.phone}`,
+        ].filter(Boolean).join(", ");
+
+        const { error } = await supabase.from("orders").insert([
+          {
+            id: crypto.randomUUID(),
+            order_code: orderId,
+            user_id: activeUser.id,
+            customer_name: `${customer.firstName || ""} ${customer.lastName || ""}`,
+            customer_email: (customer.email || "").toLowerCase(),
+            // 🔥 ADD COMPLETE BILL DATA
+            subtotal: pricing.subtotal || 0,
+            discount_amount: pricing.discount_amount || 0,
+            promo_code: pricing.promo_code || null,
+            shipping_cost: pricing.shipping_cost || 0,
+            total: pricing.total || 0,
+            items: JSON.parse(JSON.stringify(storedOrder.items || checkoutItems)),
+            address: formattedShippingAddress,
+            status: "processing",
+            payment_status: "paid",
+            payment_method: "esewa",
+            branch: assignedBranch,
+            created_at: new Date().toISOString(),
+          },
+        ]);
+        if (error) {
+          console.error("SUPABASE INSERT ERROR:", error);
+          throw error;
+        }
+        // Set processed after successful insert
+        setOrderProcessed(true);
+      }
+
+      // For custom orders only → update after payment
+      if (orderId && isCustomOrder) {
+        const { error: updateError } = await supabase
+          .from("orders")
+          .update({
+            status: "paid",
+            payment_status: "paid",
+          })
+          .eq("id", orderId as string);
+
+        if (updateError) {
+          console.error(updateError);
+          toast.error("Failed to confirm payment");
+          return;
+        }
+      }
+
+      // 📦 REDUCE STOCK AFTER ORDER CONFIRMATION
+      for (const item of storedOrder.items || []) {
+        const { data: product } = await supabase
+          .from("products")
+          .select("stock")
+          .eq("id", item.id)
+          .single();
+
+        const currentStock = Number(product?.stock || 0);
+        const newStock = Math.max(0, currentStock - item.quantity);
+
+        await supabase
+          .from("products")
+          .update({ stock: newStock })
+          .eq("id", item.id);
+      }
+
+      // 🔥 UPDATE PRODUCT SALES COUNT (BEST SELLERS)
+      for (const item of storedOrder.items || []) {
+        // get current count
+        const { data: product } = await supabase
+          .from("products")
+          .select("orders_count")
+          .eq("id", item.id)
+          .single();
+
+        const currentCount = product?.orders_count || 0;
+
+        // update count
+        await supabase
+          .from("products")
+          .update({
+            orders_count: currentCount + (item.quantity || 1),
+          })
+          .eq("id", item.id);
+      }
+
+      // Track promo usage if discount code applied and user present
+      if (pricing.promo_code && user?.id) {
+        const { error } = await supabase.from("promo_usages").insert([
+          {
+            promo_code: pricing.promo_code,
+            user_id: user.id,
+            customeremail: user.email?.toLowerCase() || null,
+          },
+        ]);
+
+        if (error) {
+          console.error("PROMO USAGE INSERT ERROR:", error);
+        }
+      }
+
+      toast.success("Order placed successfully");
       localStorage.removeItem("cartItems");
       window.dispatchEvent(new Event("cartUpdated"));
       setStoredCartItems([]);
-
-      toast.success("Order placed successfully");
+      setAppliedDiscountCode("");
+      setPromoCode("");
       setOrderPlaced(true);
       setStep("success");
+      setIsProcessingPayment(false);
+      // 🔥 CLEAR STORED DATA AFTER SUCCESS
+      localStorage.removeItem("pendingOrderData");
     } catch (err) {
       console.error(err);
       toast.error("Something went wrong");
     }
   };
 
+  useEffect(() => {
+    if (!isPaymentSuccess || orderProcessed) return;
+
+    const run = async () => {
+      console.log("✅ PAYMENT SUCCESS DETECTED");
+
+      // 🚨 ALWAYS CLEAR old flag before running
+
+      await finalizeOrder();
+      // mark as finalized AFTER success
+      setOrderProcessed(true); // 🔥 prevent duplicate run
+      setOrderPlaced(true);
+
+      // cleanup
+      localStorage.removeItem("paymentSuccess");
+      localStorage.removeItem("paidOrderId");
+
+      setStep("success");
+    };
+
+    run();
+  }, [isPaymentSuccess, orderProcessed]);
+
   if (products.length === 0) {
     return <div className="pt-20 text-center">Loading...</div>;
   }
 
-  if (cartItems.length === 0 && step !== "success") {
-    setStep("shipping");
+  if (checkoutItems.length === 0 && step !== "success") {
     return (
       <div className="pt-20 min-h-screen flex items-center justify-center px-4">
         <div className="text-center space-y-4">
@@ -621,6 +1240,22 @@ export function Checkout() {
 
   return (
     <div className="pt-20 min-h-screen bg-white">
+      {/* Sign-in or Guest Choice Banner */}
+      {!user && (
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="border border-gray-300 p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <p className="text-sm">
+              You are not signed in. Sign in for faster checkout.
+            </p>
+            <button
+              onClick={() => navigate("/signin")}
+              className="px-4 py-2 border border-black text-black hover:bg-black hover:text-white transition text-sm"
+            >
+              Sign In
+            </button>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="bg-black text-white py-8 sm:py-12 px-4">
         <div className="max-w-7xl mx-auto">
@@ -833,7 +1468,8 @@ export function Checkout() {
               </div>
               <button
                 onClick={handleShippingSubmit}
-                className="w-full bg-black text-white py-4 font-medium hover:bg-gray-900 transition text-sm sm:text-base"
+                disabled={!user}
+                className="w-full bg-black text-white py-4 font-medium hover:bg-gray-900 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
               >
                 Continue to Payment
               </button>
@@ -850,9 +1486,14 @@ export function Checkout() {
                   Orders outside these districts must use online payment.
                 </p>
               ) : null}
+              {isCustomOrder && (
+                <p className="text-sm text-red-500 mb-2">
+                  Custom orders can only be paid via eSewa
+                </p>
+              )}
               <div className="space-y-4">
                 {/* eSewa */}
-                <label className="p-4 sm:p-6 cursor-pointer transition">
+                {/* <label className="p-4 sm:p-6 cursor-pointer transition">
                   <div className="flex items-center gap-4">
                     <input
                       type="radio"
@@ -869,26 +1510,10 @@ export function Checkout() {
                   </div>
                 </label>
 
-                {/* Nepal Pay QR */}
-                <label className="p-4 sm:p-6 cursor-pointer transition">
-                  <div className="flex items-center gap-4">
-                    <input
-                      type="radio"
-                      name="paymentMethod"
-                      value="nepalpay"
-                      checked={formData.paymentMethod === "nepalpay"}
-                      onChange={handleInputChange}
-                      className="w-4 h-4 cursor-pointer"
-                    />
-                    <div>
-                      <p className="font-semibold text-sm sm:text-base">Nepal Pay QR</p>
-                      <p className="text-gray-600 text-xs sm:text-sm">Scan QR code with your bank app</p>
-                    </div>
-                  </div>
-                </label>
+
 
                 {/* Cash on Delivery */}
-                {isCashOnDeliveryAvailable ? (
+                {!isCustomOrder ? (
                   <label className="p-4 sm:p-6 cursor-pointer transition">
                     <div className="flex items-center gap-4">
                       <input
@@ -908,20 +1533,6 @@ export function Checkout() {
                 ) : null}
               </div>
 
-              {/* Nepal Pay QR Display */}
-              {formData.paymentMethod === "nepalpay" && (
-                <div className="border-2 border-yellow-500 bg-yellow-50 p-6 text-center rounded">
-                  <p className="text-sm text-gray-700 mb-4">Scan this QR code with your bank app:</p>
-                  <div className="bg-white p-4 w-48 h-48 mx-auto border-2 border-gray-300 flex items-center justify-center">
-                    <div className="text-xs text-gray-500">
-                      <p>QR Code Placeholder</p>
-                      <p className="text-xs text-gray-400 mt-2">Merchant: CLO Store</p>
-                      <p className="text-xs text-gray-400">Amount: NPR {total.toLocaleString("en-NP")}</p>
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-600 mt-4">Amount: NPR {total.toLocaleString("en-NP")}</p>
-                </div>
-              )}
 
               <div className="flex gap-4">
                 <button
@@ -932,9 +1543,14 @@ export function Checkout() {
                 </button>
                 <button
                   onClick={handlePaymentSubmit}
-                  className="flex-1 bg-black text-white py-4 font-medium hover:bg-gray-900 transition text-sm sm:text-base"
+                  disabled={isProcessingPayment}
+                  className="flex-1 bg-black text-white py-4 font-medium hover:bg-gray-900 transition text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {formData.paymentMethod === "esewa" ? "Pay with eSewa" : "Continue"}
+                  {isProcessingPayment
+                    ? "Processing..."
+                    : formData.paymentMethod === "esewa"
+                      ? "Pay with eSewa"
+                      : "Continue"}
                 </button>
               </div>
             </motion.div>
@@ -994,7 +1610,7 @@ export function Checkout() {
 
             {/* Items */}
             <div className="space-y-4 max-h-64 overflow-y-auto border-b pb-6">
-              {cartItems.map((item) => (
+              {checkoutItems.map((item) => (
                 <div key={item.id} className="flex gap-3">
                   <img src={item.image} alt={item.name} className="w-16 h-16 object-cover" />
                   <div className="flex-1 text-sm">
@@ -1038,25 +1654,41 @@ export function Checkout() {
               <div className="space-y-2">
                 <p className="text-sm font-medium">Available Promo Codes</p>
                 {visibleDiscountOptions.length > 0 ? (
-                  <div className="grid gap-2">
+                  <div className="grid gap-3">
                     {visibleDiscountOptions.map((option) => (
                       <button
                         key={option.code}
                         type="button"
                         onClick={() => applyDiscountCode(option.code)}
-                        className={`flex items-center justify-between border px-4 py-3 text-left text-sm transition ${
+                        className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 border px-4 py-3 text-left text-sm transition rounded ${
                           appliedDiscountCode === option.code
                             ? "border-black bg-black text-white"
-                            : "border-gray-300 bg-white hover:border-black"
+                            : "border-gray-300 bg-white hover:border-black hover:bg-gray-50"
                         }`}
                       >
-                        <span>{option.label}</span>
-                        <span className="text-xs opacity-80">{option.description}</span>
+                        <div className="flex flex-col">
+                          <span className="font-semibold">
+                          {option.label ?? option.code ?? "PROMO"}
+                           </span>
+                          <span className="text-xs opacity-70">
+                            {option.description || "Tap to apply discount"}
+                          </span>
+                        </div>
+
+                        <div className="text-xs font-medium sm:text-right opacity-80">
+                          {(option.type === "percent" || Number(option.value) <= 100)
+                            ? `${option.value}% OFF`
+                            : option.type === "flat"
+                              ? `NPR ${option.value} OFF`
+                              : option.type === "shipping"
+                                ? "Free Shipping"
+                                : "Offer"}
+                        </div>
                       </button>
                     ))}
                   </div>
                 ) : (
-                  <p className="rounded border border-dashed border-gray-300 bg-white px-4 py-3 text-sm text-gray-600">
+                  <p className="rounded border border-dashed border-gray-300 bg-gray-50 px-4 py-4 text-sm text-gray-600 text-center">
                     No promo codes are currently available to display.
                   </p>
                 )}
@@ -1068,7 +1700,9 @@ export function Checkout() {
               {appliedDiscount && (
                 <div className="flex items-center justify-between rounded bg-white px-4 py-3 text-sm">
                   <div>
-                    <p className="font-medium">{appliedDiscount.label} applied</p>
+                    <p className="font-medium">
+                    {appliedDiscount?.label ?? appliedDiscount?.code ?? "Promo"} applied
+                    </p>
                     <p className="text-gray-600">{appliedDiscount.code}</p>
                   </div>
                   <button
@@ -1090,7 +1724,11 @@ export function Checkout() {
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Shipping:</span>
-                <span>{shipping === 0 ? "FREE" : `NPR ${shipping.toLocaleString("en-NP")}`}</span>
+                <span>
+                  {shipping === 0
+                    ? "FREE (Kathmandu Valley)"
+                    : `NPR ${shipping.toLocaleString("en-NP")} (Outside Valley)`}
+                </span>
               </div>
               {appliedDiscount && (
                 <div className="flex justify-between text-green-700">
@@ -1113,8 +1751,9 @@ export function Checkout() {
             {/* Info */}
             <div className="bg-white p-4 rounded text-xs text-gray-600 space-y-2">
               <p>✓ Secure checkout</p>
-              <p>✓ No Returns only exchange within 2 days</p>
-              <p>✓ Same day delivery in Kathmandu</p>
+              <p>✓ Exchange within 2 days</p>
+              <p>✗ No Returns</p>
+              <p>✓ Same day delivery in within Kathmandu Valley</p>
             </div>
           </div>
         </div>

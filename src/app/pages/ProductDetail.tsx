@@ -18,6 +18,15 @@ export function ProductDetail() {
   const { id } = useParams();
   const { products } = useProducts();
   const product = products.find((p) => p.id === id);
+  const price = product?.price ?? 0;
+  const original = product?.originalPrice ?? (product as any)?.original_price ?? null;
+  const hasDiscount = original && original > price;
+  const discount = hasDiscount
+    ? Math.round(((original - price) / original) * 100)
+    : 0;
+  const saveAmount = hasDiscount ? original - price : 0;
+  const stock = Number(product?.stock ?? 0);
+  const isOutOfStock = stock <= 0;
   const [selectedSize, setSelectedSize] = useState("");
   const [selectedColor, setSelectedColor] = useState("");
   const [quantity, setQuantity] = useState(1);
@@ -76,13 +85,25 @@ export function ProductDetail() {
   );
   const averageRating = approvedReviews.length
     ? approvedReviews.reduce((sum, review) => sum + (review.rating ?? 0), 0) /
-      approvedReviews.length
+    approvedReviews.length
     : 0;
 
-  // Mock additional images (in real app, each product would have multiple images)
-  const productImages = [product.image, product.image, product.image];
+  // Use multiple images if available, otherwise fallback to a single image
+  const productImages =
+    (product as any)?.images && (product as any).images.length > 0
+      ? (product as any).images
+      : [product.image];
 
   const handleAddToCart = () => {
+    if (isOutOfStock) {
+  toast.error("This item is out of stock");
+  return;
+}
+
+if (quantity > stock) {
+  toast.error(`Only ${stock} items available`);
+  return;
+}
     const nextItem: CartItem = {
       productId: product.id,
       quantity,
@@ -155,21 +176,34 @@ export function ProductDetail() {
                 className="w-full h-full object-cover"
               />
               {product.isNew && (
-                <span className="absolute top-4 left-4 bg-black text-white px-3 py-1 text-xs tracking-wider">
+                <span className="absolute top-12 left-4 bg-black text-white px-3 py-1 text-xs tracking-wider">
                   NEW
+                </span>
+              )}
+
+              {/* SALE badge */}
+              {hasDiscount && (
+                <span className="absolute top-4 left-4 bg-black text-white px-3 py-1 text-xs tracking-wider">
+                  SALE
+                </span>
+              )}
+
+              {/* Discount % badge */}
+              {hasDiscount && (
+                <span className="absolute top-4 right-4 bg-red-600 text-white px-3 py-1 text-xs tracking-wider">
+                  -{discount}%
                 </span>
               )}
             </motion.div>
 
             {/* Thumbnail Navigation */}
             <div className="grid grid-cols-3 gap-4">
-              {productImages.map((img, index) => (
+              {productImages.map((img: string | undefined, index: number) => (
                 <button
                   key={index}
                   onClick={() => setActiveImage(index)}
-                  className={`aspect-3/4 overflow-hidden bg-gray-100 transition-colors duration-300 dark:bg-neutral-900 ${
-                    activeImage === index ? "ring-2 ring-black dark:ring-white" : ""
-                  }`}
+                  className={`aspect-3/4 overflow-hidden bg-gray-100 transition-colors duration-300 dark:bg-neutral-900 ${activeImage === index ? "ring-2 ring-black dark:ring-white" : ""
+                    }`}
                 >
                   <img
                     src={img}
@@ -212,7 +246,31 @@ export function ProductDetail() {
                   ({approvedReviews.length} review{approvedReviews.length === 1 ? "" : "s"})
                 </span>
               </div>
-              <p className="text-3xl">NPR {product.price.toLocaleString()}</p>
+              <div className="space-y-2">
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl font-semibold">
+                    NPR {price.toLocaleString()}
+                  </span>
+
+                  {hasDiscount && (
+                    <span className="text-lg text-gray-400 line-through">
+                      NPR {original.toLocaleString()}
+                    </span>
+                  )}
+                </div>
+
+                {hasDiscount && (
+                  <div className="flex items-center gap-3">
+                    <span className="bg-red-600 text-white px-3 py-1 text-xs tracking-wider uppercase">
+                      -{discount}%
+                    </span>
+
+                    <span className="text-sm text-green-600">
+                      Save NPR {saveAmount.toLocaleString()}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
 
             <p className="leading-relaxed text-gray-600 dark:text-gray-300">
@@ -229,11 +287,10 @@ export function ProductDetail() {
                   <button
                     key={color}
                     onClick={() => setSelectedColor(color)}
-                    className={`px-4 py-2 border text-sm transition-colors ${
-                      selectedColor === color
+                    className={`px-4 py-2 border text-sm transition-colors ${selectedColor === color
                         ? "border-black bg-black text-white"
                         : "border-gray-300 hover:border-black dark:border-white/20 dark:hover:border-white"
-                    }`}
+                      }`}
                   >
                     {color}
                   </button>
@@ -247,20 +304,19 @@ export function ProductDetail() {
                 <label className="text-sm">
                   Size: <span className="font-medium">{selectedSize}</span>
                 </label>
-                <button className="text-sm underline hover:no-underline">
+                <Link to="/size-guide" className="text-sm underline hover:no-underline">
                   Size Guide
-                </button>
+                </Link>
               </div>
               <div className="flex flex-wrap gap-3">
                 {product.sizes.map((size) => (
                   <button
                     key={size}
                     onClick={() => setSelectedSize(size)}
-                    className={`px-4 py-2 border text-sm transition-colors ${
-                      selectedSize === size
+                    className={`px-4 py-2 border text-sm transition-colors ${selectedSize === size
                         ? "border-black bg-black text-white"
                         : "border-gray-300 hover:border-black dark:border-white/20 dark:hover:border-white"
-                    }`}
+                      }`}
                   >
                     {size}
                   </button>
@@ -280,22 +336,39 @@ export function ProductDetail() {
                 </button>
                 <span className="flex-1 text-center">{quantity}</span>
                 <button
-                  onClick={() => setQuantity(quantity + 1)}
+                  onClick={() => setQuantity(Math.min(stock || 1, quantity + 1))}
                   className="px-4 py-2 transition-colors hover:bg-gray-100 dark:hover:bg-neutral-900"
                 >
                   +
                 </button>
               </div>
+              {/* STOCK INFO */}
+                {!isOutOfStock && stock <= 5 && (
+                  <p className="text-sm text-orange-500 mt-2">
+                    Only {stock} left in stock
+                  </p>
+                )}
+
+                {isOutOfStock && (
+                  <p className="text-sm text-red-500 mt-2">
+                    Out of stock
+                  </p>
+                )}
             </div>
 
             {/* Add to Cart */}
             <div className="flex gap-4">
               <button
                 onClick={handleAddToCart}
-                className="flex flex-1 items-center justify-center gap-2 bg-black py-4 text-white transition-colors hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
+                disabled={isOutOfStock}
+                className={`flex flex-1 items-center justify-center gap-2 py-4 transition-colors ${
+                  isOutOfStock
+                    ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                    : "bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
+                }`}
               >
                 <ShoppingBag size={20} />
-                Add to Cart
+                {isOutOfStock ? "Out of Stock" : "Add to Cart"}
               </button>
               <button className="border border-gray-300 p-4 transition-colors hover:border-black dark:border-white/20 dark:hover:border-white">
                 <Heart size={20} />
@@ -309,25 +382,25 @@ export function ProductDetail() {
                 <div>
                   <p className="font-medium text-sm">Free Shipping</p>
                   <p className="text-xs text-gray-600 dark:text-gray-400">
-                    On orders over $100
+                    On orders over NPR 3000 (Nationwide)
                   </p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
                 <RefreshCw size={20} className="mt-0.5 shrink-0" />
                 <div>
-                  <p className="font-medium text-sm">Free Returns</p>
+                  <p className="font-medium text-sm">Easy Exchange</p>
                   <p className="text-xs text-gray-600 dark:text-gray-400">
-                    30-day return policy
+                    Exchange available within 2 days of delivery
                   </p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
                 <Shield size={20} className="mt-0.5 shrink-0" />
                 <div>
-                  <p className="font-medium text-sm">Secure Checkout</p>
+                  <p className="font-medium text-sm">Secure Payments</p>
                   <p className="text-xs text-gray-600 dark:text-gray-400">
-                    SSL encrypted payment
+                    eSewa / Khalti / COD supported
                   </p>
                 </div>
               </div>
@@ -344,9 +417,8 @@ export function ProductDetail() {
                 <div key={review.id} className="border-b pb-6">
                   <div className="flex items-center gap-4 mb-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-black text-xs font-medium uppercase tracking-wider text-white dark:bg-white dark:text-black">
-                      {review.name
-                        .split(" ")
-                        .map((part: string) => part[0])
+                      {((review.name || "User").toString().split(" "))
+                        .map((part: string) => part[0] || "")
                         .join("")
                         .slice(0, 2)}
                     </div>
@@ -361,13 +433,15 @@ export function ProductDetail() {
                         />
                       ))}
                     </div>
-                    <span className="font-medium">{review.name}</span>
+                    <span className="font-medium">{review.name || "Anonymous"}</span>
                     <span className="text-sm text-gray-500">
-                      {new Date(review.created_at).toLocaleDateString("en-US", {
-                        year: "numeric",
-                        month: "long",
-                        day: "numeric",
-                      })}
+                      {review.created_at
+                        ? new Date(review.created_at).toLocaleDateString("en-US", {
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                        })
+                        : "Recently"}
                     </span>
                   </div>
                   <p className="mb-2 font-medium">{review.title || "Review"}</p>

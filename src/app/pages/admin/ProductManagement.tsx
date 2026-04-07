@@ -78,6 +78,17 @@ const colors = ["Black", "White", "Red", "Blue", "Green", "Yellow", "Purple", "P
 export function ProductManagement() {
   const adminSession = getAdminSession();
   const [products, setProducts] = useState<Product[]>([]);
+  const [collections, setCollections] = useState<any[]>([]);
+
+  const fetchCollections = async () => {
+    const { data, error } = await supabase.from("collections").select("*");
+    if (!error && data) {
+      setCollections(data);
+    }
+  };
+  const [newCollection, setNewCollection] = useState("");
+  const [collectionImage, setCollectionImage] = useState("");
+  const [collectionImageFileInput, setCollectionImageFileInput] = useState<HTMLInputElement | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -113,6 +124,7 @@ export function ProductManagement() {
       } else {
         setProducts((data || []).map((p: any) => ({
           ...p,
+          originalPrice: p?.original_price ?? undefined,
           images: Array.isArray(p?.images) ? p.images : (p?.image ? [p.image] : []),
           image: p?.image || (Array.isArray(p?.images) && p.images[0]) || "",
           stock: p?.stock ?? 10,
@@ -129,30 +141,53 @@ export function ProductManagement() {
     };
 
     fetchProducts();
+    fetchCollections();
   }, []);
+
+  useEffect(() => {
+    const uniqueCategories = Array.from(new Set(products.map(p => p.category)));
+    // setCollections(uniqueCategories); // Don't override fetched collections
+  }, [products]);
 
   const saveProducts = async (updatedProducts: Product[]) => {
     try {
       for (const product of updatedProducts) {
-        await supabase
-          .from('products')
-          const dbProduct = {
-            ...product,
-            original_price: product.originalPrice ?? null,
-            care_instructions: product.careInstructions ?? "",
-            created_at: product.createdAt,
-            updated_at: product.updatedAt,
-};
+        const dbProduct = {
+          id: product.id,
+          name: product.name,
+          price: product.price,
+          original_price: product.originalPrice ?? null,
+          description: product.description,
+          category: product.category,
+          style: product.style,
+          image: product.image,
+          images: product.images,
+          stock: product.stock,
+          featured: product.featured,
+          tags: product.tags,
+          sizes: product.sizes,
+          colors: product.colors,
+          material: product.material,
+          care_instructions: product.careInstructions,
+          rating: product.rating,
+          reviews: product.reviews,
+          created_at: product.createdAt,
+          updated_at: new Date().toISOString(),
+        };
 
-await supabase.from('products').upsert(dbProduct);
+        const { error } = await supabase.from("products").upsert(dbProduct);
+
+        if (error) {
+          console.error("Save error:", error);
+          throw error;
+        }
       }
 
       setProducts(updatedProducts);
-
-      toast.success('Changes saved to database');
+      toast.success("Changes saved to database");
     } catch (error) {
-      console.error('Error saving products:', error);
-      toast.error('Failed to save changes');
+      console.error("Error saving products:", error);
+      toast.error("Failed to save changes");
     }
   };
 
@@ -520,6 +555,7 @@ setProducts(prev => [...prev, uiProduct]);
 
                 setProducts((data || []).map((p: any) => ({
                   ...p,
+                  originalPrice: p?.original_price ?? undefined,
                   images: Array.isArray(p?.images) ? p.images : (p?.image ? [p.image] : []),
                   image: p?.image || (Array.isArray(p?.images) && p.images[0]) || "",
                   stock: p?.stock ?? 10,
@@ -562,6 +598,7 @@ setProducts(prev => [...prev, uiProduct]);
                   <ProductForm
                     formData={formData}
                     setFormData={setFormData}
+                    collections={collections}
                     onSubmit={handleAddProduct}
                     onCancel={() => {
                       setIsAddDialogOpen(false);
@@ -583,6 +620,138 @@ setProducts(prev => [...prev, uiProduct]);
         </div>
       </div>
 
+      {/* Collection Management */}
+      <div className="flex flex-col gap-3 border p-4 rounded-lg">
+        <h3 className="text-lg font-semibold">Collections</h3>
+
+        <div className="flex gap-2">
+          <Input
+            placeholder="New collection name"
+            value={newCollection}
+            onChange={(e) => setNewCollection(e.target.value)}
+          />
+          <div className="flex flex-col gap-2">
+            <Input
+              placeholder="Collection image URL (optional)"
+              value={collectionImage}
+              onChange={(e) => setCollectionImage(e.target.value)}
+            />
+            <Input
+              type="file"
+              accept="image/*"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+
+                try {
+                  const dataUrl = await fileToOptimizedDataUrl(file);
+                  setCollectionImage(dataUrl);
+                  toast.success("Image uploaded");
+                } catch {
+                  toast.error("Failed to process image");
+                }
+              }}
+            />
+          </div>
+          <Button
+            onClick={() => {
+              const addCollection = async () => {
+                const name = newCollection.trim();
+                const slug = name.toLowerCase().replace(/\s+/g, "-");
+                if (!name) {
+                  toast.error("Collection name cannot be empty.");
+                  return;
+                }
+
+                const existing = collections.find(
+                  (col: any) => col.name.toLowerCase() === name.toLowerCase()
+                );
+
+                if (existing) {
+                  // Update existing collection (ensure slug is correct)
+                  const { error } = await supabase
+                    .from("collections")
+                    .update({ slug })
+                    .eq("name", existing.name);
+
+                  if (error) {
+                    console.error("UPDATE COLLECTION ERROR:", error);
+                    toast.error(error.message || "Failed to update collection");
+                    return;
+                  }
+
+                  setCollections(prev =>
+                    prev.map((c: any) =>
+                      c.name.toLowerCase() === name.toLowerCase() ? { ...c, slug } : c
+                    )
+                  );
+
+                  toast.success("Collection updated");
+                  setNewCollection("");
+                  setCollectionImage("");
+                  return;
+                }
+
+                // Insert new collection
+                const { data, error } = await supabase
+                  .from("collections")
+                  .insert([{ name, slug, image: collectionImage }])
+                  .select();
+
+                if (error) {
+                  console.error("ADD COLLECTION ERROR:", error);
+                  toast.error(error.message || "Failed to add collection");
+                  return;
+                }
+
+                console.log("Inserted collection:", data);
+                setCollections(prev => [...prev, { name, slug, image: collectionImage }]);
+                setNewCollection("");
+                setCollectionImage("");
+                toast.success("Collection added");
+              };
+              addCollection();
+            }}
+          >
+            Add
+          </Button>
+        </div>
+
+        {collectionImage && (
+          <img
+            src={collectionImage}
+            alt="Collection Preview"
+            className="w-24 h-24 object-cover rounded border"
+          />
+        )}
+
+        <div className="flex flex-wrap gap-2">
+          {collections.map((col: any) => (
+            <div key={col.slug} className="flex items-center gap-2 border px-3 py-1 rounded">
+              <span>{col.name}</span>
+              <button
+                onClick={() => {
+                  const deleteCollection = async () => {
+                    const { error } = await supabase.from("collections").delete().eq("name", col.name);
+                    if (error) {
+                      toast.error("Failed to remove collection");
+                      return;
+                    }
+
+                    setCollections(prev => prev.filter((c: any) => c.name !== col.name));
+                    toast.success("Collection removed");
+                  };
+                  deleteCollection();
+                }}
+                className="text-red-500"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Filters */}
       <div className="flex gap-4">
         <Input
@@ -597,8 +766,10 @@ setProducts(prev => [...prev, uiProduct]);
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Categories</SelectItem>
-            {categories.map(category => (
-              <SelectItem key={category} value={category}>{category}</SelectItem>
+            {collections.map((category: any) => (
+              <SelectItem key={category.slug} value={category.slug}>
+                {category.name}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -763,6 +934,7 @@ setProducts(prev => [...prev, uiProduct]);
                 <ProductForm
                   formData={formData}
                   setFormData={setFormData}
+                  collections={collections}
                   onSubmit={handleEditProduct}
                   onCancel={() => {
                     setEditingProduct(null);
@@ -789,6 +961,7 @@ setProducts(prev => [...prev, uiProduct]);
 interface ProductFormProps {
   formData: FormData;
   setFormData: (data: FormData | ((prev: FormData) => FormData)) => void;
+  collections: any[];
   onSubmit: () => void;
   onCancel: () => void;
   addImageUrl: () => void;
@@ -804,6 +977,7 @@ interface ProductFormProps {
 function ProductForm({
   formData,
   setFormData,
+  collections,
   onSubmit,
   onCancel,
   addImageUrl,
@@ -836,8 +1010,8 @@ function ProductForm({
               <SelectValue placeholder="Select category" />
             </SelectTrigger>
             <SelectContent>
-              {categories.map(category => (
-                <SelectItem key={category} value={category}>{category}</SelectItem>
+              {collections.map((category: any) => (
+                <SelectItem key={category.slug} value={category.slug}>{category.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>

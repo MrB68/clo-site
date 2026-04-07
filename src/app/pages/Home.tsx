@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import { ArrowRight, Minus } from "lucide-react";
@@ -14,37 +14,48 @@ export function Home() {
   const filteredProducts = products.filter((p) => p.style === "minimal");
   const newArrivals = filteredProducts.filter((p) => p.isNew).slice(0, 4);
   const featuredReviews = reviews
-  .filter((review) => review.rating > 4)
-  .slice(0, 3);
+    .filter((review) => review.rating > 4)
+    .slice(0, 3);
 
+  // Fetch reviews
   useEffect(() => {
-  const fetchReviews = async () => {
-    const { data, error } = await supabase
-      .from("reviews")
-      .select("*")
-      .eq("status", "approved")
-      .order("created_at", { ascending: false });
+    const fetchReviews = async () => {
+      const { data, error } = await supabase
+        .from("reviews")
+        .select("*")
+        .eq("status", "approved")
+        .order("created_at", { ascending: false });
 
-    if (error) {
-      console.error("Failed to fetch reviews:", error);
-      return;
-    }
+      if (error) {
+        console.error("Failed to fetch reviews:", error);
+        return;
+      }
 
-    setReviews(data || []);
-  };
+      const normalized = (data || []).map((r: any) => ({
+        ...r,
+        customerName:
+          r.customer_name ||
+          (r.customer_email ? r.customer_email.split("@")[0] : "User"),
+      }));
 
-  fetchReviews();
-}, []);
+      setReviews(normalized);
+    };
+
+    fetchReviews();
+  }, []);
 
   return (
     <div>
       {/* Hero Section */}
       <section className="relative h-screen">
         <div className="absolute inset-0 bg-black">
-          <img
-            src="https://images.unsplash.com/photo-1724184888115-e76e42f53dcc?q=80&w=3264&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+          <motion.img
+            src="/home.jpeg"
             alt="Hero"
-            className="w-full h-full object-cover opacity-90"
+            className="w-full h-full object-cover object-center opacity-90"
+            initial={{ scale: 1 }}
+            animate={{ scale: 1.08 }}
+            transition={{ duration: 8, ease: "easeInOut", repeat: Infinity, repeatType: "mirror" }}
           />
         </div>
         <div className="relative z-10 h-full flex items-center justify-center">
@@ -72,10 +83,10 @@ export function Home() {
               transition={{ delay: 0.6, duration: 0.8 }}
             >
               <Link
-                to="/shop"
+                to="/collections"
                 className="inline-flex items-center gap-3 border-2 border-white text-white px-12 py-4 hover:bg-white hover:text-black transition-all duration-300 uppercase tracking-[0.2em] text-sm"
               >
-                Explore Collection
+                Explore Collections
                 <ArrowRight size={16} />
               </Link>
             </motion.div>
@@ -84,7 +95,7 @@ export function Home() {
       </section>
 
       {/* Philosophy Section */}
-      <section className="border-b border-black bg-white px-4 py-32 text-black transition-all duration-700 dark:border-white/10 dark:bg-black dark:text-white sm:px-6 lg:px-8">
+      <section className="border-b border-white/10 bg-black px-4 py-32 text-white transition-all duration-700 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto text-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -94,11 +105,11 @@ export function Home() {
             className="space-y-8"
           >
             <div className="flex items-center justify-center gap-4 mb-8 opacity-60">
-              <div className="h-px w-12 bg-black transition-colors duration-500 dark:bg-white"></div>
-              <Minus size={16} className="text-black transition-colors duration-500 dark:text-white" />
-              <div className="h-px w-12 bg-black transition-colors duration-500 dark:bg-white"></div>
+              <div className="h-px w-12 bg-white"></div>
+              <Minus size={16} className="text-white" />
+              <div className="h-px w-12 bg-white"></div>
             </div>
-            <h2 className="text-4xl tracking-[0.2em] uppercase text-black transition-colors duration-500 dark:text-white md:text-5xl">
+            <h2 className="text-4xl tracking-[0.2em] uppercase text-white md:text-5xl">
               Less is More
             </h2>
             <p className="mx-auto max-w-2xl text-base leading-relaxed text-gray-600 transition-colors duration-500 dark:text-gray-300 md:text-lg">
@@ -109,7 +120,7 @@ export function Home() {
       </section>
 
       {/* Style Toggle Section */}
-      <section className="border-t border-black bg-white px-4 py-32 transition-all duration-700 dark:border-white/10 dark:bg-black sm:px-6 lg:px-8">
+      <section className="border-t border-white/10 bg-black px-4 py-32 transition-all duration-700 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto">
           <StyleSwitch />
         </div>
@@ -134,68 +145,52 @@ export function Home() {
             </div>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-black">
-            {/* Men */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.1 }}
-              className="group relative overflow-hidden aspect-4/5g-black cursor-pointer"
-            >
-              <img
-                src="https://images.unsplash.com/photo-1759357251907-cb8302565818?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtaW5pbWFsJTIwbW9ub2Nocm9tZSUyMGZhc2hpb24lMjBtb2RlbHxlbnwxfHx8fDE3NzUxMzk4NDl8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral"
-                alt="Men's Collection"
-                className="w-full h-full object-cover transition-all duration-700 group-hover:scale-105 opacity-80 group-hover:opacity-100"
-              />
-              <div className="absolute inset-0 bg-linear-to-trom-black/80 via-black/20 to-transparent flex items-end p-12">
-                <div className="text-white w-full">
-                  <h3 className="text-3xl tracking-[0.2em] uppercase mb-4">
-                    Men
-                  </h3>
-                  <Link
-                    to="/shop"
-                    className="inline-flex items-center gap-3 text-sm tracking-[0.2em] uppercase opacity-0 group-hover:opacity-100 transition-all duration-500 group-hover:translate-x-2"
-                  >
-                    View Collection <ArrowRight size={16} />
-                  </Link>
-                </div>
-              </div>
-            </motion.div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-black">
+            {[...new Set(products.map((p) => p.category))].map((category, index) => {
+              const categoryProducts = products.filter((p) => p.category === category);
+              const previewImage =
+                categoryProducts.find((p) => p.images?.[0])?.images?.[0] ||
+                "https://images.unsplash.com/photo-1521334884684-d80222895322";
 
-            {/* Women */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.2 }}
-              className="group relative overflow-hidden aspect-4/5g-black cursor-pointer"
-            >
-              <img
-                src="https://images.unsplash.com/photo-1604513830532-8fce22d9941f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxibGFjayUyMHdoaXRlJTIwc3RyZWV0d2VhciUyMGNsb3RoaW5nfGVufDF8fHx8MTc3NTEzOTg0OXww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral"
-                alt="Women's Collection"
-                className="w-full h-full object-cover transition-all duration-700 group-hover:scale-105 opacity-80 group-hover:opacity-100"
-              />
-              <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent flex items-end p-12">
-                <div className="text-white w-full">
-                  <h3 className="text-3xl tracking-[0.2em] uppercase mb-4">
-                    Women
-                  </h3>
-                  <Link
-                    to="/shop"
-                    className="inline-flex items-center gap-3 text-sm tracking-[0.2em] uppercase opacity-0 group-hover:opacity-100 transition-all duration-500 group-hover:translate-x-2"
+              return (
+                <Link to={`/collections/${category}`} className="block">
+                  <motion.div
+                    key={category}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: index * 0.1 }}
+                    className="group relative overflow-hidden aspect-[4/5] bg-black cursor-pointer"
                   >
-                    View Collection <ArrowRight size={16} />
-                  </Link>
-                </div>
-              </div>
-            </motion.div>
+                    <img
+                      src={previewImage}
+                      alt={`${category} collection`}
+                      className="w-full h-full object-cover transition-all duration-700 group-hover:scale-105 opacity-80 group-hover:opacity-100"
+                    />
+
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex items-end p-10">
+                      <div className="text-white w-full">
+                        <h3 className="text-2xl md:text-3xl tracking-[0.2em] uppercase mb-3">
+                          {category?.charAt(0).toUpperCase() + category?.slice(1)}
+                        </h3>
+
+                        <span
+                          className="inline-flex items-center gap-2 text-xs tracking-[0.2em] uppercase opacity-0 group-hover:opacity-100 transition-all duration-500 group-hover:translate-x-2"
+                        >
+                          View Collection <ArrowRight size={14} />
+                        </span>
+                      </div>
+                    </div>
+                  </motion.div>
+                </Link>
+              );
+            })}
           </div>
         </div>
       </section>
 
       {/* New Arrivals */}
-      <section className="border-b border-black bg-white px-4 py-32 text-black transition-all duration-700 dark:border-white/10 dark:bg-black dark:text-white sm:px-6 lg:px-8">
+      <section className="border-b border-white/10 bg-black px-4 py-32 text-white transition-all duration-700 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -203,13 +198,13 @@ export function Home() {
             viewport={{ once: true }}
             className="text-center mb-20"
           >
-            <h2 className="mb-3 text-3xl tracking-[0.2em] uppercase text-black transition-colors duration-500 dark:text-white md:text-4xl">
+            <h2 className="mb-3 text-3xl tracking-[0.2em] uppercase text-white md:text-4xl">
               New Arrivals
             </h2>
             <div className="flex items-center justify-center gap-4 opacity-50">
-              <div className="h-px w-8 bg-black transition-colors duration-500 dark:bg-white"></div>
-              <Minus size={12} className="text-black transition-colors duration-500 dark:text-white" />
-              <div className="h-px w-8 bg-black transition-colors duration-500 dark:bg-white"></div>
+              <div className="h-px w-8 bg-white"></div>
+              <Minus size={12} className="text-white" />
+              <div className="h-px w-8 bg-white"></div>
             </div>
           </motion.div>
 
@@ -229,8 +224,8 @@ export function Home() {
 
           <div className="mt-16 text-center">
             <Link
-              to="/shop"
-              className="inline-flex items-center gap-3 border-2 border-black px-10 py-4 text-sm uppercase tracking-[0.2em] text-black transition-all duration-500 hover:bg-black hover:text-white dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black"
+              to="/new-arrivals"
+              className="inline-flex items-center gap-3 border-2 border-white px-10 py-4 text-sm uppercase tracking-[0.2em] text-white transition-all duration-500 hover:bg-white hover:text-black"
             >
               View All
               <ArrowRight size={16} />
@@ -240,7 +235,7 @@ export function Home() {
       </section>
 
       {/* Design Principles */}
-      <section className="bg-white px-4 py-32 text-black transition-all duration-700 dark:bg-black dark:text-white sm:px-6 lg:px-8">
+      <section className="bg-black px-4 py-32 text-white transition-all duration-700 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
             <motion.div
@@ -251,18 +246,18 @@ export function Home() {
               className="space-y-8"
             >
               <div className="flex items-center gap-4">
-                <div className="h-px w-12 bg-black transition-colors duration-500 dark:bg-white"></div>
-                <Minus size={16} className="text-black opacity-50 transition-colors duration-500 dark:text-white" />
+                <div className="h-px w-12 bg-white"></div>
+                <Minus size={16} className="text-white opacity-50" />
               </div>
-              <h2 className="text-4xl leading-tight tracking-[0.2em] uppercase text-black transition-colors duration-500 dark:text-white md:text-5xl">
+              <h2 className="text-4xl leading-tight tracking-[0.2em] uppercase text-white md:text-5xl">
                 Original Design
               </h2>
-              <p className="text-lg leading-relaxed text-gray-600 opacity-80 transition-colors duration-500 dark:text-gray-300">
+              <p className="text-lg leading-relaxed text-gray-300 opacity-80">
                 Every piece in our collection is crafted with intention. We reject fast fashion in favor of enduring design that speaks to those who value authenticity and craftsmanship.
               </p>
               <Link
                 to="/about"
-                className="inline-flex items-center gap-3 text-sm tracking-[0.2em] uppercase text-black transition-all duration-300 hover:translate-x-2 dark:text-white"
+                className="inline-flex items-center gap-3 text-sm tracking-[0.2em] uppercase text-white transition-all duration-300 hover:translate-x-2"
               >
                 Our Philosophy <ArrowRight size={16} />
               </Link>
@@ -275,9 +270,9 @@ export function Home() {
               className="relative aspect-3/4"
             >
               <img
-                src="https://images.unsplash.com/photo-1629922952881-2eed9b2f995b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtaW5pbWFsaXN0JTIwZmFzaGlvbiUyMHBvcnRyYWl0fGVufDF8fHx8MTc3NTA3NjEzN3ww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral"
+                src="/hoodie.png"
                 alt="Design Philosophy"
-                className="w-full h-full object-cover"
+                className="w-full h-full object-contain object-center"
               />
             </motion.div>
           </div>
@@ -346,7 +341,7 @@ export function Home() {
       </section>
 
       {/* Reviews Section */}
-      <section className="bg-white px-4 py-32 text-black transition-all duration-700 dark:bg-black dark:text-white sm:px-6 lg:px-8">
+      <section className="bg-black px-4 py-32 text-white transition-all duration-700 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -354,20 +349,22 @@ export function Home() {
             viewport={{ once: true }}
             className="text-center mb-20"
           >
-            <h2 className="mb-3 text-3xl tracking-[0.2em] uppercase text-black transition-colors duration-500 dark:text-white md:text-4xl">
+            <h2 className="mb-3 text-3xl tracking-[0.2em] uppercase text-white md:text-4xl">
               What They Say
             </h2>
             <div className="flex items-center justify-center gap-4">
-              <div className="h-px w-8 bg-black transition-colors duration-500 dark:bg-white"></div>
-              <Minus size={12} className="text-black opacity-50 transition-colors duration-500 dark:text-white" />
-              <div className="h-px w-8 bg-black transition-colors duration-500 dark:bg-white"></div>
+              <div className="h-px w-8 bg-white"></div>
+              <Minus size={12} className="text-white opacity-50" />
+              <div className="h-px w-8 bg-white"></div>
             </div>
           </motion.div>
 
           {featuredReviews.length > 0 ? (
             <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
               {featuredReviews.map((review, index) => {
-                const profile = getCustomerProfileByEmail(review.customerEmail);
+                const profile = review.customerEmail
+                ? getCustomerProfileByEmail(review.customerEmail)
+                : null;
 
                 return (
                   <motion.div
@@ -376,45 +373,45 @@ export function Home() {
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
                     transition={{ delay: 0.1 * (index + 1) }}
-                    className="space-y-6 border-2 border-black bg-white p-8 transition-all duration-500 dark:border-white/15 dark:bg-neutral-950"
+                    className="space-y-6 border-2 border-white/15 bg-neutral-950 p-8 transition-all duration-500"
                   >
                     <div className="flex gap-1">
                       {[...Array(review.rating)].map((_, starIndex) => (
                         <div
                           key={starIndex}
-                          className="h-4 w-4 bg-black transition-colors duration-500 dark:bg-white"
+                          className="h-4 w-4 bg-white"
                         ></div>
                       ))}
                     </div>
                     <div className="space-y-2">
-                      <p className="text-sm uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                      <p className="text-sm uppercase tracking-wider text-gray-400">
                         {review.productName}
                       </p>
-                      <p className="leading-relaxed text-black opacity-80 transition-colors duration-500 dark:text-white">
+                      <p className="leading-relaxed text-white opacity-80">
                         "{review.comment}"
                       </p>
                     </div>
-                    <div className="flex items-center gap-4 border-t border-black pt-4 dark:border-white/15">
+                    <div className="flex items-center gap-4 border-t border-white/15 pt-4">
                       {profile?.profileImage ? (
                         <img
                           src={profile.profileImage}
-                          alt={review.customerName}
+                          alt={review.customer_name || review.customerName}
                           className="h-12 w-12 rounded-full object-cover"
                         />
                       ) : (
-                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black text-sm uppercase tracking-wider text-white dark:bg-white dark:text-black">
-                          {review.customerName
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-sm uppercase tracking-wider text-black">
+                          {(review.customer_name || review.customerName || "Anonymous")
                             .split(" ")
-                            .map((name: any[]) => name[0])
+                            .map((name: string) => name?.[0] || "")
                             .join("")
                             .slice(0, 2)}
                         </div>
                       )}
                       <div>
-                        <p className="text-sm tracking-wider uppercase text-black dark:text-white">
-                          {review.customerName}
+                        <p className="text-sm tracking-wider uppercase text-white">
+                          {review.customer_name || review.customerName}
                         </p>
-                        <p className="text-xs tracking-wider text-gray-500 dark:text-gray-400">
+                        <p className="text-xs tracking-wider text-gray-400">
                           Verified Customer
                         </p>
                       </div>
@@ -434,7 +431,7 @@ export function Home() {
       </section>
 
       {/* Newsletter */}
-      <section className="bg-white px-4 py-32 text-black transition-all duration-700 dark:bg-black dark:text-white sm:px-6 lg:px-8">
+      <section className="bg-black px-4 py-32 text-white transition-all duration-700 sm:px-6 lg:px-8">
         <div className="max-w-2xl mx-auto text-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -444,14 +441,14 @@ export function Home() {
           >
             <div className="space-y-6">
               <div className="flex items-center justify-center gap-4">
-                <div className="h-px w-8 bg-black transition-colors duration-500 dark:bg-white"></div>
-                <Minus size={12} className="text-black opacity-50 transition-colors duration-500 dark:text-white" />
-                <div className="h-px w-8 bg-black transition-colors duration-500 dark:bg-white"></div>
+                <div className="h-px w-8 bg-white"></div>
+                <Minus size={12} className="text-white opacity-50" />
+                <div className="h-px w-8 bg-white"></div>
               </div>
-              <h2 className="text-3xl tracking-[0.2em] uppercase text-black transition-colors duration-500 dark:text-white md:text-4xl">
+              <h2 className="text-3xl tracking-[0.2em] uppercase text-white md:text-4xl">
                 Stay Updated
               </h2>
-              <p className="mx-auto max-w-md text-gray-600 opacity-75 transition-colors duration-500 dark:text-gray-300">
+              <p className="mx-auto max-w-md text-gray-300 opacity-75">
                 Join our community for exclusive releases and design insights.
               </p>
             </div>

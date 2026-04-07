@@ -8,6 +8,14 @@ import { useProducts } from "../contexts/ProductsContext";
 import { supabase } from "../../lib/supabase";
 import { StoredReview } from "../utils/reviews";
 
+// Helper to format order code like CLO-XXXXXX (short, uppercase, strips esewa params)
+const formatOrderCode = (id: string) => {
+  if (!id) return "";
+  const clean = id.toString().split("?")[0]; // remove esewa params
+  const short = clean.slice(-6).toUpperCase();
+  return `CLO-${short}`;
+};
+
 type CustomerOrder = any;
 
 export function Orders() {
@@ -26,6 +34,16 @@ export function Orders() {
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [selectedOrderDetails, setSelectedOrderDetails] = useState<CustomerOrder | null>(null);
   const [selectedTrackingOrder, setSelectedTrackingOrder] = useState<CustomerOrder | null>(null);
+
+  // keep tracking modal in sync with latest order data
+  useEffect(() => {
+    if (!selectedTrackingOrder) return;
+
+    const updated = storedOrders.find(o => o.id === selectedTrackingOrder.id);
+    if (updated) {
+      setSelectedTrackingOrder(updated);
+    }
+  }, [storedOrders]);
   const [selectedExchangeOrder, setSelectedExchangeOrder] = useState<CustomerOrder | null>(null);
   const [exchangeDraft, setExchangeDraft] = useState({
     reason: "",
@@ -39,15 +57,190 @@ export function Orders() {
       const { data, error } = await supabase
         .from("orders")
         .select("*")
-        .eq("customer_id", user.id)
+        .or(`user_id.eq.${user.id},customer_email.eq.${user.email}`)
         .order("created_at", { ascending: false });
 
-      if (!error) {
-        setStoredOrders(data || []);
+      console.log("FETCHED USER ORDERS:", data);
+
+      if (!error && data) {
+        // 🔥 fetch custom designs (pending)
+        const { data: customDesigns } = await supabase
+          .from("custom_designs")
+          .select("*")
+          .eq("user_id", user.id);
+
+        // map designs
+        const customDesignMap: any[] = (customDesigns || []).map((design: any) => ({
+          id: design.id,
+          custom_design_id: design.id,
+          is_custom: true,
+          design_images: design.image_urls || (design.image_url ? [design.image_url] : []),
+          created_at: design.created_at,
+          approved_price: design.approved_price || null,
+          status: design.approved_price ? "pending" : "pending",
+          payment_status: "unpaid",
+          items: [],
+          source: "design", // mark source
+        }));
+
+        // 🔥 merge orders + designs (avoid duplicates)
+        const orderMap = new Map();
+
+        // first add real orders
+        data.forEach((order: any) => {
+          const key = order.custom_design_id || order.id;
+          orderMap.set(key, {
+            ...order,
+            source: "order",
+          });
+        });
+
+        // then add designs ONLY if no order exists
+        customDesignMap.forEach((design) => {
+          if (!orderMap.has(design.id)) {
+            orderMap.set(design.id, design);
+          }
+        });
+
+        const merged = Array.from(orderMap.values());
+
+        setStoredOrders(merged);
       }
     };
 
     fetchOrders();
+
+    // 🔥 listen for admin approval updates
+    const handleOrdersUpdate = () => {
+      fetchOrders();
+    };
+
+    window.addEventListener("ordersUpdated", handleOrdersUpdate);
+
+    return () => {
+      window.removeEventListener("ordersUpdated", handleOrdersUpdate);
+    };
+  }, [user]);
+
+  // Secure backend eSewa verification (replaces fallback logic)
+  useEffect(() => {
+    const verifyPayment = async () => {
+      const urlParams = new URLSearchParams(window.location.search);
+
+      let orderId =
+        urlParams.get("orderId") ||
+        urlParams.get("oid") ||
+        urlParams.get("refId");
+
+      // fallback from localStorage
+      if (!orderId) {
+        try {
+          const stored = localStorage.getItem("customCheckoutOrder");
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            orderId = parsed?.custom_design_id || parsed?.id;
+          }
+        } catch (e) {
+          console.error("Fallback orderId parse error:", e);
+        }
+      }
+
+      const refId = urlParams.get("refId") || urlParams.get("rid");
+      const amtRaw = urlParams.get("amt") || urlParams.get("amount");
+      const amt = amtRaw ? Number(amtRaw) : null;
+
+      if (!orderId || !refId || !amt) return;
+      // 🔒 Fetch expected amount from DB
+const { data: existingOrder } = await supabase
+  .from("orders")
+  .select("total")
+  .or(`id.eq.${orderId},custom_design_id.eq.${orderId}`)
+  .single();
+
+const expectedTotal = Number(existingOrder?.total || 0);
+
+// 🚨 Reject if mismatch
+if (!expectedTotal || Math.abs(expectedTotal - Number(amt)) > 1) {
+  console.error("AMOUNT MISMATCH:", {
+    expected: expectedTotal,
+    paid: amt,
+  });
+
+  toast.error("Payment amount mismatch. Verification failed ❌");
+  return;
+}
+
+      try {
+        console.log("VERIFYING PAYMENT:", { orderId, refId, amt });
+        console.log("FINAL AMOUNT USED:", Number(amt));
+
+        const res = await fetch("/api/esewa", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            oid: orderId,
+            refId,
+            amt: Number(amt),
+          }),
+        });
+
+        const data = await res.json();
+
+        if (data.success === true) {
+          await supabase
+            .from("orders")
+            .update({
+              payment_status: "paid",
+              status: "processing",
+            })
+            .eq("id", orderId);
+
+          if (orderId) {
+            await supabase
+              .from("orders")
+              .update({
+                payment_status: "paid",
+                status: "processing",
+              })
+              .eq("custom_design_id", orderId);
+          }
+
+          toast.success("Payment verified securely ✅");
+
+          window.dispatchEvent(new Event("ordersUpdated"));
+
+          setTimeout(() => {
+            window.location.href = "/orders";
+          }, 800);
+
+          localStorage.removeItem("customCheckoutOrder");
+        } else {
+          toast.error("Payment verification failed ❌");
+        }
+      } catch (err) {
+        console.error("Verification error:", err);
+        toast.error("Verification error");
+      }
+    };
+
+    verifyPayment();
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchReviews = async () => {
+      const { data } = await supabase
+        .from("reviews")
+        .select("*")
+        .eq("customer_email", user.email);
+
+      setStoredReviews(data || []);
+    };
+
+    fetchReviews();
   }, [user]);
 
   useEffect(() => {
@@ -56,13 +249,11 @@ export function Orders() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "orders" },
-        () => {
+        (payload) => {
+          console.log("REALTIME ORDER UPDATE:", payload);
           if (user) {
-            supabase
-              .from("orders")
-              .select("*")
-              .eq("customer_id", user.id)
-              .then(({ data }) => setStoredOrders(data || []));
+            // Just re-use fetchOrders logic via event
+            window.dispatchEvent(new Event("ordersUpdated"));
           }
         }
       )
@@ -74,16 +265,73 @@ export function Orders() {
   }, [user]);
 
   const visibleOrders = useMemo(() => {
-    const ordersToRender = storedOrders;
+    const ordersToRender = (() => {
+      const map = new Map();
+
+      for (const order of storedOrders) {
+        // Handle custom orders
+        if (order.is_custom) {
+          // Use BOTH ids to ensure proper linking
+          const key = order.custom_design_id || order.id;
+
+          // Keep only latest version of the same custom order
+          if (
+            !map.has(key) ||
+            new Date(order.created_at) > new Date(map.get(key).created_at)
+          ) {
+            map.set(key, order);
+          }
+        } else {
+          // Normal orders
+          map.set(order.id, order);
+        }
+      }
+
+      return Array.from(map.values());
+    })(); // show all orders (including custom before approval)
     return ordersToRender.map((order) => ({
       ...order,
-      items: order.items.map((item: any) => ({
-        ...item,
-        image:
-          products.find((product) => product.id === item.id)?.image ||
-          products.find((product) => product.id === item.id)?.images?.[0] ||
-          "https://images.unsplash.com/photo-1441986300917-64674bd600d8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
-      })),
+      items: (
+        typeof order.items === "string"
+          ? JSON.parse(order.items)
+          : order.items || []
+      ).map((item: any) => {
+        // image resolver logic (sync, non-async)
+        let images = order.design_images;
+        if (typeof images === "string") {
+          try {
+            images = JSON.parse(images);
+          } catch {
+            images = [];
+          }
+        }
+
+        let image = undefined;
+        if (order.is_custom) {
+          if (Array.isArray(images) && images.length > 0 && images[0]) {
+            let src = images[0];
+            if (!src.startsWith("http")) {
+              let cleanPath = src
+                .replace(/^\/+/, "") // remove leading slash only
+                .replace("public/custom-designs/", "")
+                .replace("custom-designs/", "");
+              console.log("FINAL IMAGE PATH:", cleanPath);
+              src = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/custom-designs/${encodeURI(cleanPath)}`;
+            }
+            image = src;
+          } else {
+            image = "";
+          }
+        } else {
+          image =
+            products.find((product) => product.id === item.id)?.image ||
+            products.find((product) => product.id === item.id)?.images?.[0];
+        }
+        return {
+          ...item,
+          image
+        };
+      }),
     }));
   }, [products, storedOrders]);
 
@@ -131,8 +379,23 @@ export function Orders() {
     }
   };
 
-  const getStatusText = (status: CustomerOrder["status"]) => {
-    switch (status) {
+  const getStatusText = (order: CustomerOrder) => {
+    // Custom order logic
+    if (order.is_custom) {
+      if (!order.approved_price && !order.custom_designs?.approved_price) {
+        return "Waiting for Approval";
+      }
+
+      if (order.approved_price || order.custom_designs?.approved_price) {
+        if (order.payment_status === "paid" || order.payment_status === "completed") {
+          return "Paid";
+        }
+        return "Approved - Awaiting Payment";
+      }
+    }
+
+    // Normal orders
+    switch (order.status) {
       case "pending":
         return "Order Placed";
       case "processing":
@@ -201,11 +464,20 @@ export function Orders() {
       return;
     }
 
-    await supabase.from("reviews").insert([
+   const meta = (user as any)?.user_metadata || {};
+
+const customerName =
+  meta.full_name ||
+  meta.name ||
+  user.email?.split("@")[0] ||
+  "User";
+
+   await supabase.from("reviews").insert([
       {
         order_id: reviewDraft.orderId,
-        customer_name: user.name || "User",
+        customer_name: customerName,
         customer_email: user.email,
+        user_id: user.id,
         product_id: reviewDraft.productId,
         product_name: reviewDraft.productName,
         rating: reviewDraft.rating,
@@ -222,17 +494,17 @@ export function Orders() {
   const hasSubmittedReview = (orderId: string, productId: string) =>
     storedReviews.some(
       (review) =>
-        review.orderId === orderId &&
-        review.productId === productId &&
-        review.customerEmail.toLowerCase() === user.email.toLowerCase()
+        review.order_id === orderId &&
+        review.product_id === productId &&
+        (review.customer_email || "").toLowerCase() === user.email.toLowerCase()
     );
 
   const getSubmittedReview = (orderId: string, productId: string) =>
     storedReviews.find(
       (review) =>
-        review.orderId === orderId &&
-        review.productId === productId &&
-        review.customerEmail.toLowerCase() === user.email.toLowerCase()
+        review.order_id === orderId &&
+        review.product_id === productId &&
+        (review.customer_email || "").toLowerCase() === user.email.toLowerCase()
     );
 
   const getReviewStatusLabel = (status: StoredReview["status"]) => {
@@ -314,8 +586,9 @@ export function Orders() {
       return step === "delivered" ? "complete" : trackingSteps.indexOf(step) <= 2 ? "complete" : "upcoming";
     }
 
+    const liveStatus = order.status;
     const currentIndex = trackingSteps.indexOf(
-      order.status === "exchange_requested" ? "delivered" : order.status
+      liveStatus === "exchange_requested" ? "delivered" : liveStatus
     );
     const stepIndex = trackingSteps.indexOf(step);
     if (stepIndex <= currentIndex) {
@@ -325,7 +598,7 @@ export function Orders() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 pt-24">
       {/* Header */}
       <div className="bg-black text-white py-6 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -366,7 +639,10 @@ export function Orders() {
           <div className="space-y-6">
             {visibleOrders.map((order, index) => (
               <motion.div
-                key={order.id}
+                key={formatOrderCode(
+                  order.order_code ||
+                  (order.is_custom && order.custom_design_id ? order.custom_design_id : order.id)
+                )}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
@@ -377,60 +653,113 @@ export function Orders() {
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="font-semibold tracking-wider uppercase">
-                        Order #{order.id}
+                        Order #{formatOrderCode(
+                          order.order_code ||
+                          (order.is_custom && order.custom_design_id ? order.custom_design_id : order.id)
+                        )}
                       </h3>
                       <p className="text-sm text-gray-600 tracking-wider">
-                        Placed on {formatDate(order.date)}
+                        Placed on {formatDate(order.created_at || order.date)}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
+                      {order.is_custom ? (
+                        <span className="text-xs bg-purple-600 text-white px-2 py-1 rounded uppercase tracking-wider">
+                          Custom Design
+                        </span>
+                      ) : null}
                       {getStatusIcon(order.status)}
                       <span className="text-sm font-medium tracking-wider uppercase">
-                        {getStatusText(order.status)}
+                        {getStatusText(order)}
                       </span>
                     </div>
                   </div>
+                  {/* ADMIN STATUS + MESSAGE */}
+                  {order.admin_status ? (
+                    <p className="text-xs mt-1 uppercase tracking-wider text-gray-500">
+                      {order.admin_status === "approved" && "Approved by Admin"}
+                      {order.admin_status === "rejected" && "Rejected by Admin"}
+                    </p>
+                  ) : null}
                 </div>
 
                 {/* Order Items */}
                 <div className="px-6 py-4">
-                  {order.items.map((item: any) => (
-                    <div key={item.id} className="mb-4 last:mb-0">
+
+                  {(order.items || []).map((item: any, index: number) => (
+                    <div key={`${order.id}-${item.id}-${index}`} className="mb-4 last:mb-0">
                       <div className="flex items-center gap-4">
-                      <img
-                        src={item.image}
-                        alt={item.name}
-                        className="w-16 h-16 object-cover rounded"
-                      />
-                      <div className="flex-1">
-                        <h4 className="font-medium tracking-wider">{item.name}</h4>
-                        <p className="text-sm text-gray-600 tracking-wider">
-                          Quantity: {item.quantity}
-                        </p>
+                        {item.image ? (
+                          <img
+                            src={item.image}
+                            alt={item.name}
+                            className="w-16 h-16 object-cover rounded"
+                          />
+                        ) : (
+                          <div className="w-16 h-16 bg-gray-100 flex items-center justify-center text-xs text-gray-400 rounded">
+                            No Image
+                          </div>
+                        )}
+                        <div className="flex-1">
+                          <h4 className="font-medium tracking-wider">{item.name}</h4>
+                          <p className="text-sm text-gray-600 tracking-wider">
+                            Quantity: {item.quantity}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium tracking-wider">
+                          {(() => {
+                            const rawPrice =
+                              order.total ??
+                              order.approved_price ??
+                              order.custom_designs?.approved_price ??
+                              0;
+                            const price =
+                              typeof rawPrice === "string"
+                                ? parseFloat(rawPrice)
+                                : Number(rawPrice || 0);
+
+
+                            if (order.is_custom && (!order.approved_price && !order.custom_designs?.approved_price)) {
+                              return "Awaiting Pricing";
+                            }
+
+                            if (order.is_custom && (order.approved_price || order.custom_designs?.approved_price)) {
+                              const customRawPrice =
+                                order.approved_price ??
+                                order.custom_designs?.approved_price ??
+                                0;
+                              const customPrice =
+                                typeof customRawPrice === "string"
+                                  ? parseFloat(customRawPrice)
+                                  : Number(customRawPrice || 0);
+                              return `NPR ${customPrice.toLocaleString()}`;
+                            }
+
+                            return item.price
+                              ? `NPR ${item.price.toLocaleString()}`
+                              : "Included in order";
+                          })()}
+                          </p>
+                          {order.status === "delivered" ? (
+                            hasSubmittedReview(order.id, item.id) ? (
+                              <p className="mt-2 text-xs uppercase tracking-wider text-green-600">
+                                {getReviewStatusLabel(
+                                  getSubmittedReview(order.id, item.id)?.status ?? "pending"
+                                )}
+                              </p>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => openReviewModal(order.id, item.id, item.name)}
+                                className="mt-2 text-xs uppercase tracking-wider text-blue-600 hover:text-blue-800"
+                              >
+                                Write Review
+                              </button>
+                            )
+                          ) : null}
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="font-medium tracking-wider">
-                          NPR {item.price.toLocaleString()}
-                        </p>
-                        {order.status === "delivered" ? (
-                          hasSubmittedReview(order.id, item.id) ? (
-                            <p className="mt-2 text-xs uppercase tracking-wider text-green-600">
-                              {getReviewStatusLabel(
-                                getSubmittedReview(order.id, item.id)?.status ?? "pending"
-                              )}
-                            </p>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => openReviewModal(order.id, item.id, item.name)}
-                              className="mt-2 text-xs uppercase tracking-wider text-blue-600 hover:text-blue-800"
-                            >
-                              Write Review
-                            </button>
-                          )
-                        ) : null}
-                      </div>
-                    </div>
                       {order.exchangeRequest ? (
                         <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
                           <p className="text-xs uppercase tracking-wider text-amber-700">
@@ -454,6 +783,17 @@ export function Orders() {
                               Reviewed by {order.exchangeRequest.reviewedBy}
                             </p>
                           ) : null}
+                        </div>
+                      ) : null}
+                      {/* ADMIN MESSAGE DISPLAY */}
+                      {order.admin_message ? (
+                        <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                          <p className="text-xs uppercase tracking-wider text-gray-500">
+                            Admin Message
+                          </p>
+                          <p className="mt-2 text-sm text-gray-700">
+                            {order.admin_message}
+                          </p>
                         </div>
                       ) : null}
                       {(() => {
@@ -481,6 +821,68 @@ export function Orders() {
                 <div className="bg-gray-50 px-6 py-4 border-t">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
+                      {(() => {
+                        const rawPrice =
+                          order.approved_price ??
+                          order.custom_designs?.approved_price ??
+                          0;
+                        const price =
+                          typeof rawPrice === "string"
+                            ? parseFloat(rawPrice)
+                            : Number(rawPrice || 0);
+
+                       
+                        return (
+                          order.is_custom &&
+                          (order.approved_price || order.custom_designs?.approved_price) &&
+                          order.payment_method === "esewa" &&
+                          order.payment_status !== "paid" &&
+                          order.payment_status !== "completed"
+                        );
+                      })() ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (order._processing) return;
+
+                            // prevent multiple clicks (react-safe)
+                            setStoredOrders((prev) =>
+                              prev.map((o) =>
+                                o.id === order.id ? { ...o, _processing: true } : o
+                              )
+                            );
+
+                            /**
+                             * 🔥 FIX: ensure items are usable in checkout
+                             */
+                            const normalizedOrder = {
+                              ...order,
+                              items:
+                                typeof order.items === "string"
+                                  ? JSON.parse(order.items)
+                                  : order.items || [],
+                            };
+
+                            const uniqueOrder = {
+                              ...normalizedOrder,
+                              _txn: Date.now() // ensures new transaction each time
+                            };
+
+                            localStorage.setItem("customCheckoutOrder", JSON.stringify(uniqueOrder));
+
+                            // redirect to checkout with explicit payment mode
+                            const orderIdentifier =
+                            order.is_custom && order.custom_design_id
+                              ? order.custom_design_id
+                              : order.id;
+
+                          window.location.href = `/checkout?orderId=${orderIdentifier}&custom=true&mode=payment`;
+                                                    }}
+                          className="text-sm bg-black text-white px-4 py-2 hover:bg-gray-800 tracking-wider uppercase"
+                        >
+                          {order._processing ? "Redirecting..." : "Pay Now"}
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => setSelectedOrderDetails(order)}
@@ -515,7 +917,39 @@ export function Orders() {
                         Total
                       </p>
                       <p className="font-semibold tracking-wider">
-                        NPR {order.total.toLocaleString()}
+                        {(() => {
+                          const rawPrice =
+                            order.total ??
+                            order.approved_price ??
+                            order.custom_designs?.approved_price ??
+                            0;
+                          const price =
+                            typeof rawPrice === "string"
+                              ? parseFloat(rawPrice)
+                              : Number(rawPrice || 0);
+
+
+                          if (order.is_custom) {
+                            const customRawPrice =
+                              order.approved_price ??
+                              order.custom_designs?.approved_price ??
+                              0;
+                            const customPrice =
+                              typeof customRawPrice === "string"
+                                ? parseFloat(customRawPrice)
+                                : Number(customRawPrice || 0);
+                            return customPrice > 0
+                              ? `NPR ${customPrice.toLocaleString()}`
+                              : "Awaiting Pricing";
+                          }
+
+                          return price > 0
+                            ? `NPR ${price.toLocaleString()}`
+                            : "Awaiting Pricing";
+                        })()}
+                      </p>
+                      <p className="text-xs mt-1 uppercase tracking-wider text-gray-500">
+                        {(order.payment_status === "paid") ? "Paid" : "Unpaid"}
                       </p>
                     </div>
                   </div>
@@ -641,24 +1075,103 @@ export function Orders() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <p className="text-xs uppercase tracking-wider text-gray-500">Order ID</p>
-                  <p className="mt-1 text-sm">{selectedOrderDetails.id}</p>
+                  <p className="mt-1 text-sm">
+                    {formatOrderCode(
+                      selectedOrderDetails.order_code ||
+                      (selectedOrderDetails.is_custom && selectedOrderDetails.custom_design_id
+                        ? selectedOrderDetails.custom_design_id
+                        : selectedOrderDetails.id)
+                    )}
+                  </p>
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-wider text-gray-500">Status</p>
-                  <p className="mt-1 text-sm">{getStatusText(selectedOrderDetails.status)}</p>
+                  <p className="mt-1 text-sm">{getStatusText(selectedOrderDetails)}</p>
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-wider text-gray-500">Placed On</p>
-                  <p className="mt-1 text-sm">{formatDate(selectedOrderDetails.date)}</p>
+                  <p className="mt-1 text-sm">{formatDate(selectedOrderDetails.created_at || selectedOrderDetails.date)}</p>
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-wider text-gray-500">Total</p>
-                  <p className="mt-1 text-sm">NPR {selectedOrderDetails.total.toLocaleString()}</p>
+                  <p className="mt-1 text-sm">{selectedOrderDetails.total
+                    ? `NPR ${selectedOrderDetails.total.toLocaleString()}`
+                    : "Awaiting Pricing"}</p>
                 </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wider text-gray-500">Payment Method</p>
+                  <p className="mt-1 text-sm uppercase tracking-wider">
+                    {selectedOrderDetails.payment_method === "esewa" ? "eSewa" : "Cash on Delivery"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wider text-gray-500">Payment Status</p>
+                  <p className="mt-1 text-sm uppercase tracking-wider">
+                    {selectedOrderDetails.payment_status === "paid" ? "Paid" : "Unpaid"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Order Summary Section */}
+              <div className="border-t pt-4 space-y-2 bg-gray-50 p-4 rounded-lg">
+                {/* Subtotal */}
+                <div className="flex justify-between text-sm tracking-wider">
+                  <span>Subtotal</span>
+                  <span>
+                    {(() => {
+                      const total = Number(selectedOrderDetails.total || 0);
+                      const discount = Number(selectedOrderDetails.discount_amount || 0);
+                      const shipping = Number(selectedOrderDetails.shipping_cost || 0);
+
+                      const subtotal = selectedOrderDetails.subtotal !== undefined && selectedOrderDetails.subtotal !== null
+                        ? Number(selectedOrderDetails.subtotal)
+                        : total + discount - shipping;
+
+                      return `NPR ${subtotal.toLocaleString()}`;
+                    })()}
+                  </span>
+                </div>
+
+                {/* Discount */}
+                {selectedOrderDetails.discount_amount ? (
+                  <div className="flex justify-between text-sm tracking-wider text-green-600">
+                    <span>
+                      Discount {selectedOrderDetails.promo_code ? `(${selectedOrderDetails.promo_code})` : ""}
+                    </span>
+                    <span>
+                      - NPR {Number(selectedOrderDetails.discount_amount || 0).toLocaleString()}
+                    </span>
+                  </div>
+                ) : null}
+
+                {/* Shipping */}
+                {selectedOrderDetails.shipping_cost !== undefined ? (
+                  <div className="flex justify-between text-sm tracking-wider">
+                    <span>Shipping</span>
+                    <span>
+                      NPR {Number(selectedOrderDetails.shipping_cost || 0).toLocaleString()}
+                    </span>
+                  </div>
+                ) : null}
+
+                {/* Total */}
+                <div className="flex justify-between pt-3 border-t font-semibold tracking-wider uppercase text-lg">
+                  <span>Total</span>
+                  <span>
+                    NPR {Number(selectedOrderDetails.total || 0).toLocaleString()}
+                  </span>
+                </div>
+
+                {/* Promo indicator */}
+                {selectedOrderDetails.promo_code ? (
+                  <div className="text-xs text-gray-500 tracking-wider">
+                    Promo Applied: {selectedOrderDetails.promo_code}
+                  </div>
+                ) : null}
               </div>
               <div>
                 <p className="text-xs uppercase tracking-wider text-gray-500">Shipping Address</p>
-                <p className="mt-1 text-sm text-gray-700">{selectedOrderDetails.shippingAddress}</p>
+                <p className="mt-1 text-sm text-gray-700">{selectedOrderDetails.address || selectedOrderDetails.shippingAddress}</p>
               </div>
               <div>
                 <p className="text-xs uppercase tracking-wider text-gray-500">Items</p>
@@ -666,13 +1179,23 @@ export function Orders() {
                   {selectedOrderDetails.items.map((item: any) => (
                     <div key={item.id} className="flex items-center justify-between rounded border border-gray-200 px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <img src={item.image} alt={item.name} className="h-12 w-12 rounded object-cover" />
+                        {item.image ? (
+                          <img src={item.image} alt={item.name} className="h-12 w-12 rounded object-cover" />
+                        ) : (
+                          <div className="h-12 w-12 bg-gray-100 flex items-center justify-center text-xs text-gray-400 rounded">
+                            No Image
+                          </div>
+                        )}
                         <div>
                           <p className="text-sm font-medium">{item.name}</p>
                           <p className="text-xs text-gray-500">Qty: {item.quantity}</p>
                         </div>
                       </div>
-                      <p className="text-sm font-medium">NPR {item.price.toLocaleString()}</p>
+                      <p className="text-sm font-medium">
+                        {item.price
+                          ? `NPR ${item.price.toLocaleString()}`
+                          : "Included in order"}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -705,17 +1228,19 @@ export function Orders() {
                 return (
                   <div key={step} className="flex items-start gap-3">
                     <div
-                      className={`mt-1 h-3 w-3 rounded-full ${
-                        state === "complete"
+                      className={`mt-1 h-3 w-3 rounded-full ${state === "complete"
                           ? "bg-green-500"
                           : state === "cancelled"
                             ? "bg-red-500"
                             : "bg-gray-300"
-                      }`}
+                        }`}
                     />
                     <div>
                       <p className="text-sm font-medium uppercase tracking-wider">
-                        {getStatusText(step)}
+                        {step === "pending" && "Order Placed"}
+                        {step === "processing" && "Processing"}
+                        {step === "shipped" && "Shipped"}
+                        {step === "delivered" && "Delivered"}
                       </p>
                       <p className="text-xs text-gray-500">
                         {state === "complete"

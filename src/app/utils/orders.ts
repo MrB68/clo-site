@@ -81,7 +81,6 @@ function normalizeStoredOrder(order: Partial<StoredOrder>): StoredOrder | null {
     !order.status ||
     typeof order.total !== "number" ||
     !Array.isArray(order.items) ||
-    !order.source ||
     !order.shippingAddress
   ) {
     return null;
@@ -98,7 +97,7 @@ function normalizeStoredOrder(order: Partial<StoredOrder>): StoredOrder | null {
       ...item,
       adminRemark: typeof item?.adminRemark === "string" ? item.adminRemark : "",
     })),
-    source: order.source,
+    source: order.source || "website",
     shippingAddress: order.shippingAddress,
     trackingNumber: order.trackingNumber,
     phone: order.phone,

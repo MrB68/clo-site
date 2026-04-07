@@ -1,6 +1,6 @@
 import { motion } from "motion/react";
 import { Upload, X, Check, Minus } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
@@ -12,7 +12,7 @@ interface DesignForm {
   productType: string;
   quantity: string;
   message: string;
-  file: File | null;
+  files: File[];
 }
 
 export function CustomDesign() {
@@ -24,10 +24,29 @@ export function CustomDesign() {
     productType: "",
     quantity: "",
     message: "",
-    file: null,
+    files: [],
   });
   const [submitted, setSubmitted] = useState(false);
   const { user } = useAuth();
+
+  // 🔥 Autofill user data when available
+  useEffect(() => {
+    if (user) {
+      const metadata = (user as any)?.user_metadata || {};
+
+      setForm((prev) => ({
+        ...prev,
+        email: user.email || "",
+        name:
+          metadata.full_name ||
+          metadata.name ||
+          prev.name,
+        phone:
+          metadata.phone ||
+          prev.phone,
+      }));
+    }
+  }, [user]);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -43,22 +62,22 @@ export function CustomDesign() {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      setForm({ ...form, file: e.dataTransfer.files[0] });
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      setForm({ ...form, files: Array.from(e.dataTransfer.files) });
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setForm({ ...form, file: e.target.files[0] });
+    if (e.target.files && e.target.files.length > 0) {
+      setForm({ ...form, files: Array.from(e.target.files) });
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!form.file) {
-      toast.error("Please upload your design file");
+    if (form.files.length === 0) {
+      toast.error("Please upload at least one design file");
       return;
     }
 
@@ -68,23 +87,28 @@ export function CustomDesign() {
     }
 
     try {
-      const filePath = `designs/${user.id}/${Date.now()}-${form.file.name}`;
+      const uploadedUrls: string[] = [];
 
-      const { data, error: uploadError } = await supabase.storage
-        .from("custom-designs")
-        .upload(filePath, form.file);
+      for (const file of form.files) {
+        const safeFileName = file.name.replace(/\s+/g, "_").replace(/[^\w.-]/g, "");
+        const filePath = `designs/${user.id}/${Date.now()}-${safeFileName}`;
 
-      if (uploadError) {
-        console.error(uploadError);
-        toast.error("Failed to upload file");
-        return;
+        const { data, error: uploadError } = await supabase.storage
+          .from("custom-designs")
+          .upload(filePath, file);
+
+        if (uploadError) {
+          console.error(uploadError);
+          toast.error("Failed to upload one of the files");
+          return;
+        }
+
+        const { data: urlData } = supabase.storage
+          .from("custom-designs")
+          .getPublicUrl(data.path);
+
+        uploadedUrls.push(urlData.publicUrl);
       }
-
-      const { data: urlData } = supabase.storage
-        .from("custom-designs")
-        .getPublicUrl(data.path);
-
-      const imageUrl = urlData.publicUrl;
 
       const { error } = await supabase.from("custom_designs").insert([
         {
@@ -95,10 +119,13 @@ export function CustomDesign() {
           product_type: form.productType,
           quantity: Number(form.quantity),
           message: form.message.trim(),
-          image_url: imageUrl,
+          image_urls: uploadedUrls,
           status: "pending",
         },
       ]);
+
+      // ✅ Do NOT create order here
+      // Order will be created only after admin approves the design
 
       if (error) {
         console.error(error);
@@ -118,7 +145,7 @@ export function CustomDesign() {
           productType: "",
           quantity: "",
           message: "",
-          file: null,
+          files: [],
         });
       }, 3000);
     } catch {
@@ -182,15 +209,22 @@ export function CustomDesign() {
                   id="file-upload"
                   onChange={handleFileChange}
                   accept="image/*,.pdf,.ai,.psd"
+                  multiple
                   className="hidden"
                 />
-                {form.file ? (
+                {form.files.length > 0 ? (
                   <div className="space-y-4">
                     <Check size={40} className="mx-auto" />
-                    <p className="text-sm tracking-wider">{form.file.name}</p>
+                    <div className="space-y-1">
+                      {form.files.map((file, index) => (
+                        <p key={index} className="text-sm tracking-wider">
+                          {file.name}
+                        </p>
+                      ))}
+                    </div>
                     <button
                       type="button"
-                      onClick={() => setForm({ ...form, file: null })}
+                      onClick={() => setForm({ ...form, files: [] })}
                       className="inline-flex items-center gap-2 text-xs tracking-[0.2em] uppercase hover:opacity-70"
                     >
                       <X size={14} /> Remove

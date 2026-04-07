@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
+const getUser = () => JSON.parse(localStorage.getItem("user") || "null");
 import { Trash2, Plus, Minus, ArrowRight, ShoppingBag } from "lucide-react";
 import { useProducts } from "../contexts/ProductsContext";
+import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../../lib/supabase";
 
 interface CartItem {
@@ -38,11 +40,17 @@ function normalizeCartItems(value: string | null): CartItem[] {
 
     return parsed
       .map((item: LegacyCartItem) => {
-        const rawProductId = item.productId;
+        const rawProductId =
+          item.productId || (item as any).id || item.product?.id;
+
         const productId =
-          typeof rawProductId === "string"
-            ? rawProductId
-            : rawProductId?.id ?? item.product?.id;
+          typeof rawProductId === "string" || typeof rawProductId === "number"
+            ? String(rawProductId)
+            : rawProductId?.id
+            ? String(rawProductId.id)
+            : item.product?.id
+            ? String(item.product.id)
+            : null;
 
         if (!productId) {
           return null;
@@ -69,6 +77,19 @@ function normalizeCartItems(value: string | null): CartItem[] {
 export function Cart() {
   const { products } = useProducts();
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const [stockMap, setStockMap] = useState<Record<string, number>>({});
+
+  const handleCheckout = () => {
+    if (!user) {
+      navigate("/signin?redirect=/checkout");
+      return;
+    }
+
+    // pass a flag so checkout knows to clear cart after success
+    navigate("/checkout", { state: { fromCart: true } });
+  };
 
   const [cartItems, setCartItems] = useState<CartItem[]>(() =>
     normalizeCartItems(localStorage.getItem("cartItems"))
@@ -76,17 +97,77 @@ export function Cart() {
 
   useEffect(() => {
     const newItems = normalizeCartItems(localStorage.getItem("cartItems"));
-    setCartItems(newItems);
+    if (!newItems || newItems.length === 0) {
+      setCartItems([]);
+    } else {
+      setCartItems(newItems);
+    }
   }, []);
 
   useEffect(() => {
     localStorage.setItem("cartItems", JSON.stringify(cartItems));
   }, [cartItems]);
 
+  useEffect(() => {
+    const handleOrderSuccess = () => {
+      setCartItems([]);
+      localStorage.removeItem("cartItems");
+    };
+
+    const syncCart = () => {
+      const updated = normalizeCartItems(localStorage.getItem("cartItems"));
+      if (!updated || updated.length === 0) {
+        setCartItems([]);
+      } else {
+        setCartItems(updated);
+      }
+    };
+
+    window.addEventListener("orderSuccess", handleOrderSuccess);
+    window.addEventListener("storage", syncCart);
+    window.addEventListener("focus", syncCart);
+    window.addEventListener("cartUpdated", syncCart);
+
+    return () => {
+      window.removeEventListener("orderSuccess", handleOrderSuccess);
+      window.removeEventListener("storage", syncCart);
+      window.removeEventListener("focus", syncCart);
+      window.removeEventListener("cartUpdated", syncCart);
+    };
+  }, []);
+
+  useEffect(() => {
+    const fetchStock = async () => {
+      const ids = cartItems.map(i => i.productId);
+      if (ids.length === 0) {
+        setStockMap({});
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("products")
+        .select("id, stock")
+        .in("id", ids);
+
+      if (error) return;
+
+      const map: Record<string, number> = {};
+      data?.forEach((p: any) => {
+        map[p.id] = Number(p.stock ?? 0);
+      });
+
+      setStockMap(map);
+    };
+
+    fetchStock();
+  }, [cartItems]);
+
   const populatedCartItems = cartItems
     .map((item) => ({
       ...item,
-      product: products.find((product) => product.id === item.productId),
+      product: products.find(
+        (product) => String(product.id) === String(item.productId)
+      ),
     }))
     .filter(
       (
@@ -98,11 +179,17 @@ export function Cart() {
 
   const updateQuantity = (index: number, delta: number) => {
     setCartItems((items) =>
-      items.map((item, i) =>
-        i === index
-          ? { ...item, quantity: Math.max(1, item.quantity + delta) }
-          : item
-      )
+      items.map((item, i) => {
+        if (i !== index) return item;
+
+        const available = stockMap[item.productId] ?? 0;
+        const nextQty = Math.max(1, item.quantity + delta);
+
+        // cap at stock
+        const safeQty = available > 0 ? Math.min(nextQty, available) : 1;
+
+        return { ...item, quantity: safeQty };
+      })
     );
   };
 
@@ -119,8 +206,12 @@ export function Cart() {
     0
   );
 
-  const shipping = subtotal > 100 ? 0 : 500;
+  const shipping = subtotal === 0 ? 0 : subtotal > 100 ? 0 : 500;
   const total = subtotal + shipping;
+
+  const hasInvalidQty = populatedCartItems.some(
+    (item) => item.quantity > (stockMap[item.productId] ?? 0)
+  );
 
   // const placeOrder = async () => {
   //   try {
@@ -226,6 +317,11 @@ export function Cart() {
 
                   <p className="text-sm">Size: {item.selectedSize}</p>
                   <p className="text-sm">Color: {item.selectedColor}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {stockMap[item.productId] === 0
+                      ? "Out of stock"
+                      : `Available: ${stockMap[item.productId] ?? 0}`}
+                  </p>
                 </div>
 
                 <div className="flex justify-between items-center mt-4">
@@ -240,11 +336,21 @@ export function Cart() {
                     <span className="px-4">{item.quantity}</span>
                     <button
                       onClick={() => updateQuantity(index, 1)}
-                      className="px-3 py-2 transition-colors hover:bg-gray-100 dark:hover:bg-neutral-900"
+                      disabled={(stockMap[item.productId] ?? 0) <= item.quantity}
+                      className={`px-3 py-2 transition-colors ${
+                        (stockMap[item.productId] ?? 0) <= item.quantity
+                          ? "text-gray-400 cursor-not-allowed"
+                          : "hover:bg-gray-100 dark:hover:bg-neutral-900"
+                      }`}
                     >
                       <Plus size={16} />
                     </button>
                   </div>
+                  {item.quantity > (stockMap[item.productId] ?? 0) && (
+                    <p className="text-xs text-red-500 mt-1">
+                      Reduce quantity (exceeds stock)
+                    </p>
+                  )}
 
                   {/* Price */}
                   <p>NPR {(item.product.price * item.quantity).toLocaleString("en-NP")}</p>
@@ -273,20 +379,46 @@ export function Cart() {
 
           <div className="flex justify-between">
             <span>Shipping</span>
-            <span>{shipping === 0 ? "Free" : `NPR ${shipping.toLocaleString("en-NP")}`}</span>
+            <span>{shipping === 0 ? "Free Shipping" : `NPR ${shipping.toLocaleString("en-NP")}`}</span>
           </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Final shipping cost will be confirmed at checkout based on your location.
+          </p>
 
           <div className="flex justify-between border-t border-black/10 pt-3 text-lg dark:border-white/10">
             <span>Total</span>
             <span>NPR {total.toLocaleString("en-NP")}</span>
           </div>
 
+          {!user && (
+            <div className="mb-4 space-y-3">
+              <div className="p-3 border border-black/10 text-sm dark:border-white/10">
+                You are not signed in. Sign in to securely place your order.
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate("/signin")}
+                className="w-full border border-black py-2 text-sm hover:bg-black hover:text-white transition dark:border-white"
+              >
+                Sign In
+              </button>
+            </div>
+          )}
           <button
             type="button"
-            onClick={() => navigate("/checkout")}
-            className="w-full bg-black py-4 text-white transition hover:bg-gray-900 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
+            onClick={handleCheckout}
+            disabled={!user || hasInvalidQty}
+            className={`w-full py-4 transition ${
+              user
+                ? "bg-black text-white hover:bg-gray-900 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
+                : "bg-gray-300 text-gray-600 cursor-not-allowed dark:bg-neutral-800 dark:text-gray-500"
+            }`}
           >
-            Checkout
+            {!user
+              ? "Sign in to Checkout"
+              : hasInvalidQty
+              ? "Fix quantity to proceed"
+              : "Checkout"}
           </button>
         </div>
       </div>

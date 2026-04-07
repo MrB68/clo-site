@@ -17,7 +17,6 @@ import {
 } from "recharts";
 import { TrendingUp, DollarSign, ShoppingCart, Users } from "lucide-react";
 import { useProducts } from "../../contexts/ProductsContext";
-import { getStoredOrders } from "../../utils/orders";
 import { getAdminSession } from "../../utils/admin";
 
 interface SalesData {
@@ -52,6 +51,7 @@ export function SalesAnalytics() {
   const adminSession = useMemo(() => getAdminSession(), []);
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d');
   const [totalRevenue, setTotalRevenue] = useState(0);
+  const [pendingRevenue, setPendingRevenue] = useState(0);
   const [totalOrders, setTotalOrders] = useState(0);
   const [totalCustomers, setTotalCustomers] = useState(0);
   const [avgOrderValue, setAvgOrderValue] = useState(0);
@@ -69,37 +69,89 @@ export function SalesAnalytics() {
       const cutoff = new Date(now);
       cutoff.setDate(now.getDate() - (getDaysForTimeRange(timeRange) - 1));
 
+      // Performance improvement: fetch only required fields
       const { data: ordersData, error } = await supabase
-  .from("orders")
-  .select("*");
+        .from("orders")
+        .select("id, order_code, created_at, total, status, payment_status, branch, customer_email, items, payment_method");
+      console.log("ORDERS RAW:", ordersData);
+      console.log("ALL ORDERS AFTER FETCH:", ordersData);
 
-if (error) {
-  console.error("Supabase error:", error);
-  return;
-}
+      if (error) {
+        console.error("Supabase error:", error);
+        return;
+      }
+      const orders = (ordersData || [])
+        .filter((order) => new Date(order.created_at) >= cutoff)
+        .filter((order) => {
+          const method = String(order.payment_method || "").toLowerCase();
+          const status = String(order.status || "").toLowerCase();
+          const paymentStatus = String((order as any).payment_status || "").toLowerCase();
 
-const orders = (ordersData || [])
-        .filter((order) => new Date(order.date) >= cutoff)
-        .filter((order) => order.status === "delivered")
-        .filter((order) =>
-          adminSession && adminSession.branch !== "Head Office"
-            ? order.branch === adminSession.branch
-            : true
-        );
+          console.log("ANALYTICS FILTER CHECK:", { method, status, paymentStatus });
 
-      const revenue = orders.reduce((sum, order) => sum + order.total, 0);
-      const customers = new Set(orders.map((order) => order.customerEmail.toLowerCase())).size;
+          // ❌ ignore cancelled
+          if (["cancelled", "canceled"].includes(status)) return false;
+
+          const effectiveMethod = method || "cod";
+
+          // ✅ eSewa / online → count if payment is paid
+          if (effectiveMethod === "esewa" || effectiveMethod === "online") {
+            return paymentStatus === "paid";
+          }
+
+          // ✅ COD → count if delivered, processing, or pending
+          if (effectiveMethod === "cod") {
+            return status === "delivered" || status === "processing" || status === "pending";
+          }
+
+          return false;
+        });
+
+      let realizedRevenue = 0;
+      let pendingRevenueCalc = 0;
+
+      orders.forEach((order) => {
+        const value = parseFloat(order.total);
+        if (isNaN(value)) return;
+
+        const method = String(order.payment_method || "").toLowerCase();
+        const status = String(order.status || "").toLowerCase();
+        const paymentStatus = String((order as any).payment_status || "").toLowerCase();
+
+        if (method === "esewa" || method === "online") {
+          // paid online = realized revenue
+          if (paymentStatus === "paid") {
+            realizedRevenue += value;
+          }
+        } else {
+          // COD → only delivered is realized
+          if (status === "delivered") {
+            realizedRevenue += value;
+          }
+
+          // 🔥 Pending revenue = ALL COD orders except delivered
+          if (status !== "delivered") {
+            pendingRevenueCalc += value;
+          }
+        }
+      });
+
+      console.log("REALIZED REVENUE:", realizedRevenue);
+      console.log("PENDING REVENUE:", pendingRevenueCalc);
+      const customers = new Set(
+        orders.map((order) => String(order.customer_email || "").toLowerCase())
+      ).size;
 
       const groupedSales = new Map<string, SalesData>();
       orders.forEach((order) => {
-        const dateKey = new Date(order.date).toISOString().slice(0, 10);
+        const dateKey = new Date(order.created_at).toISOString().slice(0, 10);
         const existing = groupedSales.get(dateKey) ?? {
           date: dateKey,
           revenue: 0,
           orders: 0,
           customers: 0,
         };
-        existing.revenue += order.total;
+        existing.revenue += Number(order.total || 0);
         existing.orders += 1;
         existing.customers += 1;
         groupedSales.set(dateKey, existing);
@@ -111,7 +163,22 @@ const orders = (ordersData || [])
 
       const productPerformance = new Map<string, TopProduct>();
       orders.forEach((order) => {
-        order.items.forEach((item: { id: string; name: any; price: number; quantity: number; }) => {
+        let itemsArray: any[] = [];
+
+        try {
+          if (Array.isArray(order.items)) {
+            itemsArray = order.items;
+          } else if (typeof order.items === "string") {
+            itemsArray = JSON.parse(order.items);
+          } else {
+            itemsArray = [];
+          }
+        } catch (err) {
+          console.error("ITEM PARSE ERROR:", order.items);
+          itemsArray = [];
+        }
+
+        itemsArray.forEach((item: { id: string; name: any; price: number; quantity: number; }) => {
           const product = products.find((entry) => entry.id === item.id);
           const existing = productPerformance.get(item.id) ?? {
             id: item.id,
@@ -132,7 +199,22 @@ const orders = (ordersData || [])
 
       const categoryTotals = new Map<string, number>();
       orders.forEach((order) => {
-        order.items.forEach((item: { id: string; price: number; quantity: number; }) => {
+        let itemsArray: any[] = [];
+
+        try {
+          if (Array.isArray(order.items)) {
+            itemsArray = order.items;
+          } else if (typeof order.items === "string") {
+            itemsArray = JSON.parse(order.items);
+          } else {
+            itemsArray = [];
+          }
+        } catch (err) {
+          console.error("ITEM PARSE ERROR:", order.items);
+          itemsArray = [];
+        }
+
+        itemsArray.forEach((item: { id: string; price: number; quantity: number; }) => {
           const category = products.find((entry) => entry.id === item.id)?.category ?? "unknown";
           categoryTotals.set(
             category,
@@ -158,10 +240,11 @@ const orders = (ordersData || [])
         .sort((a, b) => b.value - a.value)
         .slice(0, 5);
 
-      setTotalRevenue(revenue);
+      setTotalRevenue(realizedRevenue);
+      setPendingRevenue(pendingRevenueCalc);
       setTotalOrders(orders.length);
       setTotalCustomers(customers);
-      setAvgOrderValue(orders.length ? Math.round(revenue / orders.length) : 0);
+      setAvgOrderValue(orders.length ? Math.round(realizedRevenue / orders.length) : 0);
       setSalesData(nextSalesData);
       setTopProducts(nextTopProducts);
       setCategoryData(nextCategoryData);
@@ -171,9 +254,26 @@ const orders = (ordersData || [])
     window.addEventListener("ordersUpdated", syncAnalytics);
     window.addEventListener("storage", syncAnalytics);
 
+    // 🔥 Realtime subscription to orders table
+    const channel = supabase
+      .channel('orders-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'orders'
+        },
+        () => {
+          syncAnalytics();
+        }
+      )
+      .subscribe();
+
     return () => {
       window.removeEventListener("ordersUpdated", syncAnalytics);
       window.removeEventListener("storage", syncAnalytics);
+      supabase.removeChannel(channel);
     };
   }, [adminSession?.branch, timeRange]);
 
@@ -194,7 +294,7 @@ const orders = (ordersData || [])
   }, []);
 
   const formatCurrency = (value: number) => {
-    return `NPR ${(value / 1000).toFixed(0)}K`;
+    return `NPR ${Number(value || 0).toLocaleString()}`;
   };
 
   const formatDate = (dateStr: string) => {
@@ -225,7 +325,7 @@ const orders = (ordersData || [])
         };
 // The component renders a sales analytics dashboard with a time range selector, KPI cards for total revenue, orders, customers, and average order value, as well as charts for revenue trends and category breakdowns. It also includes a table of top-performing products. The layout is responsive and uses Tailwind CSS for styling, along with Framer Motion for subtle animations.
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 px-2 md:px-4 text-black dark:text-white">
       {/* Time Range Selector */}
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold tracking-widest uppercase">Sales Analytics</h2>
@@ -234,10 +334,10 @@ const orders = (ordersData || [])
             <button
               key={range}
               onClick={() => setTimeRange(range)}
-              className={`px-4 py-2 text-sm tracking-wider uppercase border ${
+              className={`px-4 py-2 text-sm tracking-wider uppercase border rounded-md transition-all duration-200 ${
                 timeRange === range
-                  ? 'bg-black text-white border-black'
-                  : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
+                  ? 'bg-black text-white border-black dark:bg-white dark:text-black'
+                  : 'bg-white dark:bg-black text-gray-700 dark:text-white border-gray-300 dark:border-gray-700 hover:border-gray-400'
               } transition-colors`}
             >
               {range}
@@ -251,15 +351,32 @@ const orders = (ordersData || [])
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white p-6 rounded-lg shadow-sm"
+          whileHover={{ scale: 1.02 }}
+          className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6 rounded-xl shadow-md hover:shadow-lg transition-all duration-300"
         >
           <div className="flex items-center gap-4">
             <div className="p-3 bg-green-100 rounded-lg">
               <DollarSign size={24} className="text-green-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-600 tracking-wider uppercase">Total Revenue</p>
-              <p className="text-2xl font-bold tracking-wider">{formatCurrency(totalRevenue)}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 tracking-wider uppercase">Total Revenue</p>
+              <p className="text-2xl font-bold tracking-wider animate-pulse">{formatCurrency(totalRevenue)}</p>
+            </div>
+          </div>
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          whileHover={{ scale: 1.02 }}
+          className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6 rounded-xl shadow-md hover:shadow-lg transition-all duration-300"
+        >
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-yellow-100 rounded-lg">
+              <DollarSign size={24} className="text-yellow-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 dark:text-gray-400 tracking-wider uppercase">Pending Revenue</p>
+              <p className="text-2xl font-bold tracking-wider animate-pulse">{formatCurrency(pendingRevenue)}</p>
             </div>
           </div>
         </motion.div>
@@ -268,15 +385,16 @@ const orders = (ordersData || [])
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-white p-6 rounded-lg shadow-sm"
+          whileHover={{ scale: 1.02 }}
+          className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6 rounded-xl shadow-md hover:shadow-lg transition-all duration-300"
         >
           <div className="flex items-center gap-4">
             <div className="p-3 bg-blue-100 rounded-lg">
               <ShoppingCart size={24} className="text-blue-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-600 tracking-wider uppercase">Total Orders</p>
-              <p className="text-2xl font-bold tracking-wider">{totalOrders}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 tracking-wider uppercase">Total Orders</p>
+              <p className="text-2xl font-bold tracking-wider animate-pulse">{totalOrders}</p>
             </div>
           </div>
         </motion.div>
@@ -285,15 +403,16 @@ const orders = (ordersData || [])
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-white p-6 rounded-lg shadow-sm"
+          whileHover={{ scale: 1.02 }}
+          className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6 rounded-xl shadow-md hover:shadow-lg transition-all duration-300"
         >
           <div className="flex items-center gap-4">
             <div className="p-3 bg-purple-100 rounded-lg">
               <Users size={24} className="text-purple-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-600 tracking-wider uppercase">Total Customers</p>
-              <p className="text-2xl font-bold tracking-wider">{totalCustomers}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 tracking-wider uppercase">Total Customers</p>
+              <p className="text-2xl font-bold tracking-wider animate-pulse">{totalCustomers}</p>
             </div>
           </div>
         </motion.div>
@@ -302,15 +421,16 @@ const orders = (ordersData || [])
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="bg-white p-6 rounded-lg shadow-sm"
+          whileHover={{ scale: 1.02 }}
+          className="bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6 rounded-xl shadow-md hover:shadow-lg transition-all duration-300"
         >
           <div className="flex items-center gap-4">
             <div className="p-3 bg-orange-100 rounded-lg">
               <TrendingUp size={24} className="text-orange-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-600 tracking-wider uppercase">Avg Order Value</p>
-              <p className="text-2xl font-bold tracking-wider">NPR {avgOrderValue.toLocaleString()}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 tracking-wider uppercase">Avg Order Value</p>
+              <p className="text-2xl font-bold tracking-wider animate-pulse">NPR {avgOrderValue.toLocaleString()}</p>
             </div>
           </div>
         </motion.div>
@@ -323,9 +443,9 @@ const orders = (ordersData || [])
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="bg-white p-6 rounded-lg shadow-sm"
+          className="bg-white dark:bg-black backdrop-blur-lg p-6 rounded-xl shadow-md border border-gray-200 dark:border-gray-800"
         >
-          <h3 className="text-lg font-semibold mb-4 tracking-widest uppercase">Revenue Trend</h3>
+          <h3 className="text-lg font-semibold mb-4 tracking-widest uppercase flex items-center gap-2">Revenue Trend</h3>
           <ResponsiveContainer width="100%" height={300}>
             <AreaChart data={salesData}>
               <CartesianGrid stroke={chartColors.grid} strokeDasharray="3 3" />
@@ -369,9 +489,9 @@ const orders = (ordersData || [])
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
-          className="bg-white p-6 rounded-lg shadow-sm"
+          className="bg-white dark:bg-black backdrop-blur-lg p-6 rounded-xl shadow-md border border-gray-200 dark:border-gray-800"
         >
-          <h3 className="text-lg font-semibold mb-4 tracking-widest uppercase">Sales by Category</h3>
+          <h3 className="text-lg font-semibold mb-4 tracking-widest uppercase flex items-center gap-2">Sales by Category</h3>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
@@ -399,7 +519,7 @@ const orders = (ordersData || [])
           </ResponsiveContainer>
           <div className="flex justify-center gap-6 mt-4">
             {categoryData.map((category, index) => (
-              <div key={category.name} className="flex items-center gap-2">
+              <div key={`${category.name}-${index}`}>
                 <div
                   className="w-3 h-3 rounded-full"
                   style={{ backgroundColor: chartColors.pieColors[index] ?? category.color }}
@@ -416,9 +536,9 @@ const orders = (ordersData || [])
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.6 }}
-        className="bg-white p-6 rounded-lg shadow-sm"
+        className="bg-white dark:bg-black backdrop-blur-lg p-6 rounded-xl shadow-md border border-gray-200 dark:border-gray-800"
       >
-        <h3 className="text-lg font-semibold mb-4 tracking-widest uppercase">Daily Orders</h3>
+        <h3 className="text-lg font-semibold mb-4 tracking-widest uppercase flex items-center gap-2">Daily Orders</h3>
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={salesData}>
             <CartesianGrid stroke={chartColors.grid} strokeDasharray="3 3" />
@@ -455,46 +575,46 @@ const orders = (ordersData || [])
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.7 }}
-        className="bg-white rounded-lg shadow-sm overflow-hidden"
+        className="bg-white dark:bg-black rounded-xl shadow-md overflow-hidden border border-gray-200 dark:border-gray-800"
       >
         <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold tracking-widest uppercase">Top Performing Products</h3>
+          <h3 className="text-lg font-semibold tracking-widest uppercase flex items-center gap-2">Top Performing Products</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50">
+            <thead className="bg-gray-50 dark:bg-gray-900">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Product
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Category
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Units Sold
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Revenue
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {topProducts.map((product) => (
-                <tr key={product.id} className="hover:bg-gray-50">
+            <tbody className="bg-white dark:bg-black divide-y divide-gray-200 dark:divide-gray-800">
+              {topProducts.map((product, index) => (
+                  <tr key={`${product.id}-${index}`}>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900 tracking-wider">
+                    <div className="text-sm font-medium text-black dark:text-white tracking-wider">
                       {product.name}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm text-gray-900 capitalize tracking-wider">
+                    <span className="text-sm text-black dark:text-white capitalize tracking-wider">
                       {product.category}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 tracking-wider">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black dark:text-white tracking-wider">
                     {product.units}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 tracking-wider">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black dark:text-white tracking-wider">
                     {formatCurrency(product.revenue)}
                   </td>
                 </tr>

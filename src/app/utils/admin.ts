@@ -177,11 +177,40 @@ export async function appendAdminAuditLog(
       entity_type: entry.entityType,
       entity_name: entry.entityName,
       details: entry.details,
+      created_at: new Date().toISOString(),
     },
   ]);
 
   if (error) {
     console.error("Failed to save admin log:", error);
+  }
+}
+
+export async function logAdminAction(
+  admin: AdminSession | null,
+  action: string,
+  entityType: string,
+  entityName: string,
+  details?: string
+) {
+  if (!admin) return;
+
+  const { error } = await supabase.from("admin_logs").insert([
+    {
+      admin_id: admin.id,
+      admin_name: admin.name,
+      admin_email: admin.email,
+      branch: admin.branch,
+      action,
+      entity_type: entityType,
+      entity_name: entityName,
+      details: details || null,
+      created_at: new Date().toISOString(),
+    },
+  ]);
+
+  if (error) {
+    console.error("Admin log failed:", error);
   }
 }
 

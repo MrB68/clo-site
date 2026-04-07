@@ -47,7 +47,11 @@ function buildClientsFromOrders(orders: any[]) {
   const groupedOrders = new Map<string, StoredOrder[]>();
 
   orders.forEach((order) => {
-    const key = order.customerEmail.toLowerCase();
+const email = order.customerEmail;
+
+if (!email) return;
+
+const key = email.toLowerCase();
     const existingOrders = groupedOrders.get(key) ?? [];
     groupedOrders.set(key, [...existingOrders, order]);
   });
@@ -62,19 +66,50 @@ function buildClientsFromOrders(orders: any[]) {
     const orderCount = sortedOrders.length;
 
     return {
-      id: email,
-      name: latestOrder.customerName,
-      email: latestOrder.customerEmail,
-      phone: latestOrder.phone,
-      address: latestOrder.shippingAddress,
-      totalSpent,
-      orderCount,
-      firstPurchaseDate: firstOrder.date,
-      lastPurchaseDate: latestOrder.date,
-      status: getClientStatus(orderCount, totalSpent),
-      notes: buildClientNotes(sortedOrders),
-      avatar: getCustomerProfileByEmail(latestOrder.customerEmail)?.profileImage || "",
-    } satisfies Client;
+  id: email,
+
+  name:
+    latestOrder.customerName ||
+    (latestOrder.customerEmail
+      ? latestOrder.customerEmail.split("@")[0]
+      : "Unknown"),
+
+  email:
+    latestOrder.customerEmail ||
+    (latestOrder as any)?.customer_email ||
+    (latestOrder as any)?.customeremail ||
+    "",
+
+  phone:
+    latestOrder.phone ||
+    (latestOrder as any)?.phone_number ||
+    "",
+
+  address:
+    latestOrder.shippingAddress ||
+    (latestOrder as any)?.shipping_address ||
+    (latestOrder as any)?.address ||
+    "",
+
+  totalSpent,
+  orderCount,
+  firstPurchaseDate: firstOrder.date,
+  lastPurchaseDate: latestOrder.date,
+  status: getClientStatus(orderCount, totalSpent),
+  notes: buildClientNotes(sortedOrders),
+
+  avatar: (() => {
+    const emailForAvatar =
+      latestOrder.customerEmail ||
+      (latestOrder as any)?.customer_email ||
+      (latestOrder as any)?.customeremail ||
+      "";
+
+    return emailForAvatar
+      ? getCustomerProfileByEmail(emailForAvatar)?.profileImage || ""
+      : "";
+  })(),
+} satisfies Client;
   });
 }
 
@@ -112,7 +147,20 @@ export function ClientManagement() {
         ? (orders || []).filter((order: any) => order.branch === adminSession.branch)
         : (orders || []);
 
-    setClients(buildClientsFromOrders(visibleOrders));
+    const normalizedOrders = (visibleOrders || []).map((o: any) => ({
+  ...o,
+
+  customerName: o.customer_name || o.customerName || "",
+  customerEmail: o.customer_email || o.customeremail || o.customerEmail || "",
+  shippingAddress: o.shipping_address || o.shippingAddress || o.address || "",
+  phone: o.phone || o.phone_number || "",
+
+  date: o.created_at || o.date,
+  total: Number(o.total || 0),
+  items: Array.isArray(o.items) ? o.items : [],
+}));
+
+setClients(buildClientsFromOrders(normalizedOrders));
   };
 
   fetchClients();

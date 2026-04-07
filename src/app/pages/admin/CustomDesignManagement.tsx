@@ -57,6 +57,10 @@ export function CustomDesignManagement() {
         return "bg-purple-100 text-purple-700";
       case "completed":
         return "bg-green-100 text-green-700";
+      case "approved":
+        return "bg-green-100 text-green-700";
+      case "rejected":
+        return "bg-red-100 text-red-700";
     }
   };
 
@@ -170,6 +174,8 @@ export function CustomDesignManagement() {
                     <option value="reviewed">Reviewed</option>
                     <option value="contacted">Contacted</option>
                     <option value="completed">Completed</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
                   </select>
                   <button
                     type="button"
@@ -251,11 +257,180 @@ export function CustomDesignManagement() {
                 </p>
               </div>
 
+              <div className="space-y-4">
+                <h4 className="text-sm font-semibold uppercase tracking-wider">
+                  Admin Actions
+                </h4>
+
+                {selectedSubmission.status !== "approved" ? (
+                  <input
+                    type="number"
+                    placeholder="Enter price (NPR)"
+                    className="w-full border border-gray-300 px-4 py-2 text-sm focus:outline-none focus:border-black"
+                    onChange={(e) =>
+                      setSelectedSubmission({
+                        ...selectedSubmission,
+                        price: Number(e.target.value || 0),
+                      })
+                    }
+                  />
+                ) : (
+                  <div className="w-full border border-green-300 bg-green-50 px-4 py-2 text-sm text-green-700">
+                    This request is already approved.
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <button
+                    disabled={selectedSubmission.status === "approved"}
+                    onClick={async () => {
+                      if (selectedSubmission.status === "approved") return;
+                      if (!selectedSubmission.price || Number(selectedSubmission.price) <= 0) {
+                        alert("Please enter a valid price before approving.");
+                        return;
+                      }
+                      // 1. Update custom design with approved price
+                      const { error: updateError } = await supabase
+                        .from("custom_designs")
+                        .update({
+                          status: "approved",
+                          approved_price: Number(selectedSubmission.price)
+                        })
+                        .eq("id", selectedSubmission.id);
+
+                      if (updateError) {
+                        console.error("Update error:", updateError);
+                        return;
+                      }
+
+                      // 2. Check if order already exists (catch mismatched old orders)
+                      const { data: existingOrder } = await supabase
+                        .from("orders")
+                        .select("*")
+                        .or(`custom_design_id.eq.${selectedSubmission.id},id.eq.${selectedSubmission.id}`)
+                        .maybeSingle();
+
+                      // 🔥 remove any old mismatched duplicate orders
+                      await supabase
+                        .from("orders")
+                        .delete()
+                        .or(`custom_design_id.eq.${selectedSubmission.id},id.eq.${selectedSubmission.id}`)
+                        .neq("id", selectedSubmission.id);
+
+                      const { error: orderError } = await supabase
+                        .from("orders")
+                        .upsert(
+                          {
+                            // 🔥 SAME ID across system
+                            id: selectedSubmission.id,
+
+                            user_id: selectedSubmission.user_id || null,
+                            customeremail: (selectedSubmission.email || "").toLowerCase().trim(),
+
+                            // 🔥 store reference to design (important)
+                            custom_design_id: selectedSubmission.id,
+
+                            // 🔥 include design images directly for consistency
+                            design_images:
+                              selectedSubmission.image_urls ||
+                              (selectedSubmission.image_url ? [selectedSubmission.image_url] : []),
+
+                            items: [
+                              {
+                                name: selectedSubmission.product_type,
+                                quantity: selectedSubmission.quantity,
+                                type: "custom",
+                              },
+                            ],
+
+                            total: Number(selectedSubmission.price),
+                            approved_price: Number(selectedSubmission.price),
+
+                            // 🔥 unified lifecycle
+                            status: "pending",
+                            payment_status: "unpaid",
+                            payment_method: "esewa",
+
+                            is_custom: true,
+
+                            created_at: existingOrder?.created_at || new Date().toISOString(),
+                          },
+                          {
+                            onConflict: "id",
+                          }
+                        );
+
+                      if (orderError) {
+                        console.error("Order creation/update error:", orderError);
+                      }
+
+                      // 🔔 notify other tabs/pages (Orders) to refresh
+                      window.dispatchEvent(new Event("ordersUpdated"));
+                      window.dispatchEvent(new Event("customOrderApproved"));
+
+                      // 3. Update UI without reload
+                      setSelectedSubmission(null);
+
+                      // 🔥 force immediate UI sync
+                      setSubmissions((prev) =>
+                        prev.map((s) =>
+                          s.id === selectedSubmission.id
+                            ? { ...s, status: "approved", approved_price: selectedSubmission.price }
+                            : s
+                        )
+                      );
+                    }}
+                    className={`flex-1 py-2 uppercase text-sm tracking-wider transition ${
+                      selectedSubmission.status === "approved"
+                        ? "bg-gray-400 text-white cursor-not-allowed"
+                        : "bg-green-600 text-white hover:bg-green-700"
+                    }`}
+                  >
+                    {selectedSubmission.status === "approved" ? "Approved" : "Approve & Set Price"}
+                  </button>
+
+                  <button
+                    onClick={async () => {
+                      await supabase
+                        .from("custom_designs")
+                        .update({
+                          status: "rejected",
+                        })
+                        .eq("id", selectedSubmission.id);
+
+                      setSelectedSubmission(null);
+
+                      const { data } = await supabase
+                        .from("custom_designs")
+                        .select("*")
+                        .order("created_at", { ascending: false });
+
+                      setSubmissions(data || []);
+                    }}
+                    className="flex-1 bg-red-600 text-white py-2 uppercase text-sm tracking-wider hover:bg-red-700 transition"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </div>
+
               <div>
                 <h4 className="mb-3 text-sm font-semibold uppercase tracking-wider">
-                  Uploaded Design
+                  Uploaded Designs
                 </h4>
-                {selectedSubmission.image_url ? (
+
+                {selectedSubmission.image_urls && selectedSubmission.image_urls.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-4">
+                    {selectedSubmission.image_urls.map((url: string, index: number) => (
+                      <img
+                        key={index}
+                        src={url}
+                        alt="Design"
+                        className="h-48 w-full rounded border border-gray-200 object-cover hover:scale-105 transition"
+                      />
+                    ))}
+                  </div>
+                ) : selectedSubmission.image_url ? (
                   <img
                     src={selectedSubmission.image_url}
                     alt="Design"

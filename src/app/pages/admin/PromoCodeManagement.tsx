@@ -14,6 +14,7 @@ type DiscountOption = {
   expiryDate?: string;
   usageLimit?: number | null;
   usedCount?: number | null;
+  userUsageLimit?: number | null;
 };
 
 interface PromoCodeForm {
@@ -25,6 +26,7 @@ interface PromoCodeForm {
   showInCheckout: "yes" | "no";
   expiryDate: string;
   usageLimit: string;
+  userUsageLimit: string;
 }
 
 const initialForm: PromoCodeForm = {
@@ -36,6 +38,7 @@ const initialForm: PromoCodeForm = {
   showInCheckout: "yes",
   expiryDate: "",
   usageLimit: "",
+  userUsageLimit: "",
 };
 
 export function PromoCodeManagement() {
@@ -51,20 +54,47 @@ export function PromoCodeManagement() {
     const { data, error } = await supabase
       .from("promo_codes")
       .select("*")
-      .order("created_at", { ascending: false });
+      .order("code", { ascending: false });
+
+      // 🔥 REAL USAGE FROM ORDERS TABLE
+const { data: ordersData } = await supabase
+  .from("orders")
+  .select("promo_code, user_id");
+
+const usageMap: any = {};
+
+(ordersData || []).forEach((order: any) => {
+  if (!order.promo_code) return;
+
+  if (!usageMap[order.promo_code]) {
+    usageMap[order.promo_code] = {
+      total: 0,
+      users: {},
+    };
+  }
+
+  usageMap[order.promo_code].total++;
+
+  if (!usageMap[order.promo_code].users[order.user_id]) {
+    usageMap[order.promo_code].users[order.user_id] = 0;
+  }
+
+  usageMap[order.promo_code].users[order.user_id]++;
+});
 
     if (error) console.error(error);
 
     setPromoCodes((data || []).map((p: any) => ({
       code: p.code,
-      label: p.label,
-      description: p.description,
-      type: p.type,
+      label: p.label ?? p.code,
+      description: p.description || "",
+      type: p.type ?? "percent",
       value: p.value,
       showInCheckout: p.show_in_checkout,
       expiryDate: p.expiry_date,
       usageLimit: p.usage_limit,
-      usedCount: p.used_count,
+      usedCount: usageMap[p.code]?.total || 0,
+      userUsageLimit: p.user_usage_limit,
     })));
   };
 
@@ -83,7 +113,7 @@ export function PromoCodeManagement() {
     const description = form.description.trim();
     const parsedValue = Number(form.value);
 
-    if (!code || !label || !description) {
+    if (!code) {
       toast.error("Fill in all promo code fields");
       return;
     }
@@ -93,22 +123,25 @@ export function PromoCodeManagement() {
       return;
     }
 
-    const { error } = await supabase.from("promo_codes").insert([
-      {
-        code,
-        label,
-        description,
-        type: form.type,
-        value: form.type === "shipping" ? 0 : parsedValue,
-        show_in_checkout: form.showInCheckout === "yes",
-        expiry_date: form.expiryDate || null,
-        usage_limit: form.usageLimit ? Number(form.usageLimit) : null,
-        used_count: 0,
-      },
-    ]);
+    const payload = {
+      code,
+      value: form.type === "shipping" ? 0 : parsedValue,
+      show_in_checkout: form.showInCheckout === "yes",
+      expiry_date: form.expiryDate || null,
+      usage_limit: form.usageLimit ? Number(form.usageLimit) : null,
+      user_usage_limit: form.userUsageLimit ? Number(form.userUsageLimit) : null,
+      used_count: 0,
+    };
+
+    console.log("INSERT PAYLOAD:", payload);
+
+    const { error } = await supabase
+      .from("promo_codes")
+      .insert([payload]);
 
     if (error) {
-      toast.error("Failed to add promo code");
+      console.error("SUPABASE INSERT ERROR:", error);
+      toast.error(error.message || "Failed to add promo code");
       return;
     }
 
@@ -172,13 +205,13 @@ export function PromoCodeManagement() {
             Review available promo codes, add new ones, or remove old offers.
           </p>
         </div>
-        <button
+        {/*<button
           type="button"
           onClick={handleResetDefaults}
           className="border border-black px-4 py-2 text-sm font-medium uppercase tracking-wider transition hover:bg-black hover:text-white dark:border-white dark:hover:bg-white dark:hover:text-black"
         >
-          Restore Defaults
-        </button>
+          Restore Defaults.  //// rstore default features after testing, or just clear all codes to start fresh.
+        </button>*/}
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
@@ -255,11 +288,28 @@ export function PromoCodeManagement() {
                           {promoCode.showInCheckout ? "Visible In Checkout" : "Hidden Manual Only"}
                         </span>
                       </div>
-                      <p className="mt-1 text-sm font-medium text-gray-900">{promoCode.label}</p>
+                      <p className="mt-1 text-sm font-medium text-gray-900">{promoCode.code}</p>
                       <p className="text-sm text-gray-600">{promoCode.description}</p>
                       <p className="text-xs text-gray-500">
                         Used: {promoCode.usedCount || 0} / {promoCode.usageLimit || "∞"}
+                        {promoCode.userUsageLimit && (
+                          <span className="ml-2 text-xs text-gray-500">
+                            (Max {promoCode.userUsageLimit} per user)
+                          </span>
+                        )}
                       </p>
+                      <div className="w-full bg-gray-200 h-1 mt-1">
+                        <div
+                          className="bg-black h-1"
+                          style={{
+                            width: `${
+                              promoCode.usageLimit
+                                ? ((promoCode.usedCount ?? 0) / (promoCode.usageLimit ?? 1)) * 100
+                                : 0
+                            }%`,
+                          }}
+                        />
+                      </div>
                       {promoCode.expiryDate && (
                         <p className="text-xs text-gray-500">
                           Expires: {new Date(promoCode.expiryDate).toLocaleDateString()}
@@ -268,11 +318,7 @@ export function PromoCodeManagement() {
                   </div>
                   <div className="flex items-center gap-4">
                     <p className="text-sm font-medium text-gray-700">
-                      {promoCode.type === "percent"
-                        ? `${promoCode.value}% off`
-                        : promoCode.type === "flat"
-                          ? `Rs. ${promoCode.value} off`
-                          : "Free shipping"}
+                      {`Rs. ${promoCode.value} off`}
                     </p>
                     <button
                       type="button"
@@ -360,6 +406,14 @@ export function PromoCodeManagement() {
               value={form.usageLimit}
               onChange={handleChange}
               placeholder="Usage Limit"
+              className="w-full border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:border-black"
+            />
+            <input
+              type="number"
+              name="userUsageLimit"
+              value={form.userUsageLimit}
+              onChange={handleChange}
+              placeholder="Per-user usage limit (e.g. 1 or 5)"
               className="w-full border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:border-black"
             />
             <select

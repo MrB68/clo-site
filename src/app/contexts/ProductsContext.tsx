@@ -441,6 +441,7 @@ export const ProductsProvider: React.FC<{ children: ReactNode }> = ({ children }
           colors: p?.colors || [],
           description: p?.description || "",
           price: p?.price ?? 0,
+          originalPrice: p?.original_price ?? null,
           category: p?.category || "women",
           style: p?.style || "minimal",
           stock: p?.stock ?? 10,
@@ -452,15 +453,42 @@ export const ProductsProvider: React.FC<{ children: ReactNode }> = ({ children }
           careInstructions: p?.care_instructions ?? "",
           createdAt: p?.created_at ?? new Date().toISOString(),
           updatedAt: p?.updated_at ?? new Date().toISOString()
-         })));
+        })));
       }
     };
 
     fetchProducts();
   }, []);
 
-  const refreshProducts = () => {
-    setProducts(loadProducts());
+  const refreshProducts = async () => {
+    const { data, error } = await supabase.from('products').select('*');
+
+    if (error) {
+      console.error('Refresh error:', error);
+      return;
+    }
+
+    setProducts((data || []).map((p: any) => ({
+      ...p,
+      image: p?.image || p?.images?.[0] || "",
+      images: Array.isArray(p?.images) ? p.images : (p?.image ? [p.image] : []),
+      sizes: p?.sizes || [],
+      colors: p?.colors || [],
+      description: p?.description || "",
+      price: p?.price ?? 0,
+      originalPrice: p?.original_price ?? null,
+      category: p?.category || "women",
+      style: p?.style || "minimal",
+      stock: p?.stock ?? 10,
+      featured: p?.featured ?? false,
+      rating: p?.rating ?? 0,
+      reviews: p?.reviews ?? 0,
+      tags: p?.tags ?? [],
+      material: p?.material ?? "",
+      careInstructions: p?.care_instructions ?? "",
+      createdAt: p?.created_at ?? new Date().toISOString(),
+      updatedAt: p?.updated_at ?? new Date().toISOString()
+    })));
   };
 
   return (

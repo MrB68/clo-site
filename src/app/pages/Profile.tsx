@@ -11,8 +11,10 @@ import {
 } from "../utils/customerProfile";
 import { nepalLocations } from "../utils/nepalLocations";
 
+import { supabase } from "../../lib/supabase"
 export function Profile() {
   const { user, signOut } = useAuth();
+  const supabaseUser = user as any;
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [savedDetails, setSavedDetails] = useState<CustomerProfileDetails>({
     firstName: "",
@@ -30,30 +32,29 @@ export function Profile() {
     profileImage: "",
   });
 
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center px-4">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white text-black p-8 rounded-lg shadow-lg max-w-md w-full text-center"
-        >
-          <h1 className="text-2xl font-bold mb-4 tracking-widest uppercase">
-            Access Denied
-          </h1>
-          <p className="text-gray-600 mb-6 tracking-wider">
-            Please sign in to view your profile.
-          </p>
-          <Link
-            to="/signin"
-            className="inline-block bg-black text-white px-6 py-3 hover:bg-gray-800 transition-colors tracking-widest uppercase text-sm"
-          >
-            Sign In
-          </Link>
-        </motion.div>
-      </div>
-    );
-  }
+  const [stats, setStats] = useState({
+    orders: 0,
+    wishlist: 0,
+    reviews: 0,
+  });
+  const [authUser, setAuthUser] = useState<any>(null);
+useEffect(() => {
+  const fetchAuthUser = async () => {
+    const { data } = await supabase.auth.getUser();
+    setAuthUser(data.user);
+
+    // 🔥 sync avatar into state
+    if (data.user?.user_metadata?.avatar_url) {
+      setSavedDetails((prev) => ({
+        ...prev,
+        profileImage: data.user.user_metadata.avatar_url,
+      }));
+    }
+  };
+
+  fetchAuthUser();
+}, []);
+
 
   const handleSignOut = () => {
     setIsSigningOut(true);
@@ -63,14 +64,14 @@ export function Profile() {
   };
 
   const derivedName = useMemo(() => {
-    const fullName = (user.name || "").trim();
+    if (!supabaseUser) return { firstName: "", lastName: "" };
+    const fullName = (supabaseUser?.user_metadata?.full_name || "").trim();
     const parts = fullName.split(/\s+/);
-
     return {
       firstName: parts[0] ?? "",
       lastName: parts.slice(1).join(" "),
     };
-  }, [user.name]);
+  }, [supabaseUser?.user_metadata?.full_name]);
 
   const provinceOptions = Object.keys(nepalLocations);
   const districtOptions = savedDetails.province
@@ -81,20 +82,57 @@ export function Profile() {
     : [];
 
   useEffect(() => {
+    if (!user?.id) return;
     const storedProfile = getCustomerProfile(user.id);
 
     if (storedProfile) {
-      setSavedDetails(storedProfile);
+      setSavedDetails({
+        ...storedProfile,
+        profileImage:
+          storedProfile.profileImage ||
+          supabaseUser?.user_metadata?.avatar_url ||
+          "",
+      });
       return;
     }
 
+    const fullName =
+      supabaseUser?.user_metadata?.full_name ||
+      `${derivedName.firstName} ${derivedName.lastName}`.trim();
+
+    const parts = fullName.split(" ");
+
     setSavedDetails((current) => ({
       ...current,
-      firstName: derivedName.firstName,
-      lastName: derivedName.lastName,
-      email: user.email,
+      firstName: parts[0] || "",
+      lastName: parts.slice(1).join(" "),
+      email: user?.email || "",
+      profileImage: supabaseUser?.user_metadata?.avatar_url || "",
     }));
-  }, [derivedName.firstName, derivedName.lastName, user.email, user.id]);
+  }, [derivedName.firstName, derivedName.lastName, user?.email, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const fetchStats = async () => {
+      try {
+        const { count } = await supabase
+          .from("orders")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", user.id);
+
+        setStats({
+          orders: count || 0,
+          wishlist: 0,
+          reviews: 0,
+        });
+      } catch (err) {
+        console.error("Stats fetch error:", err);
+      }
+    };
+
+    fetchStats();
+  }, [user?.id]);
 
   const handleDetailsChange = (
     event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -115,7 +153,7 @@ export function Profile() {
     });
   };
 
-  const handleProfileImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleProfileImageChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) {
       return;
@@ -126,26 +164,106 @@ export function Profile() {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      setSavedDetails((current) => ({
-        ...current,
-        profileImage: typeof reader.result === "string" ? reader.result : "",
-      }));
-      toast.success("Profile picture added");
-    };
-    reader.onerror = () => {
-      toast.error("Unable to read the selected image");
-    };
-    reader.readAsDataURL(file);
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${user?.id}-${Date.now()}.${fileExt}`;
+    const filePath = `avatars/${fileName}`;
+
+    // 🔥 upload to Supabase Storage
+    const { error: uploadError } = await supabase.storage
+      .from("avatars")
+      .upload(filePath, file, {
+        cacheControl: "3600",
+        upsert: true,
+      });
+
+    if (uploadError) {
+      console.error(uploadError);
+      toast.error("Upload failed");
+      return;
+    }
+
+    // 🔥 get public URL
+    const { data } = supabase.storage
+      .from("avatars")
+      .getPublicUrl(filePath);
+
+    const publicUrl = data.publicUrl;
+
+    // update state
+    setSavedDetails((current) => ({
+      ...current,
+      profileImage: publicUrl,
+    }));
+
+    // save in Supabase user metadata
+    await supabase.auth.updateUser({
+      data: { avatar_url: publicUrl },
+    });
+
+    toast.success("Profile picture updated");
   };
 
-  const handleSaveDetails = () => {
+  // 🔥 Add delete profile image handler
+  const handleDeleteProfileImage = async () => {
+    if (!user?.id) return;
+
+    try {
+      // extract file path from URL
+      const url = savedDetails.profileImage;
+      if (!url) return;
+
+      const path = url.split("/avatars/")[1];
+
+      if (path) {
+        await supabase.storage.from("avatars").remove([`avatars/${path}`]);
+      }
+
+      // remove from metadata
+      await supabase.auth.updateUser({
+        data: { avatar_url: null },
+      });
+
+      // update UI
+      setSavedDetails((prev) => ({
+        ...prev,
+        profileImage: "",
+      }));
+
+      toast.success("Profile picture removed");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to remove image");
+    }
+  };
+
+  const handleSaveDetails = async () => {
+    if (!user?.id) {
+      toast.error("Please sign in again");
+      return;
+    }
+
+    const fullName = `${savedDetails.firstName} ${savedDetails.lastName}`.trim();
+
     saveCustomerProfile(user.id, {
       ...savedDetails,
-      email: savedDetails.email.trim() || user.email,
+      email: savedDetails.email.trim() || user?.email || "",
     });
-    toast.success("Profile details saved for checkout");
+
+    // 🔥 persist to Supabase
+    const { error } = await supabase.auth.updateUser({
+      data: {
+        full_name: fullName,
+        avatar_url: savedDetails.profileImage,
+      },
+    });
+
+    if (error) {
+      console.error("Metadata update error:", error);
+      toast.error("Failed to update profile");
+      return;
+    }
+
+    toast.success("Profile updated successfully");
   };
 
   const formatDate = (dateString: string) => {
@@ -155,6 +273,27 @@ export function Profile() {
       day: 'numeric'
     });
   };
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center px-4">
+        <div className="bg-white text-black p-8 rounded-lg shadow-lg max-w-md w-full text-center">
+          <h1 className="text-2xl font-bold mb-4 tracking-widest uppercase">
+            Access Denied
+          </h1>
+          <p className="text-gray-600 mb-6 tracking-wider">
+            Please sign in to view your profile.
+          </p>
+          <Link
+            to="/signin"
+            className="inline-block bg-black text-white px-6 py-3 hover:bg-gray-800 transition-colors tracking-widest uppercase text-sm"
+          >
+            Sign In
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -196,10 +335,10 @@ export function Profile() {
                 <div className="flex items-center gap-4">
                   <div className="relative">
                     <div className="w-16 h-16 overflow-hidden rounded-full bg-black flex items-center justify-center">
-                      {savedDetails.profileImage ? (
+                      {savedDetails.profileImage || supabaseUser?.user_metadata?.avatar_url ? (
                         <img
-                          src={savedDetails.profileImage}
-                          alt={user.name || "User"}
+                          src={savedDetails.profileImage || supabaseUser?.user_metadata?.avatar_url}
+                          alt={supabaseUser?.user_metadata?.full_name || `${savedDetails.firstName} ${savedDetails.lastName}`.trim() || "User"}
                           className="h-full w-full object-cover"
                         />
                       ) : (
@@ -215,11 +354,22 @@ export function Profile() {
                         className="hidden"
                       />
                     </label>
+                    {(savedDetails.profileImage || supabaseUser?.user_metadata?.avatar_url) && (
+                      <button
+                        onClick={handleDeleteProfileImage}
+                        className="absolute -top-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-red-500 text-white text-xs shadow hover:bg-red-600"
+                        title="Remove"
+                      >
+                        ×
+                      </button>
+                    )}
                   </div>
                   <div>
-                    <h3 className="font-medium tracking-wider">{user.name || "User"}</h3>
+                    <h3 className="font-medium tracking-wider">
+                      {supabaseUser?.user_metadata?.full_name || `${savedDetails.firstName} ${savedDetails.lastName}`.trim() || "User"}
+                    </h3>
                     <p className="text-sm text-gray-500 tracking-wider uppercase">
-                      Member since N/A
+                      Member since {authUser?.created_at ? formatDate(authUser.created_at) : "N/A"}
                     </p>
                   </div>
                 </div>
@@ -234,7 +384,7 @@ export function Profile() {
                     </label>
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded">
                       <User size={16} className="text-gray-400" />
-                      <span className="tracking-wider">{user.name || "User"}</span>
+                      <span className="tracking-wider">{supabaseUser?.user_metadata?.full_name || `${savedDetails.firstName} ${savedDetails.lastName}`.trim() || "User"}</span>
                     </div>
                   </div>
 
@@ -244,7 +394,7 @@ export function Profile() {
                     </label>
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded">
                       <Mail size={16} className="text-gray-400" />
-                      <span className="tracking-wider">{user.email}</span>
+                      <span className="tracking-wider">{user?.email || ""}</span>
                     </div>
                   </div>
 
@@ -254,7 +404,9 @@ export function Profile() {
                     </label>
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded">
                       <Calendar size={16} className="text-gray-400" />
-                      <span className="tracking-wider">N/A</span>
+                      <span className="tracking-wider">
+                        {authUser?.created_at ? formatDate(authUser.created_at) : "N/A"}
+                      </span>
                     </div>
                   </div>
 
@@ -503,19 +655,19 @@ export function Profile() {
                   <span className="text-sm text-gray-600 tracking-wider uppercase">
                     Total Orders
                   </span>
-                  <span className="font-medium tracking-wider">0</span>
+                  <span className="font-medium tracking-wider">{stats.orders}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600 tracking-wider uppercase">
                     Wishlist Items
                   </span>
-                  <span className="font-medium tracking-wider">0</span>
+                  <span className="font-medium tracking-wider">{stats.wishlist}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600 tracking-wider uppercase">
                     Reviews Written
                   </span>
-                  <span className="font-medium tracking-wider">0</span>
+                  <span className="font-medium tracking-wider">{stats.reviews}</span>
                 </div>
               </div>
             </div>

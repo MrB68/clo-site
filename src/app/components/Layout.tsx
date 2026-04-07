@@ -3,7 +3,6 @@ import { ShoppingCart, User, Menu, X, Search, LogOut, Moon, Sun } from "lucide-r
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useAuth } from "../contexts/AuthContext";
-import { useTheme } from "next-themes";
 
 export function Layout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -18,7 +17,6 @@ export function Layout() {
   const isHomePage = location.pathname === "/";
 
   const { user, signOut, isAuthenticated } = useAuth();
-  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -74,9 +72,6 @@ export function Layout() {
     setMounted(true);
   }, []);
 
-  const toggleTheme = () => {
-    setTheme(theme === "dark" ? "light" : "dark");
-  };
 
   const handleSearchSubmit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -87,70 +82,80 @@ export function Layout() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground transition-colors">
+    <div className="min-h-screen bg-black text-white">
       {/* Navbar */}
       <motion.nav
         initial={{ y: -100 }}
         animate={{ y: 0 }}
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled || !isHomePage
-            ? "bg-background shadow-sm"
-            : "bg-transparent text-white"
-          }`}
+        className="fixed top-0 left-0 right-0 z-50 transition-all duration-300 bg-black text-white"
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-20">
+          <div className="relative flex items-center justify-between h-20">
             {/* Logo */}
-            <Link to="/" className="text-2xl tracking-[0.3em] uppercase">
+            <Link to="/" className="text-2xl tracking-[0.3em] uppercase hover:opacity-70 transition-opacity">
               clo
             </Link>
 
             {/* Desktop Navigation */}
-            <div className="hidden md:flex items-center gap-8">
+            <div className="hidden md:flex items-center gap-8 absolute left-1/2 transform -translate-x-1/2">
               <Link
                 to="/shop"
-                className={`hover:opacity-70 transition-opacity tracking-widest uppercase text-sm ${scrolled || !isHomePage ? "text-black" : "text-white"
-                  }`}
+                className="relative group tracking-widest uppercase text-sm text-white"
               >
                 Shop
+                <span className="absolute left-0 -bottom-1 w-0 h-[1px] bg-current transition-all duration-300 group-hover:w-full"></span>
+
               </Link>
-              <Link
-                to="/custom"
-                className={`hover:opacity-70 transition-opacity tracking-widest uppercase text-sm ${scrolled || !isHomePage ? "text-black" : "text-white"
-                  }`}
-              >
-                Custom
-              </Link>
+            
               <Link
                 to="/about"
-                className={`hover:opacity-70 transition-opacity tracking-widest uppercase text-sm ${scrolled || !isHomePage ? "text-black" : "text-white"
-                  }`}
+                className="relative group tracking-widest uppercase text-sm text-white"
               >
                 About
+                <span className="absolute left-0 -bottom-1 w-0 h-[1px] bg-current transition-all duration-300 group-hover:w-full"></span>
+              </Link>
+              <Link
+                to="/collections"
+                className="relative group tracking-widest uppercase text-sm text-white"
+              >
+                Collections
+                <span className="absolute left-0 -bottom-1 w-0 h-[1px] bg-current transition-all duration-300 group-hover:w-full"></span>
+              </Link>
+              <Link
+                to="/sale"
+                className="relative group tracking-widest uppercase text-sm text-white"
+              >
+                Sale
+                <span className="absolute left-0 -bottom-1 w-0 h-[1px] bg-current transition-all duration-300 group-hover:w-full"></span>
               </Link>
             </div>
-
+            
+            {/* add this line to link to custom design page */}
+            {
+              /*  {<Link
+                to="/custom"
+                className={`relative group tracking-widest uppercase text-sm ${scrolled || !isHomePage ? "text-black" : "text-white"}`}
+              >
+                Custom 
+                <span className="absolute left-0 -bottom-1 w-0 h-[1px] bg-current transition-all duration-300 group-hover:w-full"></span>
+              </Link>}
+            }
+            */}
+            
+            
+            
             {/* Desktop Icons */}
             <div className="hidden md:flex items-center gap-6">
               <button
-                onClick={toggleTheme}
-                className={`hover:opacity-70 transition-opacity ${scrolled || !isHomePage ? "text-black dark:text-white" : "text-white"
-                  }`}
-                aria-label="Toggle theme"
-              >
-                {mounted && theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
-              </button>
-              <button
                 onClick={() => setSearchOpen(!searchOpen)}
-                className={`hover:opacity-70 transition-opacity ${scrolled || !isHomePage ? "text-black" : "text-white"
-                  }`}
+                className="hover:opacity-70 transition-opacity text-white"
               >
                 <Search size={20} />
               </button>
               <div className="relative">
                 <button
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
-                  className={`hover:opacity-70 transition-opacity ${scrolled || !isHomePage ? "text-black" : "text-white"
-                    }`}
+                  className="hover:opacity-70 transition-opacity text-white"
                 >
                   <User size={20} />
                 </button>
@@ -220,8 +225,7 @@ export function Layout() {
               </div>
               <Link
                 to="/cart"
-                className={`hover:opacity-70 transition-opacity relative ${scrolled || !isHomePage ? "text-black" : "text-white"
-                  }`}
+                className="hover:opacity-70 transition-opacity relative text-white"
               >
                 <ShoppingCart size={20} />
                 {cartCount > 0 && (
@@ -235,8 +239,7 @@ export function Layout() {
             {/* Mobile Menu Button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className={`md:hidden ${scrolled || !isHomePage ? "text-black" : "text-white"
-                }`}
+              className="md:hidden text-white"
             >
               {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
@@ -264,12 +267,12 @@ export function Layout() {
                     autoFocus
                     value={searchTerm}
                     onChange={(event) => setSearchTerm(event.target.value)}
-                    className="flex-1 bg-transparent border-b-2 border-gray-300 px-4 py-3 focus:outline-none focus:border-black transition-colors uppercase tracking-widest text-sm placeholder:text-gray-400"
+                    className="flex-1 bg-transparent border-b-2 border-gray-300 px-4 py-3 focus:outline-none focus:border-white transition-colors uppercase tracking-widest text-sm placeholder:text-gray-400"
                   />
                   <div className="flex items-center gap-3 self-end sm:self-auto">
                     <button
                       type="submit"
-                      className="bg-black px-4 py-2 text-xs uppercase tracking-[0.2em] text-white transition-colors hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
+                    className="bg-white text-black hover:bg-gray-200 px-4 py-2 text-xs uppercase tracking-[0.2em] transition-colors"
                     >
                       Search
                     </button>
@@ -315,13 +318,18 @@ export function Layout() {
                 >
                   About
                 </Link>
-                <button
-                  onClick={toggleTheme}
-                  className="flex items-center gap-3 text-black dark:text-white text-sm tracking-widest uppercase"
+                <Link
+                  to="/collections"
+                  className="block text-black hover:opacity-70 transition-opacity tracking-widest uppercase text-sm"
                 >
-                  {mounted && theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
-                  {mounted && theme === "dark" ? "Light Mode" : "Dark Mode"}
-                </button>
+                  Collections
+                </Link>
+                <Link
+                  to="/sale"
+                  className="block text-black hover:opacity-70 transition-opacity tracking-widest uppercase text-sm"
+                >
+                  Sale
+                </Link>
                 <div className="pt-4 border-t space-y-4">
                   <button
                     onClick={() => {
@@ -469,7 +477,8 @@ export function Layout() {
                 <li><Link to="/shop" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">All Products</Link></li>
                 <li><Link to="/custom" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">Custom Prints</Link></li>
                 <li><Link to="/shop?filter=new" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">New Arrivals</Link></li>
-                <li><Link to="/shop" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">Collections</Link></li>
+                <li><Link to="/collections" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">Collections</Link></li>
+                <li><Link to="/sale" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">Sale</Link></li>
               </ul>
             </div>
 
@@ -477,7 +486,14 @@ export function Layout() {
             <div className="space-y-4">
               <h4 className="font-medium tracking-widest uppercase text-sm">Help</h4>
               <ul className="space-y-3 text-sm text-gray-400">
-                <li><a href="#" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">Customer Service</a></li>
+                <li>
+                  <Link
+                    to="/customer-service"
+                    className="inline-flex leading-6 hover:text-white transition-colors tracking-wider"
+                  >
+                    Customer Service
+                  </Link>
+                </li>
                 <li><Link to="/shipping" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">Shipping & Returns</Link></li>
                 <li><Link to="/size-guide" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">Size Guide</Link></li>
                 <li><Link to="/contact" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">Contact Us</Link></li>
@@ -527,24 +543,25 @@ export function Layout() {
                   </div>
 
                 {/* Khalti */}
+                {/* 
                 <div className="group flex items-center gap-2 bg-white/5 px-3 py-2 rounded-lg">
-                  {/* PLACE YOUR KHALTI ICON HERE */}
                   <img
                     src="/icons/KHALTI.png"
                     alt="Khalti"
                     className="w-18 h-9 text-white group-hover:text-green-400" />
-                
                 </div>
+                */}
 
                 {/* Nepal Pay */}
+                {/*
                 <div className="group flex items-center gap-2 bg-white/5 px-3 py-2 rounded-lg">
                   <img
                     src="/icons/NCH.png"
                     alt="Nepal Pay"
                     className="w-18 h-9 object-contain"
                   />
-                
                 </div>
+                */}
               </div>
 
               {/* Copyright & Legal */}

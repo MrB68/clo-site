@@ -9,9 +9,9 @@ export function About() {
       <section className="relative h-[60vh] min-h-100">
         <div className="absolute inset-0">
           <img
-            src="https://images.unsplash.com/photo-1771775735322-2abfea815153?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxmYXNoaW9uJTIwYnJhbmQlMjBsaWZlc3R5bGUlMjBzdG9yZXxlbnwxfHx8fDE3NzUwNDY2NjB8MA&ixlib=rb-4.1.0&q=80&w=1080"
+            src="/about.png"
             alt="About Hero"
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover object-[center_top]"
           />
           <div className="absolute inset-0 bg-black/40" />
         </div>
@@ -42,15 +42,10 @@ export function About() {
           >
             <h2 className="text-3xl md:text-4xl tracking-wider">OUR MISSION</h2>
             <p className="text-lg text-gray-600 leading-relaxed">
-              At ÉLÉGANCE, we believe fashion should be effortless, timeless,
-              and sustainable. We create pieces that transcend trends, designed
-              for those who value quality over quantity and style over hype.
+              At CLO, we build a modern fashion label rooted in precision, minimalism, and longevity. Our goal is to create elevated essentials that feel premium, look timeless, and perform across everyday life.
             </p>
             <p className="text-lg text-gray-600 leading-relaxed">
-              Every garment is thoughtfully crafted with attention to detail,
-              using premium materials and ethical manufacturing practices. Our
-              commitment is to provide you with clothing that looks good, feels
-              good, and does good.
+              Every piece is designed with intent—clean silhouettes, strong materials, and consistent quality. We prioritize durability, fit, and versatility so each item earns its place in your wardrobe.
             </p>
           </motion.div>
         </div>
@@ -138,7 +133,7 @@ export function About() {
               className="relative aspect-4/5"
             >
               <img
-                src="https://images.unsplash.com/photo-1770644935626-f61d233f4827?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx3b21hbiUyMGJlaWdlJTIwY29hdCUyMGZhc2hpb258ZW58MXx8fHwxNzc1MDQ2NjU5fDA&ixlib=rb-4.1.0&q=80&w=1080"
+                src="/about1.png"
                 alt="Lifestyle 1"
                 className="w-full h-full object-cover"
               />
@@ -150,7 +145,7 @@ export function About() {
               className="relative aspect-4/5"
             >
               <img
-                src="https://images.unsplash.com/photo-1765815442424-5acf90d01e41?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxmYXNoaW9uJTIwcnVud2F5JTIwbW9kZWwlMjBlZGl0b3JpYWx8ZW58MXx8fHwxNzc1MDQ2NjU5fDA&ixlib=rb-4.1.0&q=80&w=1080"
+                src="/about2.png"
                 alt="Lifestyle 2"
                 className="w-full h-full object-cover"
               />
@@ -173,41 +168,42 @@ export function About() {
             </h2>
 
             <div className="space-y-8">
-              <div className="border-l-2 border-white/20 pl-8 py-4">
-                <span className="text-sm text-gray-400">2020</span>
-                <h3 className="text-xl mt-2 mb-3">The Beginning</h3>
-                <p className="text-gray-400">
-                  ÉLÉGANCE was founded with a simple vision: to create fashion
-                  that respects both people and the planet, without compromising
-                  on style or quality.
-                </p>
-              </div>
-
-              <div className="border-l-2 border-white/20 pl-8 py-4">
-                <span className="text-sm text-gray-400">2022</span>
-                <h3 className="text-xl mt-2 mb-3">Global Expansion</h3>
-                <p className="text-gray-400">
-                  We expanded to serve customers worldwide, maintaining our
-                  commitment to quality and sustainability at every step.
-                </p>
-              </div>
-
-              <div className="border-l-2 border-white/20 pl-8 py-4">
-                <span className="text-sm text-gray-400">2024</span>
-                <h3 className="text-xl mt-2 mb-3">Innovation in Fashion</h3>
-                <p className="text-gray-400">
-                  Launched our most sustainable collection yet, using
-                  cutting-edge eco-friendly materials and zero-waste production
-                  methods.
-                </p>
-              </div>
-
+              {/* 2026 - Founding */}
               <div className="border-l-2 border-white pl-8 py-4">
                 <span className="text-sm text-gray-400">2026</span>
-                <h3 className="text-xl mt-2 mb-3">Looking Forward</h3>
+                <h3 className="text-xl mt-2 mb-3">The Beginning</h3>
                 <p className="text-gray-400">
-                  Continuing to push boundaries and redefine what luxury fashion
-                  means for the modern world.
+                  CLO was founded with a clear focus: build a premium, modern clothing brand that balances simplicity, quality, and strong identity.
+                </p>
+              </div>
+
+              {/* Future Slot 1 */}
+              <div className="border-l-2 border-white/20 pl-8 py-4">
+                <span className="text-sm text-gray-400">Coming Soon</span>
+                <h3 className="text-xl mt-2 mb-3">Next Milestone</h3>
+                <p className="text-gray-400">
+                  {/* Add next major achievement here */}
+                  Expansion, collaborations, or new collections will be documented here.
+                </p>
+              </div>
+
+              {/* Future Slot 2 */}
+              <div className="border-l-2 border-white/20 pl-8 py-4">
+                <span className="text-sm text-gray-400">Coming Soon</span>
+                <h3 className="text-xl mt-2 mb-3">Growth Phase</h3>
+                <p className="text-gray-400">
+                  {/* Add scaling phase details */}
+                  Retail presence, global reach, or product expansion.
+                </p>
+              </div>
+
+              {/* Future Slot 3 */}
+              <div className="border-l-2 border-white/20 pl-8 py-4">
+                <span className="text-sm text-gray-400">Coming Soon</span>
+                <h3 className="text-xl mt-2 mb-3">Long-Term Vision</h3>
+                <p className="text-gray-400">
+                  {/* Add long-term brand vision */}
+                  Sustainability milestones, innovation, and category leadership.
                 </p>
               </div>
             </div>
@@ -233,10 +229,10 @@ export function About() {
               will become wardrobe staples for years to come.
             </p>
             <Link
-              to="/shop"
+              to="/collections"
               className="inline-flex items-center gap-2 bg-black text-white px-8 py-4 hover:bg-gray-800 transition-colors"
             >
-              Explore Collection
+              Explore Collections
               <ArrowRight size={18} />
             </Link>
           </motion.div>

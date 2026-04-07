@@ -5,6 +5,7 @@ export interface User {
   id: string;
   email: string;
   name?: string;
+  created_at?: string;
 }
 
 interface AuthContextType {
@@ -30,51 +31,67 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const getSession = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      try {
+        setIsLoading(true);
 
-      if (user) {
-        setUser({
-          id: user.id,
-          email: user.email || '',
-        });
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (session?.user) {
+          setUser({
+            id: session.user.id,
+            email: session.user.email || '',
+            name: session.user.user_metadata?.name || '',
+            created_at: session.user.created_at,
+          });
+        } else {
+          setUser(null);
+        }
+      } catch (err) {
+        console.error('Auth error:', err);
+        setUser(null);
+      } finally {
+        setIsLoading(false);
       }
-
-      setIsLoading(false);
     };
 
     getSession();
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" && session?.user) {
+      if (event === 'SIGNED_IN' && session?.user) {
         const currentUser = {
           id: session.user.id,
           email: session.user.email || '',
+          name: session.user.user_metadata?.name || '',
+          created_at: session.user.created_at,
         };
 
         setUser(currentUser);
 
-        // 🔥 Log admin login (only once on sign-in)
-        (async () => {
-          const { error } = await supabase.from("admin_logs").insert([
-            {
-              admin_id: currentUser.id,
-              admin_name: currentUser.email || "Admin",
-              admin_email: currentUser.email,
-              branch: "Admin Panel",
-              action: "login",
-              entity_type: "auth",
-              entity_name: "admin login",
-              details: "Admin logged into dashboard",
-              created_at: new Date().toISOString(),
-            },
-          ]);
-          if (error) {
-            console.error("Failed to log admin login:", error);
-          }
-        })();
-      } else if (event === "SIGNED_OUT") {
+        // Optional: Only log admin if matches your admin email
+        const isAdmin = currentUser.email === 'youradmin@email.com';
+        if (isAdmin) {
+          (async () => {
+            const { error } = await supabase.from('admin_logs').insert([
+              {
+                admin_id: currentUser.id,
+                admin_name: currentUser.email,
+                admin_email: currentUser.email,
+                branch: 'Admin Panel',
+                action: 'login',
+                entity_type: 'auth',
+                entity_name: 'admin login',
+                details: 'Admin logged into dashboard',
+                created_at: new Date().toISOString(),
+              },
+            ]);
+            if (error) {
+              console.error('Failed to log admin login:', error);
+            }
+          })();
+        }
+      } else if (event === 'SIGNED_OUT') {
         setUser(null);
       }
     });

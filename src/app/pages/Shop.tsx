@@ -5,6 +5,7 @@ import { SlidersHorizontal, X } from "lucide-react";
 import { useProducts } from "../contexts/ProductsContext";
 import { ProductCard } from "../components/ProductCard";
 import { StyleToggle } from "../components/StyleToggle";
+import { supabase } from "@/lib/supabase";
 
 export function Shop() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -12,11 +13,26 @@ export function Shop() {
   const [selectedStyle, setSelectedStyle] = useState<"minimal" | "extravagant">("minimal");
   const [selectedSize, setSelectedSize] = useState<string>("All");
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 0]);
-  const [sortBy, setSortBy] = useState<string>("featured");
+  const [sortBy, setSortBy] = useState<string>("all");
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const { products } = useProducts();
-  const prices = products.map((p) => p.price);
+ const [categories, setCategories] = useState<string[]>([]);
+
+useEffect(() => {
+  const fetchCollections = async () => {
+    const { data, error } = await supabase
+      .from("collections")
+      .select("slug");
+
+    if (!error && data) {
+      setCategories(data.map((c: any) => c.slug));
+    }
+  };
+
+  fetchCollections();
+}, []);
+  const prices = products.map((p) => Number(p.price) || 0);
   const minPrice = prices.length ? Math.min(...prices) : 0;
   const maxPrice = prices.length ? Math.max(...prices) : 100;
 
@@ -29,6 +45,38 @@ export function Shop() {
 
   // Filter products
   let filteredProducts = [...products];
+
+  // --- Dynamic filter from URL ---
+  const urlFilter = searchParams.get("filter");
+
+  // Normalize originalPrice FIRST
+  filteredProducts = filteredProducts.map((p: any) => ({
+    ...p,
+    originalPrice: p.originalPrice ?? p.original_price ?? null,
+  }));
+
+  // Apply URL-based filters (premium sections)
+  if (urlFilter === "sale") {
+    filteredProducts = filteredProducts.filter(
+      (p: any) => p.originalPrice && p.originalPrice > p.price
+    );
+  }
+
+  if (urlFilter === "new") {
+    filteredProducts.sort((a: any, b: any) => {
+      const dateA = new Date(a.created_at || a.createdAt || 0).getTime();
+      const dateB = new Date(b.created_at || b.createdAt || 0).getTime();
+      return dateB - dateA;
+    });
+  }
+
+  if (urlFilter === "popular") {
+    filteredProducts.sort((a: any, b: any) => {
+      const scoreA = a.orders_count || 0;
+      const scoreB = b.orders_count || 0;
+      return scoreB - scoreA;
+    });
+  }
 
   // Filter by style
   filteredProducts = filteredProducts.filter((p) => p.style === selectedStyle);
@@ -50,17 +98,20 @@ export function Shop() {
 
   if (selectedSize !== "All") {
     filteredProducts = filteredProducts.filter((p) =>
-      p.sizes.includes(selectedSize)
+      Array.isArray(p.sizes) && p.sizes.includes(selectedSize)
     );
   }
 
   // Slider price filter
-  if (priceRange[0] !== 0 || priceRange[1] !== 0) {
+  if (priceRange[0] !== minPrice || priceRange[1] !== maxPrice) {
     filteredProducts = filteredProducts.filter(
       (p) => p.price >= priceRange[0] && p.price <= priceRange[1]
     );
   }
-
+// Featured filter (real behavior)
+if (sortBy === "featured") {
+  filteredProducts = filteredProducts.filter((p: any) => p.featured === true);
+}
   // Sort products
   if (sortBy === "price-low") {
     filteredProducts.sort((a, b) => a.price - b.price);
@@ -100,15 +151,15 @@ export function Shop() {
             animate={{ opacity: 1, y: 0 }}
             className="text-center space-y-8"
           >
-            <h1 className="text-4xl md:text-5xl tracking-[0.2em] uppercase">Shop</h1>
+            <h1 className="text-5xl md:text-6xl tracking-[0.35em] font-light uppercase">Shop</h1>
             <div className="flex justify-center">
               <StyleToggle
                 activeStyle={selectedStyle}
                 onStyleChange={setSelectedStyle}
               />
             </div>
-            <p className="text-sm tracking-wider text-gray-400 dark:text-gray-500">
-              {filteredProducts.length} products available
+            <p className="text-[11px] tracking-[0.3em] uppercase text-gray-400 dark:text-gray-500">
+              {filteredProducts.length} products {urlFilter ? `in ${urlFilter.replace("-", " ")}` : "available"}
             </p>
             {searchLabel ? (
               <div className="flex justify-center">
@@ -127,86 +178,69 @@ export function Shop() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="flex flex-col lg:flex-row gap-12">
+
           {/* Filters - Desktop */}
-          <div className="hidden lg:block w-48 shrink-0">
-            <div className="sticky top-24 space-y-8">
+          <div className="hidden lg:block w-56 shrink-0">
+            <div className="sticky top-24 space-y-10 border border-black/10 p-6 bg-white/70 backdrop-blur-xl dark:bg-neutral-950/70 shadow-xl">
               <div>
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-medium tracking-widest uppercase text-sm">Filters</h3>
+                  <h3 className="font-light tracking-[0.35em] uppercase text-xs">Filters</h3>
                   {hasActiveFilters && (
                     <button
                       onClick={clearFilters}
-                      className="text-xs tracking-wider uppercase text-gray-500 transition-colors hover:text-black dark:text-gray-400 dark:hover:text-white"
+                      className="text-[10px] tracking-[0.3em] uppercase text-gray-400 hover:text-black dark:hover:text-white transition-colors"
                     >
                       Clear all
                     </button>
                   )}
                 </div>
 
-                {/* Category Filter */}
+                {/* Category */}
                 <div className="space-y-3 mb-6">
-                  <h4 className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
+                  <h4 className="text-[10px] uppercase tracking-[0.35em] text-gray-400 dark:text-gray-500">
                     Category
                   </h4>
-                  {["All", "men", "women", "accessories"].map((category) => (
-                    <label
-                      key={category}
-                      className="flex items-center gap-2 cursor-pointer"
-                    >
+                  {["All", ...categories].map((category) => (
+                    <label key={category} className="flex items-center gap-3 cursor-pointer group">
                       <input
                         type="radio"
-                        name="category"
                         checked={selectedCategory === category}
                         onChange={() => setSelectedCategory(category)}
-                        className="w-4 h-4"
+                        className="w-4 h-4 accent-black dark:accent-white"
                       />
-                      <span className="text-sm capitalize tracking-wider">{category}</span>
+                      <span className="text-sm capitalize tracking-wide group-hover:opacity-100 opacity-80 transition">{category}</span>
                     </label>
                   ))}
                 </div>
 
-                {/* Size Filter */}
+                {/* Size */}
                 <div className="space-y-3 mb-6">
-                  <h4 className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
+                  <h4 className="text-[10px] uppercase tracking-[0.35em] text-gray-400 dark:text-gray-500">
                     Size
                   </h4>
                   {["All", "XS", "S", "M", "L", "XL"].map((size) => (
-                    <label
-                      key={size}
-                      className="flex items-center gap-2 cursor-pointer"
-                    >
+                    <label key={size} className="flex items-center gap-3 cursor-pointer group">
                       <input
                         type="radio"
-                        name="size"
                         checked={selectedSize === size}
                         onChange={() => setSelectedSize(size)}
-                        className="w-4 h-4"
+                        className="w-4 h-4 accent-black dark:accent-white"
                       />
-                      <span className="text-sm tracking-wider">{size}</span>
+                      <span className="text-sm tracking-wide group-hover:opacity-100 opacity-80 transition">{size}</span>
                     </label>
                   ))}
                 </div>
 
-                {/* Price Filter */}
+                {/* Price */}
                 <div className="space-y-4">
-                  <h4 className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
+                  <h4 className="text-[10px] uppercase tracking-[0.35em] text-gray-400 dark:text-gray-500">
                     Price
                   </h4>
 
-                  <div className="px-1">
-                    <div className="flex justify-between text-xs text-gray-500 mb-2">
-                      <span>NPR {(Math.round(priceRange[0] / 1000) * 1000).toLocaleString()}</span>
-                      <span>NPR {(Math.round(priceRange[1] / 1000) * 1000).toLocaleString()}</span>
-                    </div>
-
-                    <div className="relative h-1 bg-gray-200 rounded mb-4 hover:bg-gray-300 transition-colors duration-200">
-                      <div
-                        className="absolute h-1 bg-black rounded transition-all duration-300 ease-out"
-                        style={{
-                          left: `${maxPrice > minPrice ? ((priceRange[0] - minPrice) / (maxPrice - minPrice)) * 100 : 0}%`,
-                          width: `${maxPrice > minPrice ? ((priceRange[1] - priceRange[0]) / (maxPrice - minPrice)) * 100 : 0}%`,
-                        }}
-                      />
+                  <div className="px-1 pt-2">
+                    <div className="flex justify-between text-[10px] tracking-[0.2em] text-gray-400 mb-3">
+                      <span>NPR {priceRange[0]}</span>
+                      <span>NPR {priceRange[1]}</span>
                     </div>
 
                     <input
@@ -220,7 +254,7 @@ export function Shop() {
                           priceRange[1],
                         ])
                       }
-                      className="w-full appearance-none bg-transparent cursor-pointer relative z-10 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:bg-black [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:duration-200 hover:[&::-webkit-slider-thumb]:scale-110 active:[&::-webkit-slider-thumb]:scale-125"
+                      className="w-full"
                     />
 
                     <input
@@ -234,7 +268,7 @@ export function Shop() {
                           Math.max(Number(e.target.value), priceRange[0] + 1),
                         ])
                       }
-                      className="w-full appearance-none bg-transparent -mt-2 cursor-pointer relative z-20 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:bg-black [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:duration-200 hover:[&::-webkit-slider-thumb]:scale-110 active:[&::-webkit-slider-thumb]:scale-125"
+                      className="w-full mt-2"
                     />
                   </div>
                 </div>
@@ -264,8 +298,9 @@ export function Shop() {
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
-                  className="bg-white border-2 border-gray-300 px-4 py-2 text-sm tracking-wider uppercase transition-colors focus:border-black focus:outline-none dark:border-white/20 dark:bg-neutral-950 dark:text-white dark:focus:border-white"
+                  className="bg-transparent border border-black px-5 py-2 text-[10px] tracking-[0.3em] uppercase transition-all focus:border-black focus:outline-none dark:border-white dark:text-white"
                 >
+                  <option value="all">All</option>
                   <option value="featured">Featured</option>
                   <option value="price-low">Price: Low to High</option>
                   <option value="price-high">Price: High to Low</option>
@@ -276,9 +311,14 @@ export function Shop() {
 
             {/* Products Grid */}
             {filteredProducts.length > 0 ? (
-              <div className="grid grid-cols-1 gap-px bg-gray-200 transition-colors duration-300 sm:grid-cols-2 lg:grid-cols-3 dark:bg-white/10">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10">
                 {filteredProducts.map((product) => (
-                  <ProductCard key={product.id} product={product} />
+                  <div
+                    key={product.id}
+                    className="group bg-white dark:bg-neutral-950 p-5 transition-all duration-500 hover:shadow-2xl hover:scale-[1.02] border border-black/5 dark:border-white/10"
+                  >
+                    <ProductCard product={product} />
+                  </div>
                 ))}
               </div>
             ) : (
@@ -343,7 +383,7 @@ export function Shop() {
               <h4 className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
                 Category
               </h4>
-              {["all", "men", "women", "accessories"].map((category) => (
+              {["All", ...categories].map((category) => (
                 <label
                   key={category}
                   className="flex items-center gap-2 cursor-pointer"

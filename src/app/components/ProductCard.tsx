@@ -1,66 +1,141 @@
-import { Link } from "react-router-dom";
 import { motion } from "motion/react";
-import { Product } from "../contexts/ProductsContext";
-import { Plus } from "lucide-react";
+import { Link } from "react-router-dom";
 
-interface ProductCardProps {
-  product: Product;
-}
+type ProductCardProps = {
+  product: any;
+  hideBadge?: boolean;
+};
 
-export function ProductCard({ product }: ProductCardProps) {
-  // ✅ Safe price formatter
-  const formatPrice = (price?: number | null) =>
-    `NPR ${(price ?? 0).toLocaleString()}`;
+export function ProductCard({ product, hideBadge }: ProductCardProps) {
+  const isFeatured = product?.featured;
+  const price = product.price ?? 0;
+  const original =
+    product.originalPrice ?? product.original_price ?? null;
+
+  const hasDiscount = original !== null && Number(original) > Number(price);
+
+  const discount = hasDiscount
+    ? Math.round(((Number(original) - Number(price)) / Number(original)) * 100)
+    : 0;
+
+  const saveAmount = hasDiscount ? original - price : 0;
+  const stock = Number(product?.stock ?? 0);
+  const isOutOfStock = stock <= 0;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      className="group relative border border-black/10 bg-white transition-colors duration-300 dark:border-white/10 dark:bg-neutral-950"
+    <Link
+      to={isOutOfStock ? "#" : `/product/${product.id}`}
+      onClick={(e) => {
+        if (isOutOfStock) e.preventDefault();
+      }}
     >
-      <Link to={`/product/${product?.id}`}>
-        <div className="relative aspect-3/4 overflow-hidden bg-neutral-100 transition-colors duration-300 dark:bg-neutral-900">
+      <div className={`group relative overflow-hidden transition-all duration-500 hover:-translate-y-1 hover:shadow-2xl w-full ${
+        isFeatured ? "md:col-span-2 lg:col-span-2" : ""
+      }`}>
+        {/* IMAGE */}
+        <div className="relative overflow-hidden bg-neutral-100 dark:bg-neutral-900">
+          {/* First Image */}
           <img
-            src={product?.image}
-            alt={product?.name}
-            className="w-full h-full object-cover transition-all duration-700 group-hover:scale-105"
+            src={product.image}
+            alt={product.name}
+            className={`w-full object-cover transition-all duration-700 ease-out ${
+              isFeatured ? "h-[520px]" : "h-[420px]"
+            } group-hover:opacity-0 group-hover:scale-110`}
           />
 
-          {product?.isNew && (
-            <span className="absolute top-0 left-0 bg-black text-white px-4 py-2 text-xs tracking-[0.2em] uppercase">
-              New
+          {/* Second Image (hover preview) */}
+          {product.images && product.images[1] && (
+            <img
+              src={product.images[1]}
+              alt={`${product.name} hover`}
+              className={`absolute inset-0 w-full object-cover opacity-0 transition-all duration-700 ease-out pointer-events-none ${
+                isFeatured ? "h-[520px]" : "h-[420px]"
+              } group-hover:opacity-100 group-hover:scale-110`}
+            />
+          )}
+
+          {/* SALE BADGE */}
+          {!hideBadge && hasDiscount && !isOutOfStock && (
+            <span className="absolute top-3 left-3 z-20 bg-black text-white px-3 py-1 text-[10px] tracking-[0.2em] uppercase shadow-md">
+              Sale
             </span>
           )}
 
-          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-500" />
+          {/* OUT OF STOCK BADGE */}
+          {isOutOfStock && (
+            <span className="absolute top-3 left-3 z-30 bg-red-700 text-white px-3 py-1 text-[10px] tracking-[0.2em] uppercase shadow-lg">
+              Out of Stock
+            </span>
+          )}
+
+          {/* % BADGE */}
+          {hasDiscount && (
+            <motion.span
+              initial={{ opacity: 0, scale: 0.8 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.3 }}
+              className="absolute top-3 right-3 z-20 bg-red-600 text-white px-3 py-1 text-[10px] tracking-[0.2em] uppercase shadow-md"
+            >
+              -{discount}%
+            </motion.span>
+          )}
+
+          {/* QUICK VIEW BUTTON */}
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition duration-500 bg-gradient-to-t from-black/60 via-black/20 to-transparent">
+            <button
+              disabled={isOutOfStock}
+              className={`px-4 py-2 text-xs tracking-wide border ${
+                isOutOfStock
+                  ? "bg-gray-300 text-gray-500 border-gray-300 cursor-not-allowed"
+                  : "bg-white dark:bg-black text-black dark:text-white border-black dark:border-white"
+              }`}
+            >
+              {isOutOfStock ? "Out of Stock" : "View"}
+            </button>
+          </div>
         </div>
 
-        <div className="space-y-3 border-t border-black/10 p-6 transition-colors duration-300 dark:border-white/10">
-          <div className="flex items-start justify-between gap-4">
-            <h3 className="text-sm tracking-widest uppercase text-black transition-colors duration-300 dark:text-white">
-              {product?.name || "Unnamed Product"}
-            </h3>
+        {/* CONTENT */}
+        <div className={`mt-6 space-y-3 px-2 ${isFeatured ? "md:px-4" : ""}`}>
+          {/* PRODUCT NAME */}
+          <h3 className="text-[16px] font-medium tracking-wide line-clamp-2 min-h-[52px] break-words leading-snug">
+            {product.name}
+          </h3>
 
-            {/* ✅ Fixed price */}
-            <p className="whitespace-nowrap text-sm tracking-wider text-black transition-colors duration-300 dark:text-white">
-              {formatPrice(product?.price)}
+          {/* STOCK INFO */}
+          {!isOutOfStock && stock <= 5 && (
+            <p className="text-xs text-orange-500">
+              Only {stock} left
             </p>
+          )}
+
+          {isOutOfStock && (
+            <p className="text-xs text-red-500">
+              Currently unavailable
+            </p>
+          )}
+
+          {/* PRICE SECTION */}
+          <div className="flex items-center gap-2 flex-wrap mt-1">
+            <span className="text-lg font-medium">
+              NPR {price.toLocaleString()}
+            </span>
+
+            {hasDiscount && (
+              <span className="text-xs text-neutral-400 line-through">
+                NPR {original.toLocaleString()}
+              </span>
+            )}
           </div>
 
-          <p className="text-xs uppercase tracking-[0.2em] text-gray-500 transition-colors duration-300 dark:text-gray-400">
-            {product?.category || "Unknown"}
-          </p>
+          {/* SAVE TEXT */}
+          {hasDiscount && (
+            <p className="text-xs text-green-600 tracking-wide">
+              Save NPR {saveAmount.toLocaleString()}
+            </p>
+          )}
         </div>
-      </Link>
-
-      <motion.button
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        className="absolute top-4 right-4 border border-black bg-white p-3 opacity-0 transition-all duration-300 group-hover:opacity-100 dark:border-white dark:bg-neutral-950 dark:text-white"
-      >
-        <Plus size={16} />
-      </motion.button>
-    </motion.div>
+      </div>
+    </Link>
   );
 }

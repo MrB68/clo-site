@@ -1,16 +1,135 @@
-export default function SizeGuide() {
-  return (
-    <div className="pt-24 px-6 max-w-4xl mx-auto">
-      <h1 className="text-3xl tracking-widest uppercase mb-6">
-        Size Guide
-      </h1>
-      <p className="text-gray-600 leading-7">
-        Choose your regular size for a standard fit.
-      </p>
+'use client';
+import { useState } from 'react';
 
-      <p className="text-gray-600 leading-7 mt-4">
-        For oversized styling, go one size up.
-      </p>
+export default function SizeGuide() {
+  const [height, setHeight] = useState<number | ''>('');
+  const [weight, setWeight] = useState<number | ''>('');
+
+  const getRecommendedSize = () => {
+    if (!height || !weight) return '';
+    // very simple heuristic; adjust later
+    if (weight < 55) return 'S';
+    if (weight < 70) return 'M';
+    if (weight < 85) return 'L';
+    return 'XL';
+  };
+
+  const recommended = getRecommendedSize();
+
+  return (
+    <div className="pt-28 px-6 max-w-6xl mx-auto space-y-16 text-black dark:text-white">
+      {/* Header */}
+      <div className="space-y-5 text-center">
+        <h1 className="text-4xl md:text-5xl tracking-[0.25em] uppercase font-semibold">
+          Size Guide
+        </h1>
+        <p className="text-gray-500 dark:text-gray-400 text-sm max-w-xl mx-auto leading-relaxed">
+          Find your perfect fit with our sizing recommendations.
+        </p>
+      </div>
+
+      {/* Fit Guide Cards */}
+      <div className="grid md:grid-cols-3 gap-6">
+        {[
+          {
+            title: "Regular Fit",
+            desc: "Choose your usual size for a clean and standard fit."
+          },
+          {
+            title: "Oversized Fit",
+            desc: "Size up for a relaxed, street-style oversized look."
+          },
+          {
+            title: "Slim Fit",
+            desc: "Size down for a tighter, body-hugging fit."
+          }
+        ].map((item, i) => (
+          <div
+            key={i}
+            className="border border-gray-200 dark:border-neutral-700 rounded-2xl p-6 space-y-3 bg-white dark:bg-neutral-900 hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
+          >
+            <h3 className="font-semibold tracking-wide">{item.title}</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              {item.desc}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* Size Calculator */}
+      <div className="border border-gray-200 dark:border-neutral-700 rounded-2xl p-6 bg-white dark:bg-neutral-900 space-y-6">
+        <h2 className="text-lg font-semibold tracking-wide text-center">Size Calculator</h2>
+
+        <div className="grid md:grid-cols-2 gap-4">
+          <input
+            type="number"
+            placeholder="Height (cm)"
+            value={height}
+            onChange={(e) => setHeight(e.target.value === '' ? '' : Number(e.target.value))}
+            className="p-3 rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-sm outline-none"
+          />
+
+          <input
+            type="number"
+            placeholder="Weight (kg)"
+            value={weight}
+            onChange={(e) => setWeight(e.target.value === '' ? '' : Number(e.target.value))}
+            className="p-3 rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-sm outline-none"
+          />
+        </div>
+
+        <div className="text-center">
+          {recommended ? (
+            <p className="text-lg font-medium">
+              Recommended Size: <span className="font-semibold">{recommended}</span>
+            </p>
+          ) : (
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Enter your height and weight to get a recommendation
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Size Table */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm border border-gray-200 dark:border-neutral-700 rounded-xl overflow-hidden">
+          <thead className="bg-gray-100 dark:bg-neutral-800">
+            <tr>
+              <th className="p-3 text-left font-medium">Size</th>
+              <th className="p-3 text-left font-medium">Chest (in)</th>
+              <th className="p-3 text-left font-medium">Length (in)</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200 dark:divide-neutral-700">
+            {[
+              { size: "S", chest: "36–38", length: "26" },
+              { size: "M", chest: "38–40", length: "27" },
+              { size: "L", chest: "40–42", length: "28" },
+              { size: "XL", chest: "42–44", length: "29" }
+            ].map((row, i) => (
+              <tr key={i} className="bg-white dark:bg-neutral-900">
+                <td className="p-3">{row.size}</td>
+                <td className="p-3">{row.chest}</td>
+                <td className="p-3">{row.length}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Tips Section */}
+      <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-neutral-900 dark:to-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-2xl p-6 space-y-3">
+        <h2 className="text-lg font-semibold">Sizing Tips</h2>
+        <ul className="text-sm text-gray-600 dark:text-gray-300 space-y-2">
+          <li>• Measure your chest for best accuracy</li>
+          <li>• Compare with your favorite fitting clothing</li>
+          <li>• When in doubt, size up for comfort</li>
+        </ul>
+      </div>
+
+      {/* Footer spacing */}
+      <div className="pb-10" />
     </div>
   );
 }

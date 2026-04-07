@@ -12,6 +12,8 @@ import {
 
 import { supabase } from "../../../lib/supabase";
 
+import toast from "react-hot-toast";
+
 // Lazy load admin components for code splitting
 const SalesAnalytics = lazy(() => import("./SalesAnalytics").then(module => ({ default: module.SalesAnalytics })));
 const OrderManagement = lazy(() => import("./OrderManagement").then(module => ({ default: module.OrderManagement })));
@@ -30,7 +32,7 @@ interface AdminTabItem {
   id: AdminTab;
   label: string;
   icon: React.ComponentType<{ size?: number | string; className?: string }>;
-  component: React.LazyExoticComponent<React.ComponentType>;
+  component: React.LazyExoticComponent<React.ComponentType<any>>;
 }
 
 const adminTabs: AdminTabItem[] = [
@@ -52,12 +54,12 @@ const adminTabs: AdminTabItem[] = [
     icon: Plus,
     component: ProductManagement
   },
-  {
+  /*
     id: "clients",
     label: "Client Management",
     icon: Users,
     component: ClientManagement
-  },
+  },*/ /*Client management is currently on hold, can be re-enabled when needed*/
   {
     id: "reviews",
     label: "Review Management",
@@ -70,12 +72,12 @@ const adminTabs: AdminTabItem[] = [
     icon: TicketPercent,
     component: PromoCodeManagement
   },
-  {
+  /*{
     id: "customdesigns",
     label: "Custom Designs",
     icon: Palette,
     component: CustomDesignManagement
-  },
+  },*/// Custom designs are currently on hold, can be re-enabled when needed
   {
     id: "recyclebin",
     label: "Recycle Bin",
@@ -102,7 +104,7 @@ export function AdminDashboard() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [activeTab, setActiveTab] = useState<AdminTab>('analytics');
-  const [adminTheme, setAdminTheme] = useState<"light" | "dark">("light");
+  const adminTheme = "dark";
   const [adminSession, setAdminSession] = useState<AdminSession | null>(null);
   const navigate = useNavigate();
 
@@ -110,74 +112,114 @@ export function AdminDashboard() {
     // Check if admin is already authenticated
     const savedAdminSession = getAdminSession();
     if (savedAdminSession) {
-      setIsAuthenticated(true);
       setAdminSession(savedAdminSession);
-    }
-
-    const savedAdminTheme = localStorage.getItem("adminTheme");
-    if (savedAdminTheme === "dark" || savedAdminTheme === "light") {
-      setAdminTheme(savedAdminTheme);
+      setIsAuthenticated(true);
     }
   }, []);
 
-  const toggleAdminTheme = () => {
-    const nextTheme = adminTheme === "dark" ? "light" : "dark";
-    setAdminTheme(nextTheme);
-    localStorage.setItem("adminTheme", nextTheme);
-    window.dispatchEvent(
-      new CustomEvent("adminThemeUpdated", {
-        detail: { theme: nextTheme },
-      })
-    );
-  };
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("orders-channel")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "orders",
+        },
+        (payload) => {
+          // 🔊 Play sound
+          const audio = new Audio("/notification.wav");
+          audio.play().catch(() => {});
+
+          // 💬 Custom CLO toast
+          toast.custom((t) => (
+            <div className="bg-black text-white px-5 py-3 rounded-xl shadow-xl border border-white/10 tracking-wider uppercase">
+              🛒 New Order Received
+            </div>
+          ));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
 
-    if (error) {
-      alert(error.message);
-      return;
+      if (error || !data.user) {
+        alert("Invalid email or password");
+        return;
+      }
+
+      if (!data.user.email_confirmed_at) {
+        alert("Please verify your email before logging in.");
+        return;
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", data.user.id)
+        .single();
+
+      if (profileError || !profile) {
+        alert("Profile not found");
+        return;
+      }
+
+      if (profile.role !== "admin") {
+        alert("Access denied: not an admin");
+        return;
+      }
+
+      const sessionData: AdminSession = {
+        id: data.user.id,
+        name: profile.name,
+        email: data.user.email || "",
+        role: profile.role,
+        branch: "Main",
+        lastLoginAt: new Date().toISOString(),
+      };
+
+      saveAdminSession(sessionData);
+      setAdminSession(sessionData);
+      setIsAuthenticated(true);
+
+      setEmail("");
+      setPassword("");
+
+      appendAdminAuditLog({
+        adminId: sessionData.id,
+        adminName: sessionData.name,
+        adminEmail: sessionData.email,
+        branch: sessionData.branch,
+        action: "logged in",
+        entityType: "admin-session",
+        entityName: sessionData.email,
+        details: "Admin logged into dashboard",
+      });
+
+    } catch (err) {
+      console.error(err);
+      alert("Something went wrong");
     }
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      alert("Login failed");
-      return;
-    }
-
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .single();
-
-    if (data?.role !== "admin") {
-      alert("Access denied: not an admin");
-      return;
-    }
-
-    setIsAuthenticated(true);
-    setAdminSession({
-      id: user.id,
-      name: data.name,
-      email: user.email,
-      role: data.role,
-      branch: "Main",
-    } as any);
-
-    setEmail("");
-    setPassword("");
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+
     if (adminSession) {
       appendAdminAuditLog({
         adminId: adminSession.id,
@@ -190,6 +232,7 @@ export function AdminDashboard() {
         details: `Signed out of the ${adminSession.branch} dashboard.`,
       });
     }
+
     setIsAuthenticated(false);
     setAdminSession(null);
     clearAdminSession();
@@ -201,17 +244,17 @@ export function AdminDashboard() {
 
   const LoadingSpinner = () => (
     <div className="flex items-center justify-center p-8">
-      <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-black dark:border-white"></div>
+      <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-white"></div>
     </div>
   );
 
   if (!isAuthenticated) {
     return (
-      <div className={`admin-login admin-${adminTheme} flex min-h-screen items-center justify-center px-4 ${adminTheme === "dark" ? "bg-black text-white" : "bg-white text-black"}`}>
+      <div className="admin-login admin-dark flex min-h-screen items-center justify-center px-4 bg-black text-white">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className={`w-full max-w-md rounded-lg p-8 shadow-lg transition-colors duration-300 ${adminTheme === "dark" ? "border border-white/10 bg-neutral-950 text-white" : "bg-white text-black"}`}
+          className="w-full max-w-md rounded-lg p-8 shadow-lg transition-colors duration-300 border border-white/10 bg-neutral-950 text-white"
         >
           <h1 className="text-2xl font-bold text-center mb-6 tracking-widest uppercase">
             Admin Access
@@ -225,7 +268,7 @@ export function AdminDashboard() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className={`w-full border px-4 py-2 tracking-wider focus:outline-none ${adminTheme === "dark" ? "border-white/20 bg-neutral-900 text-white focus:border-white" : "border-gray-300 focus:border-black"}`}
+                className="w-full border px-4 py-2 tracking-wider focus:outline-none border-white/20 bg-neutral-900 text-white focus:border-white"
                 placeholder="Enter admin email"
                 required
               />
@@ -239,7 +282,7 @@ export function AdminDashboard() {
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className={`w-full border px-4 py-2 tracking-wider focus:outline-none ${adminTheme === "dark" ? "border-white/20 bg-neutral-900 text-white focus:border-white" : "border-gray-300 focus:border-black"}`}
+                  className="w-full border px-4 py-2 tracking-wider focus:outline-none border-white/20 bg-neutral-900 text-white focus:border-white"
                   placeholder="Enter admin password"
                   required
                 />
@@ -254,7 +297,7 @@ export function AdminDashboard() {
             </div>
             <button
               type="submit"
-              className={`w-full py-3 text-sm uppercase tracking-wider transition-colors ${adminTheme === "dark" ? "bg-white text-black hover:bg-neutral-200" : "bg-black text-white hover:bg-gray-800"}`}
+              className="w-full py-3 text-sm uppercase tracking-wider transition-colors bg-white text-black hover:bg-neutral-200"
             >
               Access Admin Panel
             </button>
@@ -267,9 +310,9 @@ export function AdminDashboard() {
   const ActiveComponent = adminTabs.find(tab => tab.id === activeTab)?.component;
 
   return (
-    <div className={`admin-dashboard admin-${adminTheme} min-h-screen transition-colors duration-300 ${adminTheme === "dark" ? "bg-black text-white" : "bg-gray-50 text-black"}`}>
+    <div className="admin-dashboard admin-dark min-h-screen transition-colors duration-300 bg-neutral-950 text-gray-200">
       {/* Header */}
-      <div className="w-full border-b border-gray-200 bg-white shadow-sm transition-colors duration-300">
+      <div className="w-full border-b shadow-sm transition-colors duration-300 border-white/10 bg-black text-gray-200">
         <div className="px-4 sm:px-6 lg:px-8">
           {/* Centered CLO Admin Title */}
           <div className="flex justify-center items-center h-16 mb-2">
@@ -287,8 +330,8 @@ export function AdminDashboard() {
                     onClick={() => setActiveTab(tab.id)}
                     className={`flex items-center gap-2 px-3 py-2 text-sm font-medium tracking-wider uppercase transition-colors whitespace-nowrap ${
                       activeTab === tab.id
-                        ? "border-b-2 border-black text-black dark:border-white dark:text-white"
-                        : "text-gray-600 hover:text-black dark:text-gray-400 dark:hover:text-white"
+                        ? "border-b-2 border-white text-white font-semibold"
+                        : "text-gray-500 hover:text-white"
                     }`}
                   >
                     <Icon size={16} />
@@ -300,24 +343,15 @@ export function AdminDashboard() {
 
             <div className="ml-4 flex items-center gap-2 sm:gap-4">
               <button
-                onClick={toggleAdminTheme}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-medium uppercase tracking-wider text-gray-600 transition-colors hover:text-black"
-              >
-                {adminTheme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
-                <span className="hidden sm:inline">
-                  {adminTheme === "dark" ? "Light Mode" : "Dark Mode"}
-                </span>
-              </button>
-              <button
                 onClick={handleViewSite}
-                className="hidden items-center gap-2 px-4 py-2 text-sm font-medium uppercase tracking-wider text-gray-600 transition-colors hover:text-black sm:flex"
+                className="hidden items-center gap-2 px-4 py-2 text-sm font-medium uppercase tracking-wider transition-colors sm:flex text-gray-500 hover:text-white"
               >
                 <ExternalLink size={16} />
                 View Site
               </button>
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium uppercase tracking-wider text-gray-600 transition-colors hover:text-black"
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium uppercase tracking-wider transition-colors text-gray-500 hover:text-white"
               >
                 <LogOut size={16} />
                 Logout
@@ -328,19 +362,12 @@ export function AdminDashboard() {
       </div>
 
       {/* Mobile Tab Navigation */}
-      <div className="w-full border-b border-gray-200 bg-white transition-colors duration-300 md:hidden">
+      <div className="w-full border-b transition-colors duration-300 md:hidden border-white/10 bg-neutral-950 text-white">
         <div className="px-4 py-3">
           <div className="mb-3 flex flex-wrap justify-center gap-3">
             <button
-              onClick={toggleAdminTheme}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium uppercase tracking-wider text-gray-600 transition-colors hover:text-black"
-            >
-              {adminTheme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
-              {adminTheme === "dark" ? "Light Mode" : "Dark Mode"}
-            </button>
-            <button
               onClick={handleViewSite}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium uppercase tracking-wider text-gray-600 transition-colors hover:text-black"
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium uppercase tracking-wider transition-colors text-gray-500 hover:text-white"
             >
               <ExternalLink size={16} />
               View Site
@@ -355,8 +382,8 @@ export function AdminDashboard() {
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center gap-2 px-3 py-2 text-sm font-medium tracking-wider uppercase whitespace-nowrap transition-colors shrink-0 ${
                     activeTab === tab.id
-                      ? "border-b-2 border-black text-black dark:border-white dark:text-white"
-                      : "text-gray-600 hover:text-black dark:text-gray-400 dark:hover:text-white"
+                      ? "border-b-2 border-white text-white font-semibold"
+                      : "text-gray-500 hover:text-white"
                   }`}
                 >
                   <Icon size={16} />
@@ -371,13 +398,13 @@ export function AdminDashboard() {
       {/* Main Content */}
       <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6 w-full">
-          <div className="rounded-lg border border-black/10 bg-white p-4 transition-colors duration-300 dark:border-white/10 dark:bg-neutral-950">
+          <div className="rounded-lg border p-4 transition-colors duration-300 border-zinc-800 bg-black">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 className="text-lg font-semibold tracking-wider uppercase">
                   Active Admin Access
                 </h3>
-                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                <p className="mt-1 text-sm text-gray-500">
                   This dashboard is currently using the admin account shown below.
                 </p>
               </div>
@@ -386,40 +413,19 @@ export function AdminDashboard() {
                   <span className="font-semibold">Name:</span>{" "}
                   {adminSession?.name ?? "Unknown Admin"}
                 </p>
-                <p className="tracking-wider text-gray-600 dark:text-gray-400">
-                  <span className="font-semibold text-black dark:text-white">Email:</span>{" "}
+                <p className="tracking-wider text-gray-500">
+                  <span className="font-semibold text-white">Email:</span>{" "}
                   {adminSession?.email ?? "No email"}
                 </p>
-                <p className="tracking-wider text-gray-600 dark:text-gray-400">
-                  <span className="font-semibold text-black dark:text-white">Role:</span>{" "}
+                <p className="tracking-wider text-gray-500">
+                  <span className="font-semibold text-white">Role:</span>{" "}
                   {adminSession?.role ?? "Administrator"}
                 </p>
-                <p className="tracking-wider text-gray-600 dark:text-gray-400">
-                  <span className="font-semibold text-black dark:text-white">Branch:</span>{" "}
+                <p className="tracking-wider text-gray-500">
+                  <span className="font-semibold text-white">Branch:</span>{" "}
                   {adminSession?.branch ?? "Head Office"}
                 </p>
               </div>
-            </div>
-          </div>
-        </div>
-
-        {/* View Site Section */}
-        <div className="mb-6 w-full">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 w-full">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-blue-900">Preview Your Changes</h3>
-                <p className="text-blue-700 text-sm mt-1">
-                  View the live website to see how your product updates, pricing changes, and other modifications appear to customers.
-                </p>
-              </div>
-              <button
-                onClick={handleViewSite}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-medium whitespace-nowrap"
-              >
-                <ExternalLink size={16} />
-                View Live Site
-              </button>
             </div>
           </div>
         </div>

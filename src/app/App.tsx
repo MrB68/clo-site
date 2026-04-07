@@ -3,7 +3,8 @@ import { router } from "./routes";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ProductsProvider } from "./contexts/ProductsContext";
 import { ThemeProvider } from "./components/ThemeProvider";
-import { Toaster } from "./components/ui/sonner";
+import { Toaster as HotToaster } from "react-hot-toast";
+import { ScrollToTop } from "./components/ScrollToTop";
 
 export default function App() {
   return (
@@ -11,7 +12,7 @@ export default function App() {
       <AuthProvider>
         <ProductsProvider>
           <RouterProvider router={router} />
-          <Toaster />
+          <HotToaster position="top-right" />
         </ProductsProvider>
       </AuthProvider>
     </ThemeProvider>

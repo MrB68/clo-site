@@ -30,8 +30,23 @@ export function ReviewManagement() {
       return;
     }
 
-    setReviews(data || []);
-    setFilteredReviews(data || []);
+    const normalized = (data || []).map((r: any) => ({
+      ...r,
+      customerName:
+        r.customer_name?.trim() ||
+        r.customer_email?.split("@")[0] ||
+        "User",
+      customerEmail: r.customer_email,
+      productName: r.product_name,
+      date: r.created_at,
+      helpful: r.helpful ?? 0,
+      notHelpful: r.not_helpful ?? 0,
+      images: r.images ?? [],
+      status: r.status || "pending",
+    }));
+
+setReviews(normalized);
+setFilteredReviews(normalized);
   };
 
   fetchReviews();
@@ -134,13 +149,13 @@ export function ReviewManagement() {
       branch: adminSession.branch,
       action: action === "approve" ? "approved" : "rejected",
       entityType: "review",
-      entityName: updatedReview.productName,
+      entityName: updatedReview.productName || "Review",
       details: `Review by ${updatedReview.customerEmail} marked ${action}d.`,
     });
   }
 };
 
- const handleSaveReply = () => {
+ const handleSaveReply = async () => {
   if (!selectedReview || !adminSession) {
     return;
   }
@@ -179,7 +194,14 @@ export function ReviewManagement() {
 
     return nextReviews;
   });
-
+  await supabase
+  .from("reviews")
+  .update({
+    admin_reply: trimmedReply,
+    admin_reply_at: new Date().toISOString(),
+    admin_reply_by: adminSession.name,
+  })
+  .eq("id", selectedReview.id);
   toast.success("Review reply saved.");
 };
 
@@ -330,9 +352,9 @@ export function ReviewManagement() {
                   />
                 ) : (
                   <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black text-sm font-semibold uppercase tracking-wider text-white">
-                    {review.customerName
+                    {(review.customerName || "Anonymous")
                       .split(" ")
-                      .map((part: any[]) => part[0])
+                      .map((name: string) => name[0] || "")
                       .join("")
                       .slice(0, 2)}
                   </div>
@@ -350,7 +372,7 @@ export function ReviewManagement() {
                     </span>
                   </div>
                   <p className="text-sm text-gray-600 tracking-wider mb-2">
-                    {review.productName} • {formatDate(review.date)}
+                    {review.productName} • {formatDate(review.date || review.created_at)}
                   </p>
                   <div className="flex items-center gap-2 mb-3">
                     {renderStars(review.rating)}
@@ -468,9 +490,9 @@ export function ReviewManagement() {
                       />
                     ) : (
                       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black text-sm font-semibold uppercase tracking-wider text-white">
-                        {selectedReview.customerName
+                        {(selectedReview.customerName || "Anonymous")
                           .split(" ")
-                          .map((part: any[]) => part[0])
+                          .map((part: string) => part[0] || "")
                           .join("")
                           .slice(0, 2)}
                       </div>
@@ -486,7 +508,7 @@ export function ReviewManagement() {
                     </span>
                   </div>
                   <p className="text-gray-600 tracking-wider mb-3">
-                    {selectedReview.productName} • {formatDate(selectedReview.date)}
+                    {selectedReview.productName} • {formatDate(selectedReview.date || selectedReview.created_at)}
                   </p>
                   <div className="flex items-center gap-2">
                     {renderStars(selectedReview.rating)}
