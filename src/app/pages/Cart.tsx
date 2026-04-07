@@ -206,7 +206,13 @@ export function Cart() {
     0
   );
 
-  const shipping = cartItems.length === 0 ? 0 : subtotal > 100 ? 0 : 500;
+  const isCartReady = cartItems !== null;
+
+  const shipping = !isCartReady || cartItems.length === 0
+    ? 0
+    : subtotal > 100
+    ? 0
+    : 500;
   const total = subtotal + shipping;
 
   const hasInvalidQty = populatedCartItems.some(
@@ -379,7 +385,13 @@ export function Cart() {
 
           <div className="flex justify-between">
             <span>Shipping</span>
-            <span>{shipping === 0 ? "Free Shipping" : `NPR ${shipping.toLocaleString("en-NP")}`}</span>
+            <span>
+              {cartItems.length === 0
+                ? "-"
+                : shipping === 0
+                ? "Free Shipping"
+                : `NPR ${shipping.toLocaleString("en-NP")}`}
+            </span>
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400">
             Final shipping cost will be confirmed at checkout based on your location.

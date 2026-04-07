@@ -117,6 +117,11 @@ export function AdminDashboard() {
     }
   }, []);
 
+  // Force dark mode at root level so Vercel matches local
+  useEffect(() => {
+    document.documentElement.classList.add("dark");
+  }, []);
+
 
   useEffect(() => {
     const channel = supabase
@@ -310,9 +315,9 @@ export function AdminDashboard() {
   const ActiveComponent = adminTabs.find(tab => tab.id === activeTab)?.component;
 
   return (
-    <div className="admin-dashboard admin-dark min-h-screen transition-colors duration-300 bg-neutral-950 text-gray-200">
+    <div className="admin-dashboard admin-dark min-h-screen transition-colors duration-300 bg-black text-gray-200">
       {/* Header */}
-      <div className="w-full border-b shadow-sm transition-colors duration-300 border-white/10 bg-black text-gray-200">
+      <div className="w-full border-b shadow-sm transition-colors duration-300 border-white/10 bg-black text-white">
         <div className="px-4 sm:px-6 lg:px-8">
           {/* Centered CLO Admin Title */}
           <div className="flex justify-center items-center h-16 mb-2">

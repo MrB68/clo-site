@@ -17,6 +17,11 @@ export function Home() {
     .filter((review) => review.rating > 4)
     .slice(0, 3);
 
+  // Force dark mode class on html
+  useEffect(() => {
+    document.documentElement.classList.add("dark");
+  }, []);
+
   // Fetch reviews
   useEffect(() => {
     const fetchReviews = async () => {
@@ -45,7 +50,7 @@ export function Home() {
   }, []);
 
   return (
-    <div>
+    <div className="bg-black text-white min-h-screen">
       {/* Hero Section */}
       <section className="relative h-screen">
         <div className="absolute inset-0 bg-black">
