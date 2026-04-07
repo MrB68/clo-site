@@ -241,9 +241,9 @@ export function Layout() {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              className="bg-background border-t border-border"
+              className="bg-black border-t border-white/10"
             >
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 bg-black">
                 <form
                   onSubmit={handleSearchSubmit}
                   className="flex flex-col gap-4 sm:flex-row sm:items-center"
@@ -255,19 +255,19 @@ export function Layout() {
                     autoFocus
                     value={searchTerm}
                     onChange={(event) => setSearchTerm(event.target.value)}
-                    className="flex-1 bg-transparent border-b-2 border-gray-300 px-4 py-3 focus:outline-none focus:border-white transition-colors uppercase tracking-widest text-sm placeholder:text-gray-400"
+                    className="flex-1 bg-neutral-900 text-white border-b-2 border-white/20 px-4 py-3 focus:outline-none focus:border-white transition-colors uppercase tracking-widest text-sm placeholder:text-gray-500"
                   />
                   <div className="flex items-center gap-3 self-end sm:self-auto">
                     <button
                       type="submit"
-                    className="bg-white text-black hover:bg-gray-200 px-4 py-2 text-xs uppercase tracking-[0.2em] transition-colors"
+                      className="bg-white text-black hover:bg-gray-200 px-4 py-2 text-xs uppercase tracking-[0.2em] transition-colors"
                     >
                       Search
                     </button>
                     <button
                       type="button"
                       onClick={() => setSearchOpen(false)}
-                      className="text-foreground hover:opacity-70"
+                      className="text-white hover:opacity-70"
                     >
                       <X size={20} />
                     </button>

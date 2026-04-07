@@ -6,12 +6,23 @@ export default function BestSellers() {
 
   // 🔥 Sort by real sales
   const sorted = [...products]
-    .map((p: any) => ({
-      ...p,
-      sales: Number(p.orders_count || p.sales_count || p.sold || 0),
-    }))
+    .map((p: any) => {
+      const salesValue =
+        p.orders_count ??
+        p.sales_count ??
+        p.sold ??
+        0;
+
+      return {
+        ...p,
+        sales: isNaN(Number(salesValue)) ? 0 : Number(salesValue),
+      };
+    })
+    .filter((p: any) => p.sales > 0) // only real best sellers
     .sort((a: any, b: any) => b.sales - a.sales)
     .slice(0, 24);
+
+  const finalProducts = sorted.length > 0 ? sorted : products.slice(0, 24);
 
   return (
     <div className="pt-20">
@@ -28,7 +39,7 @@ export default function BestSellers() {
       {/* PRODUCTS */}
       <div className="max-w-7xl mx-auto px-4 py-12">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-          {sorted.map((product: any, index: number) => (
+          {finalProducts.map((product: any, index: number) => (
             <div key={product.id} className="relative group">
               
 

@@ -144,19 +144,19 @@ if (quantity > stock) {
   };
 
   return (
-    <div className="bg-white pt-20 text-black transition-colors duration-300 dark:bg-black dark:text-white">
+    <div className="bg-black pt-20 text-white min-h-screen">
       {/* Breadcrumb */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-          <Link to="/" className="transition-colors hover:text-black dark:hover:text-white">
+        <div className="flex items-center gap-2 text-sm text-gray-400">
+          <Link to="/" className="transition-colors hover:text-white">
             Home
           </Link>
           <span>/</span>
-          <Link to="/shop" className="transition-colors hover:text-black dark:hover:text-white">
+          <Link to="/shop" className="transition-colors hover:text-white">
             Shop
           </Link>
           <span>/</span>
-          <span className="capitalize text-black dark:text-white">{product.category}</span>
+          <span className="capitalize text-white">{product.category}</span>
         </div>
       </div>
 
@@ -168,7 +168,7 @@ if (quantity > stock) {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="relative aspect-3/4 overflow-hidden bg-gray-100 transition-colors duration-300 dark:bg-neutral-900"
+              className="relative aspect-3/4 overflow-hidden bg-neutral-900"
             >
               <img
                 src={productImages[activeImage]}
@@ -202,7 +202,7 @@ if (quantity > stock) {
                 <button
                   key={index}
                   onClick={() => setActiveImage(index)}
-                  className={`aspect-3/4 overflow-hidden bg-gray-100 transition-colors duration-300 dark:bg-neutral-900 ${activeImage === index ? "ring-2 ring-black dark:ring-white" : ""
+                  className={`aspect-3/4 overflow-hidden bg-neutral-900 ${activeImage === index ? "ring-2 ring-white" : ""
                     }`}
                 >
                   <img
@@ -222,7 +222,7 @@ if (quantity > stock) {
             className="space-y-6"
           >
             <div>
-              <p className="mb-2 text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              <p className="mb-2 text-xs uppercase tracking-wider text-gray-400">
                 {product.category}
               </p>
               <h1 className="text-3xl md:text-4xl tracking-wide mb-4">
@@ -242,7 +242,7 @@ if (quantity > stock) {
                     />
                   ))}
                 </div>
-                <span className="text-sm text-gray-600 dark:text-gray-400">
+                <span className="text-sm text-gray-400">
                   ({approvedReviews.length} review{approvedReviews.length === 1 ? "" : "s"})
                 </span>
               </div>
@@ -273,7 +273,7 @@ if (quantity > stock) {
               </div>
             </div>
 
-            <p className="leading-relaxed text-gray-600 dark:text-gray-300">
+            <p className="leading-relaxed text-gray-300">
               {product.description}
             </p>
 
@@ -288,8 +288,8 @@ if (quantity > stock) {
                     key={color}
                     onClick={() => setSelectedColor(color)}
                     className={`px-4 py-2 border text-sm transition-colors ${selectedColor === color
-                        ? "border-black bg-black text-white"
-                        : "border-gray-300 hover:border-black dark:border-white/20 dark:hover:border-white"
+                        ? "border-white bg-white text-black"
+                        : "border-white/20 hover:border-white"
                       }`}
                   >
                     {color}
@@ -314,8 +314,8 @@ if (quantity > stock) {
                     key={size}
                     onClick={() => setSelectedSize(size)}
                     className={`px-4 py-2 border text-sm transition-colors ${selectedSize === size
-                        ? "border-black bg-black text-white"
-                        : "border-gray-300 hover:border-black dark:border-white/20 dark:hover:border-white"
+                        ? "border-white bg-white text-black"
+                        : "border-white/20 hover:border-white"
                       }`}
                   >
                     {size}
@@ -327,17 +327,17 @@ if (quantity > stock) {
             {/* Quantity */}
             <div>
               <label className="block text-sm mb-3">Quantity</label>
-              <div className="flex w-32 items-center border border-gray-300 dark:border-white/20">
+              <div className="flex w-32 items-center border border-white/20">
                 <button
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  className="px-4 py-2 transition-colors hover:bg-gray-100 dark:hover:bg-neutral-900"
+                  className="px-4 py-2 transition-colors hover:bg-neutral-900"
                 >
                   -
                 </button>
                 <span className="flex-1 text-center">{quantity}</span>
                 <button
                   onClick={() => setQuantity(Math.min(stock || 1, quantity + 1))}
-                  className="px-4 py-2 transition-colors hover:bg-gray-100 dark:hover:bg-neutral-900"
+                  className="px-4 py-2 transition-colors hover:bg-neutral-900"
                 >
                   +
                 </button>
@@ -364,24 +364,24 @@ if (quantity > stock) {
                 className={`flex flex-1 items-center justify-center gap-2 py-4 transition-colors ${
                   isOutOfStock
                     ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                    : "bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
+                    : "bg-white text-black hover:bg-neutral-200"
                 }`}
               >
                 <ShoppingBag size={20} />
                 {isOutOfStock ? "Out of Stock" : "Add to Cart"}
               </button>
-              <button className="border border-gray-300 p-4 transition-colors hover:border-black dark:border-white/20 dark:hover:border-white">
+              <button className="border border-white/20 p-4 transition-colors hover:border-white">
                 <Heart size={20} />
               </button>
             </div>
 
             {/* Features */}
-            <div className="space-y-4 border-t border-black/10 pt-6 dark:border-white/10">
+            <div className="space-y-4 border-t border-white/10 pt-6">
               <div className="flex items-start gap-3">
                 <Truck size={20} className="mt-0.5 shrink-0" />
                 <div>
                   <p className="font-medium text-sm">Free Shipping</p>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                  <p className="text-xs text-gray-400">
                     On orders over NPR 3000 (Nationwide)
                   </p>
                 </div>
@@ -390,7 +390,7 @@ if (quantity > stock) {
                 <RefreshCw size={20} className="mt-0.5 shrink-0" />
                 <div>
                   <p className="font-medium text-sm">Easy Exchange</p>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                  <p className="text-xs text-gray-400">
                     Exchange available within 2 days of delivery
                   </p>
                 </div>
@@ -399,7 +399,7 @@ if (quantity > stock) {
                 <Shield size={20} className="mt-0.5 shrink-0" />
                 <div>
                   <p className="font-medium text-sm">Secure Payments</p>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                  <p className="text-xs text-gray-400">
                     eSewa / Khalti / COD supported
                   </p>
                 </div>
@@ -416,7 +416,7 @@ if (quantity > stock) {
               {approvedReviews.map((review) => (
                 <div key={review.id} className="border-b pb-6">
                   <div className="flex items-center gap-4 mb-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-black text-xs font-medium uppercase tracking-wider text-white dark:bg-white dark:text-black">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-black text-xs font-medium uppercase tracking-wider text-white">
                       {((review.name || "User").toString().split(" "))
                         .map((part: string) => part[0] || "")
                         .join("")
@@ -445,11 +445,11 @@ if (quantity > stock) {
                     </span>
                   </div>
                   <p className="mb-2 font-medium">{review.title || "Review"}</p>
-                  <p className="text-gray-600 dark:text-gray-300">{review.comment || ""}</p>
+                  <p className="text-gray-300">{review.comment || ""}</p>
                   {review.adminReply && (
-                    <div className="mt-4 rounded-lg border border-black/10 bg-gray-50 p-4 dark:border-white/10 dark:bg-neutral-900">
+                    <div className="mt-4 rounded-lg border border-white/10 bg-neutral-900 p-4">
                       <p className="text-sm font-medium">Reply from {review.adminReplyBy || "Admin"}</p>
-                      <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                      <p className="mt-2 text-sm text-gray-300">
                         {review.adminReply}
                       </p>
                     </div>
@@ -458,7 +458,7 @@ if (quantity > stock) {
               ))}
             </div>
           ) : (
-            <p className="text-gray-600 dark:text-gray-400">
+            <p className="text-gray-400">
               No approved reviews yet for this product.
             </p>
           )}
