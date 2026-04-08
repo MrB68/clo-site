@@ -533,11 +533,11 @@ setProducts(prev => [...prev, uiProduct]);
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 dark bg-gray-900 text-white min-h-screen">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Product Management</h2>
-          <p className="text-gray-600 dark:text-gray-400">Manage your product catalog, inventory, and features</p>
+          <p className="text-gray-600 dark:text-gray-300">Manage your product catalog, inventory, and features</p>
         </div>
         <div className="flex gap-3">
           <Button
@@ -629,12 +629,14 @@ setProducts(prev => [...prev, uiProduct]);
             placeholder="New collection name"
             value={newCollection}
             onChange={(e) => setNewCollection(e.target.value)}
+            className="dark:bg-gray-800 dark:border-gray-700 dark:text-white"
           />
           <div className="flex flex-col gap-2">
             <Input
               placeholder="Collection image URL (optional)"
               value={collectionImage}
               onChange={(e) => setCollectionImage(e.target.value)}
+              className="dark:bg-gray-800 dark:border-gray-700 dark:text-white"
             />
             <Input
               type="file"
@@ -651,6 +653,7 @@ setProducts(prev => [...prev, uiProduct]);
                   toast.error("Failed to process image");
                 }
               }}
+              className="dark:bg-gray-800 dark:border-gray-700 dark:text-white"
             />
           </div>
           <Button
@@ -758,10 +761,10 @@ setProducts(prev => [...prev, uiProduct]);
           placeholder="Search products..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="max-w-sm"
+          className="max-w-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
         />
         <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-          <SelectTrigger className="w-48">
+          <SelectTrigger className="w-48 dark:bg-gray-800 dark:border-gray-700 dark:text-white">
             <SelectValue placeholder="All Categories" />
           </SelectTrigger>
           <SelectContent>
@@ -784,7 +787,7 @@ setProducts(prev => [...prev, uiProduct]);
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
           >
-            <Card className="h-full">
+            <Card className="h-full dark:bg-gray-800 dark:border-gray-700">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -858,22 +861,22 @@ setProducts(prev => [...prev, uiProduct]);
                       ${product.price}
                     </span>
                     {product.originalPrice && (
-                      <span className="text-sm text-gray-500 line-through">
+                      <span className="text-sm text-gray-400 dark:text-gray-400 line-through">
                         ${product.originalPrice}
                       </span>
                     )}
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <Package size={16} className="text-gray-500" />
-                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                    <Package size={16} className="text-gray-400 dark:text-gray-400" />
+                    <span className="text-sm text-gray-600 dark:text-gray-300">
                       Stock: {product.stock}
                     </span>
                   </div>
 
                   <div className="flex items-center gap-2">
                     <Star size={16} className="text-yellow-500 fill-current" />
-                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                    <span className="text-sm text-gray-600 dark:text-gray-300">
                       {product.rating} ({product.reviews} reviews)
                     </span>
                   </div>
@@ -885,6 +888,7 @@ setProducts(prev => [...prev, uiProduct]);
                     size="sm"
                     onClick={() => updateStock(product.id, product.stock - 1)}
                     disabled={product.stock <= 0}
+                    className="dark:border-gray-600 dark:text-white"
                   >
                     -1
                   </Button>
@@ -892,13 +896,14 @@ setProducts(prev => [...prev, uiProduct]);
                     type="number"
                     value={product.stock}
                     onChange={(e) => updateStock(product.id, parseInt(e.target.value) || 0)}
-                    className="w-20 text-center"
+                    className="w-20 text-center dark:bg-gray-800 dark:border-gray-700 dark:text-white"
                     min="0"
                   />
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => updateStock(product.id, product.stock + 1)}
+                    className="dark:border-gray-600 dark:text-white"
                   >
                     +1
                   </Button>
@@ -921,7 +926,7 @@ setProducts(prev => [...prev, uiProduct]);
 
       {/* Edit Product Dialog */}
       <Dialog open={!!editingProduct} onOpenChange={(open) => !open && setEditingProduct(null)}>
-        <DialogContent className="w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0 sm:p-0">
+        <DialogContent className="w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0 sm:p-0 dark:bg-gray-900 dark:text-white">
           <div className="overflow-y-auto flex-1">
             <div className="p-6 sm:p-8">
               <DialogHeader className="mb-6">
@@ -1000,13 +1005,13 @@ function ProductForm({
             value={formData.name}
             onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
             placeholder="Enter product name"
-            className="text-base"
+            className="text-base dark:bg-gray-800 dark:border-gray-700 dark:text-white"
           />
         </div>
         <div className="space-y-2">
           <Label htmlFor="category">Category</Label>
           <Select value={formData.category} onValueChange={(value) => setFormData(prev => ({ ...prev, category: value }))}>
-            <SelectTrigger className="text-base">
+            <SelectTrigger className="text-base dark:bg-gray-800 dark:border-gray-700 dark:text-white">
               <SelectValue placeholder="Select category" />
             </SelectTrigger>
             <SelectContent>
@@ -1024,7 +1029,7 @@ function ProductForm({
               setFormData((prev) => ({ ...prev, style: value }))
             }
           >
-            <SelectTrigger className="text-base">
+            <SelectTrigger className="text-base dark:bg-gray-800 dark:border-gray-700 dark:text-white">
               <SelectValue placeholder="Select style section" />
             </SelectTrigger>
             <SelectContent>
@@ -1046,7 +1051,7 @@ function ProductForm({
             value={formData.price}
             onChange={(e) => setFormData(prev => ({ ...prev, price: e.target.value }))}
             placeholder="0.00"
-            className="text-base"
+            className="text-base dark:bg-gray-800 dark:border-gray-700 dark:text-white"
           />
         </div>
         <div className="space-y-2">
@@ -1058,7 +1063,7 @@ function ProductForm({
             value={formData.originalPrice}
             onChange={(e) => setFormData(prev => ({ ...prev, originalPrice: e.target.value }))}
             placeholder="0.00 (optional)"
-            className="text-base"
+            className="text-base dark:bg-gray-800 dark:border-gray-700 dark:text-white"
           />
         </div>
       </div>
@@ -1072,7 +1077,7 @@ function ProductForm({
           onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
           placeholder="Enter product description"
           rows={4}
-          className="text-base resize-none"
+          className="text-base resize-none dark:bg-gray-800 dark:border-gray-700 dark:text-white"
         />
       </div>
 
@@ -1087,7 +1092,7 @@ function ProductForm({
             onChange={(e) => setFormData(prev => ({ ...prev, stock: e.target.value }))}
             placeholder="0"
             min="0"
-            className="text-base"
+            className="text-base dark:bg-gray-800 dark:border-gray-700 dark:text-white"
           />
         </div>
         <div className="flex items-center space-x-3 pt-8">
@@ -1107,7 +1112,7 @@ function ProductForm({
         <Label className="text-base font-medium">Images</Label>
         <div className="space-y-3">
           {formData.images.map((image: string, index: number) => (
-            <div key={index} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg">
+            <div key={index} className="flex items-center gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg">
               <img
                 src={image}
                 alt={`Preview ${index + 1}`}
@@ -1117,14 +1122,14 @@ function ProductForm({
                 }}
               />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">
+                <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
                   {image.startsWith('data:') ? `Uploaded image ${index + 1}` : 'URL image'}
                 </p>
-                <p className="text-xs text-gray-500 truncate">
+                <p className="text-xs text-gray-400 dark:text-gray-400 truncate">
                   {image.startsWith('data:') ? 'From file upload' : image}
                 </p>
               </div>
-              <Button variant="outline" size="sm" onClick={() => removeImage(index)} className="shrink-0">
+              <Button variant="outline" size="sm" onClick={() => removeImage(index)} className="shrink-0 dark:border-gray-600 dark:text-white">
                 <X size={14} />
               </Button>
             </div>
@@ -1136,9 +1141,9 @@ function ProductForm({
               value={imageUrlInput}
               onChange={(e) => setImageUrlInput(e.target.value)}
               placeholder="Enter image URL (https://...)"
-              className="flex-1 text-base min-w-0"
+              className="flex-1 text-base min-w-0 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
             />
-            <Button variant="outline" onClick={addImageUrl} disabled={!imageUrlInput.trim()} className="px-4 sm:px-6 flex-shrink-0">
+            <Button variant="outline" onClick={addImageUrl} disabled={!imageUrlInput.trim()} className="px-4 sm:px-6 flex-shrink-0 dark:border-gray-600 dark:text-white">
               <Image size={16} className="mr-2" />
               <span className="hidden sm:inline">Add URL</span>
               <span className="sm:hidden">Add</span>
@@ -1146,23 +1151,23 @@ function ProductForm({
           </div>
 
           {/* File Upload Section */}
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
-            <Upload size={24} className="mx-auto text-gray-400 mb-2" />
+          <div className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-6 text-center hover:border-gray-400 dark:hover:border-gray-400 transition-colors">
+            <Upload size={24} className="mx-auto text-gray-400 dark:text-gray-400 mb-2" />
             <div className="space-y-2">
               <Input
                 type="file"
                 accept="image/*"
                 multiple
                 onChange={handleFileUpload}
-                className="file:mr-4 file:py-3 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 file:cursor-pointer"
+                className="file:mr-4 file:py-3 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 file:cursor-pointer dark:bg-gray-800 dark:border-gray-700 dark:text-white"
               />
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-gray-600 dark:text-gray-300">
                 Or drag and drop images here
               </p>
             </div>
           </div>
 
-          <p className="text-sm text-gray-500 bg-gray-50 p-3 rounded-md">
+          <p className="text-sm text-gray-400 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-3 rounded-md">
             <strong>Supported formats:</strong> JPEG, PNG, WebP, GIF • <strong>Max size:</strong> 5MB per file • <strong>Multiple uploads allowed</strong>
           </p>
         </div>
@@ -1214,7 +1219,7 @@ function ProductForm({
             value={formData.material}
             onChange={(e) => setFormData(prev => ({ ...prev, material: e.target.value }))}
             placeholder="e.g., Cotton, Silk, Leather"
-            className="text-base w-full break-words"
+            className="text-base w-full break-words dark:bg-gray-800 dark:border-gray-700 dark:text-white"
           />
         </div>
 
@@ -1225,7 +1230,7 @@ function ProductForm({
             value={formData.tags}
             onChange={(e) => setFormData(prev => ({ ...prev, tags: e.target.value }))}
             placeholder="e.g., summer, casual, trendy"
-            className="text-base w-full break-words"
+            className="text-base w-full break-words dark:bg-gray-800 dark:border-gray-700 dark:text-white"
           />
         </div>
       </div>
@@ -1238,12 +1243,12 @@ function ProductForm({
           onChange={(e) => setFormData(prev => ({ ...prev, careInstructions: e.target.value }))}
           placeholder="Washing and care instructions"
           rows={3}
-          className="text-base resize-none"
+          className="text-base resize-none dark:bg-gray-800 dark:border-gray-700 dark:text-white"
         />
       </div>
 
       <div className="flex justify-end gap-2 pt-4">
-        <Button variant="outline" onClick={onCancel}>
+        <Button variant="outline" onClick={onCancel} className="dark:border-gray-600 dark:text-white">
           Cancel
         </Button>
         <Button onClick={onSubmit}>
