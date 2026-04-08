@@ -52,19 +52,19 @@ export default function Collections() {
   }, [products]);
 
   return (
-    <div className="pt-24 pb-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+    <div className="pt-20 pb-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
       {/* Header */}
       <div className="text-center mb-16">
-        <h1 className="text-4xl md:text-5xl tracking-[0.2em] uppercase mb-4">
+        <h1 className="text-3xl md:text-5xl tracking-[0.2em] uppercase mb-3">
           Collections
         </h1>
-        <p className="text-gray-500 max-w-xl mx-auto">
+        <p className="text-gray-400 max-w-md mx-auto text-sm">
           Discover curated styles crafted for every identity.
         </p>
       </div>
 
       {/* Premium Sections */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-12">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
         {[
           {
             title: "New Arrivals",
@@ -74,9 +74,7 @@ export default function Collections() {
           {
             title: "Best Sellers",
             description: "Most loved",
-            link: bestSellerCategory
-              ? `/collections/${bestSellerCategory}`
-              : (collections[0]?.slug ? `/collections/${collections[0].slug}` : "/shop"),
+            link: "/best-sellers",
           },
           {
             title: "On Sale",
@@ -87,7 +85,7 @@ export default function Collections() {
           <Link
             key={i}
             to={item.link}
-            className="group border border-black/10 dark:border-white/10 rounded-xl p-6 flex flex-col justify-between hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-all duration-300"
+            className="group border border-white/10 rounded-xl p-5 flex flex-col justify-between bg-neutral-900 hover:bg-white hover:text-black transition-all duration-300"
           >
             <div>
               <h3 className="text-xl font-semibold tracking-wide mb-1">
@@ -109,7 +107,7 @@ export default function Collections() {
       )}
 
       {/* Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
         {collections.map((collection, index) => (
           <motion.div
             key={collection.id || index}
@@ -117,7 +115,7 @@ export default function Collections() {
             className="group relative overflow-hidden rounded-2xl border border-black/5 dark:border-white/10 shadow-sm hover:shadow-xl transition-all duration-500"
           >
             <Link to={`/collections/${collection.slug || collection.name?.toLowerCase().replace(/\s+/g, "-")}`}>
-              <div className="aspect-[4/5] overflow-hidden bg-neutral-100 dark:bg-neutral-900">
+              <div className="aspect-[3/4] overflow-hidden bg-neutral-900">
                 <img
                   src={
                     products.find(p => p.category === (collection.slug || collection.name?.toLowerCase().replace(/\s+/g, "-")))?.image ||
@@ -139,14 +137,14 @@ export default function Collections() {
 
                 {/* Bottom content */}
                 <div>
-                  <h2 className="text-white text-2xl md:text-3xl font-semibold tracking-wide mb-1 group-hover:translate-y-[-2px] transition">
+                  <h2 className="text-white text-lg md:text-3xl font-semibold tracking-wide mb-1">
                     {collection.name || "Collection"}
                   </h2>
-                  <p className="text-white/70 text-sm mb-3">
+                  <p className="text-white/70 text-xs mb-2">
                     Shop {collection.name || "Collection"}
                   </p>
 
-                  <span className="inline-block text-xs uppercase tracking-widest text-white/80 border border-white/30 px-3 py-1 rounded-full group-hover:bg-white group-hover:text-black transition">
+                  <span className="inline-block text-[10px] uppercase tracking-widest text-white/80 border border-white/30 px-3 py-2 rounded-full group-hover:bg-white group-hover:text-black transition">
                     Explore
                   </span>
                 </div>

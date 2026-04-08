@@ -166,7 +166,7 @@ const isPaymentSuccess =
     wardNumber: "",
     landmark: "",
     postalCode: "",
-    paymentMethod: "esewa",
+    paymentMethod: "cod",
   });
   const [storedCartItems, setStoredCartItems] = useState(() => getStoredCartItems());
   const [promoCode, setPromoCode] = useState("");
@@ -1142,25 +1142,6 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
           .eq("id", item.id);
       }
 
-      // 🔥 UPDATE PRODUCT SALES COUNT (BEST SELLERS)
-      for (const item of storedOrder.items || []) {
-        // get current count
-        const { data: product } = await supabase
-          .from("products")
-          .select("orders_count")
-          .eq("id", item.id)
-          .single();
-
-        const currentCount = product?.orders_count || 0;
-
-        // update count
-        await supabase
-          .from("products")
-          .update({
-            orders_count: currentCount + (item.quantity || 1),
-          })
-          .eq("id", item.id);
-      }
 
       // Track promo usage if discount code applied and user present
       if (pricing.promo_code && user?.id) {
@@ -1223,10 +1204,10 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
 
   if (checkoutItems.length === 0 && step !== "success") {
     return (
-      <div className="pt-20 min-h-screen flex items-center justify-center px-4">
+      <div className="pt-20 min-h-screen flex items-center justify-center px-4 bg-black text-white">
         <div className="text-center space-y-4">
           <h2 className="text-3xl font-semibold">Your checkout is empty</h2>
-          <p className="text-gray-600">Add items to your cart before proceeding.</p>
+          <p className="text-gray-400">Add items to your cart before proceeding.</p>
           <button
             type="button"
             onClick={() => window.location.assign("/shop")}
@@ -1240,7 +1221,7 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
   }
 
   return (
-    <div className="pt-20 min-h-screen bg-white">
+    <div className="pt-20 min-h-screen bg-black text-white">
       {/* Sign-in or Guest Choice Banner */}
       {!user && (
         <div className="max-w-7xl mx-auto px-4 py-4">
@@ -1272,7 +1253,7 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
       </div>
 
       {/* Progress indicator */}
-      <div className="border-b">
+        <div className="border-b border-gray-800 bg-black text-white">
         <div className="max-w-7xl mx-auto px-4 py-6 flex justify-between items-center text-xs sm:text-sm">
           {[
             { key: "shipping", label: "Shipping" },
@@ -1284,7 +1265,7 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
                 className={`w-8 h-8 rounded-full flex items-center justify-center transition ${
                   (step === s.key || ["shipping", "payment", "review"].indexOf(step) > idx)
                     ? "bg-black text-white"
-                    : "bg-gray-200 text-gray-600"
+                    : "bg-gray-200 text-gray-400"
                 }`}
               >
                 {["shipping", "payment", "review"].indexOf(step) > idx ? <CheckCircle2 size={18} /> : idx + 1}
@@ -1303,7 +1284,7 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
           {step === "shipping" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
               <h2 className="text-2xl font-semibold">Shipping Information</h2>
-              <p className="text-sm text-gray-600">Fields marked with <span className="text-red-600">*</span> are required.</p>
+              <p className="text-sm text-gray-400">Fields marked with <span className="text-red-600">*</span> are required.</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="mb-2 block text-sm">First Name <span className="text-red-600">*</span></label>
@@ -1361,7 +1342,7 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
                     name="province"
                     value={formData.province}
                     onChange={handleInputChange}
-                    className={`w-full border px-4 py-3 text-sm focus:outline-none transition bg-white ${shippingErrors.province ? "border-red-500" : "border-gray-300 focus:border-black"}`}
+                    className={`w-full border px-4 py-3 text-sm focus:outline-none transition bg-black text-white border-gray-700 focus:border-white ${shippingErrors.province ? "border-red-500" : ""}`}
                   >
                     <option value="">Select Province</option>
                     {provinceOptions.map((province) => (
@@ -1377,7 +1358,7 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
                     value={formData.district}
                     onChange={handleInputChange}
                     disabled={!formData.province}
-                    className={`w-full border px-4 py-3 text-sm focus:outline-none transition bg-white disabled:bg-gray-100 ${shippingErrors.district ? "border-red-500" : "border-gray-300 focus:border-black"}`}
+                    className={`w-full border px-4 py-3 text-sm focus:outline-none transition bg-black text-white border-gray-700 focus:border-white disabled:bg-gray-900 ${shippingErrors.district ? "border-red-500" : ""}`}
                   >
                     <option value="">Select District</option>
                     {districtOptions.map((district) => (
@@ -1393,7 +1374,7 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
                     value={formData.city}
                     onChange={handleInputChange}
                     disabled={!formData.province}
-                    className={`w-full border px-4 py-3 text-sm focus:outline-none transition bg-white ${shippingErrors.city ? "border-red-500" : "border-gray-300 focus:border-black"}`}
+                    className={`w-full border px-4 py-3 text-sm focus:outline-none transition bg-black text-white border-gray-700 focus:border-white ${shippingErrors.city ? "border-red-500" : ""}`}
                   >
                     <option value="">Select City / Municipality</option>
                     {cityOptions.map((city) => (
@@ -1493,8 +1474,8 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
                 </p>
               )}
               <div className="space-y-4">
-                {/* eSewa */}
-                {/* <label className="p-4 sm:p-6 cursor-pointer transition">
+                {/* eSewa temporarily disabled
+                <label className="p-4 sm:p-6 cursor-pointer transition">
                   <div className="flex items-center gap-4">
                     <input
                       type="radio"
@@ -1506,10 +1487,13 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
                     />
                     <div>
                       <p className="font-semibold text-sm sm:text-base">eSewa</p>
-                      <p className="text-gray-600 text-xs sm:text-sm">Fast and secure mobile wallet</p>
+                      <p className="text-gray-400 text-xs sm:text-sm">
+                        Fast and secure mobile wallet
+                      </p>
                     </div>
                   </div>
                 </label>
+                */}
 
 
 
@@ -1527,7 +1511,7 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
                       />
                       <div>
                         <p className="font-semibold text-sm sm:text-base">Cash on Delivery</p>
-                        <p className="text-gray-600 text-xs sm:text-sm">Pay when you receive your order</p>
+                        <p className="text-gray-400 text-xs sm:text-sm">Pay when you receive your order</p>
                       </div>
                     </div>
                   </label>
@@ -1538,7 +1522,7 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
               <div className="flex gap-4">
                 <button
                   onClick={() => setStep("shipping")}
-                  className="flex-1 border-2 border-black text-black py-4 font-medium hover:bg-black hover:text-white transition text-sm sm:text-base"
+                className="flex-1 border border-white text-white py-4 font-medium hover:bg-white hover:text-black transition text-sm sm:text-base"
                 >
                   Back
                 </button>
@@ -1547,11 +1531,7 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
                   disabled={isProcessingPayment}
                   className="flex-1 bg-black text-white py-4 font-medium hover:bg-gray-900 transition text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isProcessingPayment
-                    ? "Processing..."
-                    : formData.paymentMethod === "esewa"
-                      ? "Pay with eSewa"
-                      : "Continue"}
+                  {isProcessingPayment ? "Processing..." : "Continue"}
                 </button>
               </div>
             </motion.div>
@@ -1563,7 +1543,7 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
               <h2 className="text-2xl font-semibold">Order Review</h2>
               <div className="border-t pt-6 space-y-4">
                 <h3 className="font-semibold">Shipping Details:</h3>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-gray-400">
                   {formData.firstName} {formData.lastName}
                   <br />
                   {formData.address}
@@ -1593,7 +1573,7 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12 space-y-6">
               <div className="text-6xl text-green-500">✓</div>
               <h2 className="text-3xl sm:text-4xl font-semibold">Order Confirmed!</h2>
-              <p className="text-gray-600 text-sm sm:text-base">Your order has been placed successfully. You'll receive a confirmation email shortly.</p>
+              <p className="text-gray-400 text-sm sm:text-base">Your order has been placed successfully. You'll receive a confirmation email shortly.</p>
               <button
                 onClick={() => navigate("/")}
                 className="mx-auto block bg-black text-white px-8 py-3 font-medium hover:bg-gray-900 transition text-sm sm:text-base"
@@ -1606,7 +1586,7 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
 
         {/* Right - Order Summary */}
         <div className="lg:col-span-1">
-          <div className="sticky top-32 bg-gray-50 p-6 sm:p-8 space-y-6">
+          <div className="sticky top-32 bg-[#0a0a0a] border border-gray-800 p-6 sm:p-8 space-y-6 text-white">
             <h2 className="text-xl font-semibold">Order Summary</h2>
 
             {/* Items */}
@@ -1616,7 +1596,7 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
                   <img src={item.image} alt={item.name} className="w-16 h-16 object-cover" />
                   <div className="flex-1 text-sm">
                     <p className="font-medium line-clamp-2">{item.name}</p>
-                    <p className="text-gray-600">Qty: {item.quantity}</p>
+                    <p className="text-gray-400">Qty: {item.quantity}</p>
                     <p className="font-medium">NPR {(item.price * item.quantity).toLocaleString("en-NP")}</p>
                   </div>
                 </div>
@@ -1637,7 +1617,7 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
                       }
                     }}
                     placeholder="Enter promo code"
-                    className="flex-1 border border-gray-300 bg-white px-4 py-3 text-sm focus:outline-none focus:border-black transition"
+                    className="flex-1 border border-gray-700 bg-black text-white px-4 py-3 text-sm focus:outline-none focus:border-white transition"
                   />
                   <button
                     type="button"
@@ -1664,7 +1644,7 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
                         className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 border px-4 py-3 text-left text-sm transition rounded ${
                           appliedDiscountCode === option.code
                             ? "border-black bg-black text-white"
-                            : "border-gray-300 bg-white hover:border-black hover:bg-gray-50"
+                            : "border-gray-700 bg-black hover:border-white hover:bg-gray-900"
                         }`}
                       >
                         <div className="flex flex-col">
@@ -1689,7 +1669,7 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
                     ))}
                   </div>
                 ) : (
-                  <p className="rounded border border-dashed border-gray-300 bg-gray-50 px-4 py-4 text-sm text-gray-600 text-center">
+                  <p className="rounded border border-dashed border-gray-700 bg-black px-4 py-4 text-sm text-gray-400 text-center">
                     No promo codes are currently available to display.
                   </p>
                 )}
@@ -1699,12 +1679,12 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
               </div>
 
               {appliedDiscount && (
-                <div className="flex items-center justify-between rounded bg-white px-4 py-3 text-sm">
+                <div className="flex items-center justify-between rounded bg-black border border-gray-800 px-4 py-3 text-sm">
                   <div>
                     <p className="font-medium">
                     {appliedDiscount?.label ?? appliedDiscount?.code ?? "Promo"} applied
                     </p>
-                    <p className="text-gray-600">{appliedDiscount.code}</p>
+                    <p className="text-gray-400">{appliedDiscount.code}</p>
                   </div>
                   <button
                     type="button"
@@ -1720,11 +1700,11 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
             {/* Totals */}
             <div className="space-y-3 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-600">Subtotal:</span>
+                <span className="text-gray-400">Subtotal:</span>
                 <span>NPR {subtotal.toLocaleString("en-NP")}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Shipping:</span>
+                <span className="text-gray-400">Shipping:</span>
                 <span>
                   {shipping === 0
                     ? "FREE (Kathmandu Valley)"
@@ -1750,7 +1730,7 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
             </div>
 
             {/* Info */}
-            <div className="bg-white p-4 rounded text-xs text-gray-600 space-y-2">
+            <div className="bg-black border border-gray-800 p-4 rounded text-xs text-gray-400 space-y-2">
               <p>✓ Secure checkout</p>
               <p>✓ Exchange within 2 days</p>
               <p>✗ No Returns</p>

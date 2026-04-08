@@ -1,22 +1,42 @@
+
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
-import { ShoppingCart, User, Menu, X, Search, LogOut, Moon, Sun } from "lucide-react";
-import { useState, useEffect } from "react";
+import { ShoppingCart, User, Search, LogOut, X, Home, Store, Layers, Tag } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useAuth } from "../contexts/AuthContext";
+import { Bell } from "lucide-react";
+import { useNotifications } from "../contexts/NotificationContext";
+import { supabase } from "../../lib/supabase";
+const triggerHaptic = () => {
+  if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+    navigator.vibrate(10);
+  }
+};
+
 
 export function Layout() {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [cartCount, setCartCount] = useState(0);
   const [mounted, setMounted] = useState(false);
+  const [profileName, setProfileName] = useState<string>("");
+  const [footerOpen, setFooterOpen] = useState<string | null>(null);
+  const toggleFooter = (section: string) => {
+    setFooterOpen(prev => (prev === section ? null : section));
+  };
   const location = useLocation();
   const navigate = useNavigate();
   const isHomePage = location.pathname === "/";
 
-  const { user, signOut, isAuthenticated } = useAuth();
+  const { user, isLoading } = useAuth();
+  const isAuthenticated = !!user;
+  const { notifications, setNotifications } = useNotifications();
+  const unreadCount = notifications?.filter((n: any) => !n.is_read).length || 0;
+  const [notifOpen, setNotifOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
+  const notifRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -63,7 +83,6 @@ export function Layout() {
   }, []);
 
   useEffect(() => {
-    setMobileMenuOpen(false);
     setSearchOpen(false);
     setUserMenuOpen(false);
   }, [location]);
@@ -71,6 +90,89 @@ export function Layout() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+
+      if (userMenuRef.current && !userMenuRef.current.contains(target)) {
+        setUserMenuOpen(false);
+      }
+
+      if (notifRef.current && !notifRef.current.contains(target)) {
+        setNotifOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const fetchProfile = async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", user.id)
+        .single();
+
+      if (!error && data?.full_name) {
+        setProfileName(data.full_name);
+      }
+    };
+
+    fetchProfile();
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel("notifications")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          setNotifications((prev: any) => [payload.new, ...prev]);
+
+          const event = new CustomEvent("toast", {
+            detail: {
+              title: payload.new.title,
+              message: payload.new.message,
+            },
+          });
+
+          window.dispatchEvent(event);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+
+  const markAsRead = async (id: string) => {
+    await supabase
+      .from("notifications")
+      .update({ is_read: true })
+      .eq("id", id);
+
+    setNotifications((prev: any) =>
+      prev.map((n: any) =>
+        n.id === id ? { ...n, is_read: true } : n
+      )
+    );
+  };
+
+  // toast handled by ToastProvider
 
 
   const handleSearchSubmit = (event: React.FormEvent) => {
@@ -82,7 +184,7 @@ export function Layout() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-black text-white overflow-x-hidden max-w-[100vw]">
       {/* Navbar */}
       <motion.nav
         initial={{ y: -100 }}
@@ -90,40 +192,38 @@ export function Layout() {
         className="fixed top-0 left-0 right-0 z-50 transition-all duration-300 bg-black text-white"
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="relative flex items-center justify-between h-20">
+          <div className="relative flex items-center justify-between h-20 flex-wrap">
             {/* Logo */}
-            <Link to="/" className="text-2xl tracking-[0.3em] uppercase hover:opacity-70 transition-opacity">
+            <Link to="/" className="text-2xl tracking-[0.3em] uppercase hover:opacity-70 transition-opacity absolute left-4 md:static">
               clo
             </Link>
 
-            {/* Desktop Navigation */}
-            <div className="hidden md:flex items-center gap-8 absolute left-1/2 transform -translate-x-1/2">
+            {/* Navigation */}
+            <div className="hidden md:flex items-center gap-8 absolute left-1/2 transform -translate-x-1/2 pointer-events-auto">
               <Link
                 to="/shop"
-                className="relative group tracking-widest uppercase text-sm text-white"
+                className="relative group tracking-widest uppercase text-sm text-white whitespace-nowrap"
               >
                 Shop
                 <span className="absolute left-0 -bottom-1 w-0 h-[1px] bg-current transition-all duration-300 group-hover:w-full"></span>
-
               </Link>
-            
               <Link
                 to="/about"
-                className="relative group tracking-widest uppercase text-sm text-white"
+                className="relative group tracking-widest uppercase text-sm text-white whitespace-nowrap"
               >
                 About
                 <span className="absolute left-0 -bottom-1 w-0 h-[1px] bg-current transition-all duration-300 group-hover:w-full"></span>
               </Link>
               <Link
                 to="/collections"
-                className="relative group tracking-widest uppercase text-sm text-white"
+                className="relative group tracking-widest uppercase text-sm text-white whitespace-nowrap"
               >
                 Collections
                 <span className="absolute left-0 -bottom-1 w-0 h-[1px] bg-current transition-all duration-300 group-hover:w-full"></span>
               </Link>
               <Link
                 to="/sale"
-                className="relative group tracking-widest uppercase text-sm text-white"
+                className="relative group tracking-widest uppercase text-sm text-white whitespace-nowrap"
               >
                 Sale
                 <span className="absolute left-0 -bottom-1 w-0 h-[1px] bg-current transition-all duration-300 group-hover:w-full"></span>
@@ -132,18 +232,18 @@ export function Layout() {
             
             
             
-            {/* Desktop Icons */}
-            <div className="hidden md:flex items-center gap-6">
+            {/* Icons (visible on all screens) */}
+            <div className="flex items-center gap-4 ml-auto">
               <button
                 onClick={() => setSearchOpen(!searchOpen)}
-                className="hover:opacity-70 transition-opacity text-white"
+                className="hover:opacity-70 transition-opacity text-white flex items-center justify-center"
               >
                 <Search size={20} />
               </button>
-              <div className="relative">
+              <div className="relative" ref={userMenuRef}>
                 <button
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
-                  className="hover:opacity-70 transition-opacity text-white"
+                  className="hover:opacity-70 transition-opacity text-white flex items-center justify-center"
                 >
                   <User size={20} />
                 </button>
@@ -153,38 +253,45 @@ export function Layout() {
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: 10 }}
-                      className="absolute right-0 top-full mt-4 w-48 bg-background border border-border shadow-lg"
+                      className="absolute right-0 top-full mt-4 w-56 bg-black border border-gray-800 shadow-2xl text-white rounded-xl overflow-hidden"
                     >
                       <div className="py-2">
                         {isAuthenticated ? (
                           <>
-                            <div className="px-6 py-3 border-b border-gray-200">
-                              <p className="text-sm font-medium tracking-wider text-foreground">
-                                {user?.name}
+                            <div className="px-6 py-3 border-b border-gray-800">
+                              <p className="text-sm font-medium tracking-wider text-white">
+                                {profileName || "User"}
                               </p>
-                              <p className="text-xs text-gray-500 tracking-wider">
+                              <p className="text-xs text-gray-400 tracking-wider mt-1 break-all">
                                 {user?.email}
                               </p>
                             </div>
                             <Link
                               to="/orders"
-                              className="block px-6 py-3 text-sm tracking-wider uppercase hover:bg-muted transition-colors text-foreground"
+                              className="block px-6 py-3 text-sm tracking-wider uppercase hover:bg-white/5 transition-colors text-white"
                             >
                               Orders
                             </Link>
                             <Link
+                              to="/wishlist"
+                              className="block px-6 py-3 text-sm tracking-wider uppercase hover:bg-white/5 transition-colors text-white"
+                            >
+                              Wishlist
+                            </Link>
+                            <Link
                               to="/profile"
-                              className="block px-6 py-3 text-sm tracking-wider uppercase hover:bg-muted transition-colors text-foreground"
+                              className="block px-6 py-3 text-sm tracking-wider uppercase hover:bg-white/5 transition-colors text-white"
                             >
                               Profile
                             </Link>
-                            <div className="border-t border-gray-200 my-2"></div>
+                            <div className="border-t border-gray-800 my-2"></div>
                             <button
-                              onClick={() => {
-                                signOut();
+                              onClick={async () => {
+                                const { supabase } = await import("../../lib/supabase");
+                                await supabase.auth.signOut();
                                 setUserMenuOpen(false);
                               }}
-                              className="w-full text-left px-6 py-3 text-sm tracking-wider uppercase hover:bg-muted transition-colors text-red-600 flex items-center gap-2"
+                              className="w-full text-left px-6 py-3 text-sm tracking-wider uppercase hover:bg-white/5 transition-colors text-red-600 flex items-center gap-2"
                             >
                               <LogOut size={16} />
                               Sign Out
@@ -192,19 +299,101 @@ export function Layout() {
                           </>
                         ) : (
                           <>
-                            <Link
-                              to="/signin"
-                              className="block px-6 py-3 text-sm tracking-wider uppercase hover:bg-muted transition-colors text-foreground"
-                            >
-                              Sign In
-                            </Link>
-                            <Link
-                              to="/register"
-                              className="block px-6 py-3 text-sm tracking-wider uppercase hover:bg-muted transition-colors text-foreground"
-                            >
-                              Register
-                            </Link>
+                          <Link
+                            to="/signin"
+                            className="block px-6 py-3 text-sm tracking-wider uppercase hover:bg-white/5 transition-colors text-white"
+                          >
+                            Sign In
+                          </Link>
+                          <Link
+                            to="/register"
+                            className="block px-6 py-3 text-sm tracking-wider uppercase hover:bg-white/5 transition-colors text-white"
+                          >
+                            Register
+                          </Link>
                           </>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+              <div className="relative" ref={notifRef}>
+                <button
+                  onClick={async () => {
+                    const next = !notifOpen;
+                    setNotifOpen(next);
+
+                    if (next && notifications.length > 0) {
+                      // mark all as read in DB
+                      await supabase
+                        .from("notifications")
+                        .update({ is_read: true })
+                        .eq("user_id", user?.id);
+
+                      // update local state
+                      setNotifications((prev: any[]) =>
+                        prev.map((n) => ({ ...n, is_read: true }))
+                      );
+                    }
+                  }}
+                  className="hover:opacity-70 transition-opacity text-white flex items-center justify-center"
+                >
+                  <Bell size={20} />
+                </button>
+
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 bg-red-600 text-white text-[10px] font-semibold min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full leading-none">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+
+                <AnimatePresence>
+                  {notifOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      className="absolute right-0 top-full mt-4 w-[320px] bg-black border border-gray-800 shadow-2xl text-white rounded-xl overflow-hidden"
+                    >
+                      <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between text-sm uppercase tracking-wider">
+                        <span>Notifications</span>
+                        {notifications.length > 0 && (
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              await supabase
+                                .from("notifications")
+                                .delete()
+                                .eq("user_id", user?.id);
+
+                              setNotifications([]);
+                            }}
+                            className="text-xs text-red-500 hover:text-red-400 transition"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="max-h-80 overflow-y-auto">
+                        {notifications?.length === 0 ? (
+                          <p className="px-4 py-4 text-gray-400 text-sm">
+                            No notifications
+                          </p>
+                        ) : (
+                          notifications.map((n: any) => (
+                            <div
+                              key={n.id}
+                              onClick={() => {}}
+                              className={`px-4 py-3 border-b border-gray-800 text-sm cursor-pointer flex flex-col gap-1 ${
+                                !n.is_read ? "bg-white/5" : ""
+                              }`}
+                            >
+                              <p className="font-medium leading-tight">{n.title}</p>
+                              <p className="text-xs text-gray-400 leading-snug">{n.message}</p>
+                            </div>
+                          ))
                         )}
                       </div>
                     </motion.div>
@@ -213,24 +402,17 @@ export function Layout() {
               </div>
               <Link
                 to="/cart"
-                className="hover:opacity-70 transition-opacity relative text-white"
+                className="hover:opacity-70 transition-opacity relative text-white flex items-center justify-center"
               >
                 <ShoppingCart size={20} />
                 {cartCount > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
-                    {cartCount}
+                  <span className="absolute -top-1.5 -right-1.5 bg-red-600 text-white text-[10px] font-semibold min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full leading-none">
+                    {cartCount > 9 ? "9+" : cartCount}
                   </span>
                 )}
               </Link>
             </div>
 
-            {/* Mobile Menu Button */}
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden text-white"
-            >
-              {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-            </button>
           </div>
         </div>
 
@@ -264,13 +446,13 @@ export function Layout() {
                     >
                       Search
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setSearchOpen(false)}
-                      className="text-white hover:opacity-70"
-                    >
-                      <X size={20} />
-                    </button>
+                  <button
+                    type="button"
+                    onClick={() => setSearchOpen(false)}
+                    className="text-white hover:opacity-70 flex items-center justify-center"
+                  >
+                    <X size={20} />
+                  </button>
                   </div>
                 </form>
               </div>
@@ -278,119 +460,92 @@ export function Layout() {
           )}
         </AnimatePresence>
 
-        {/* Mobile Menu */}
-        <AnimatePresence>
-          {mobileMenuOpen && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="md:hidden bg-background border-t border-border"
-            >
-              <div className="px-4 py-6 space-y-4">
-                <Link
-                  to="/shop"
-                  className="block text-black hover:opacity-70 transition-opacity tracking-widest uppercase text-sm"
-                >
-                  Shop
-                </Link>
-                {/*
-                <Link
-                  to="/custom"
-                  className="block text-black hover:opacity-70 transition-opacity tracking-widest uppercase text-sm"
-                >
-                  Custom Prints
-                </Link>
-                */}
-                <Link
-                  to="/about"
-                  className="block text-black hover:opacity-70 transition-opacity tracking-widest uppercase text-sm"
-                >
-                  About
-                </Link>
-                <Link
-                  to="/collections"
-                  className="block text-black hover:opacity-70 transition-opacity tracking-widest uppercase text-sm"
-                >
-                  Collections
-                </Link>
-                <Link
-                  to="/sale"
-                  className="block text-black hover:opacity-70 transition-opacity tracking-widest uppercase text-sm"
-                >
-                  Sale
-                </Link>
-                <div className="pt-4 border-t space-y-4">
-                  <button
-                    onClick={() => {
-                      setMobileMenuOpen(false);
-                      setSearchOpen(true);
-                    }}
-                    className="flex items-center gap-3 text-black text-sm tracking-widest uppercase"
-                  >
-                    <Search size={20} />
-                    Search
-                  </button>
-                  <div className="space-y-3 pl-8">
-                    <Link
-                      to="/signin"
-                      className="block text-sm tracking-wider uppercase text-gray-600 hover:text-black transition-colors"
-                    >
-                      Sign In
-                    </Link>
-                    <Link
-                      to="/register"
-                      className="block text-sm tracking-wider uppercase text-gray-600 hover:text-black transition-colors"
-                    >
-                      Register
-                    </Link>
-                  </div>
-                </div>
-                <div className="flex items-center gap-6 pt-4 border-t">
-                  <Link to="/cart" className="text-black relative">
-                    <ShoppingCart size={20} />
-                    {cartCount > 0 && (
-                      <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
-                        {cartCount}
-                      </span>
-                    )}
-                  </Link>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </motion.nav>
 
       {/* Main Content */}
-      <main>
+      <main className="pt-20 pb-20 md:pb-0 overflow-x-hidden">
         <Outlet />
+      {/* Mobile Bottom Nav */}
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 md:hidden bg-white/10 backdrop-blur-xl border border-white/10 flex justify-between px-5 py-2 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.6)] w-[92%] max-w-md">
+        <Link
+          to="/"
+          onClick={triggerHaptic}
+          className={`flex flex-col items-center justify-center text-[10px] tracking-widest uppercase transition-all duration-300 active:scale-95 ${
+            location.pathname === "/" ? "text-white" : "text-white/60 hover:text-white"
+          }`}
+        >
+          <Home size={18} />
+          <span className="mt-1">Home</span>
+          {location.pathname === "/" && (
+            <span className="mt-1 w-1 h-1 bg-white rounded-full"></span>
+          )}
+        </Link>
+        <Link
+          to="/shop"
+          onClick={triggerHaptic}
+          className={`flex flex-col items-center justify-center text-[10px] tracking-widest uppercase transition-all duration-300 active:scale-95 ${
+            location.pathname === "/shop" ? "text-white" : "text-white/60 hover:text-white"
+          }`}
+        >
+          <Store size={18} />
+          <span className="mt-1">Shop</span>
+          {location.pathname === "/shop" && (
+            <span className="mt-1 w-1 h-1 bg-white rounded-full"></span>
+          )}
+        </Link>
+        <Link
+          to="/collections"
+          onClick={triggerHaptic}
+          className={`flex flex-col items-center justify-center text-[10px] tracking-widest uppercase transition-all duration-300 active:scale-95 ${
+            location.pathname === "/collections" ? "text-white" : "text-white/60 hover:text-white"
+          }`}
+        >
+          <Layers size={18} />
+          <span className="mt-1">Collections</span>
+          {location.pathname === "/collections" && (
+            <span className="mt-1 w-1 h-1 bg-white rounded-full"></span>
+          )}
+        </Link>
+        <Link
+          to="/sale"
+          onClick={triggerHaptic}
+          className={`flex flex-col items-center justify-center text-[10px] tracking-widest uppercase transition-all duration-300 active:scale-95 ${
+            location.pathname === "/sale" ? "text-white" : "text-white/60 hover:text-white"
+          }`}
+        >
+          <Tag size={18} />
+          <span className="mt-1">Sale</span>
+          {location.pathname === "/sale" && (
+            <span className="mt-1 w-1 h-1 bg-white rounded-full"></span>
+          )}
+        </Link>
+      </div>
       </main>
 
 
-      <footer className="bg-black text-white">
+      <footer className="bg-black text-white pb-28 md:pb-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-          <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-[1fr_0.9fr_0.9fr_1.2fr] lg:gap-12">
+          <div className="flex flex-col gap-10 md:grid md:grid-cols-2 lg:grid-cols-[1fr_0.9fr_0.9fr_1.2fr] lg:gap-12 text-center md:text-left">
             {/* Brand + SOCIAL MEDIA LINKS */}
             <div className="group space-y-6 sm:col-span-2 lg:col-span-1">
               <h3 className="text-xl tracking-[0.3em] uppercase">clo</h3>
               <div className="space-y-2">
-                <p className="max-w-xs text-gray-400 text-sm leading-6">
-                  Minimal. Original. Design.
-                </p>
-                <p className=" flex place-items-centertext-sm uppercase tracking-[0.20em] text-white/0 transition duration-300 group-hover:text-white/75">
-                  Extravagant
+                <p className="max-w-xs mx-auto md:mx-0 text-gray-400 text-sm leading-6 text-center md:text-left">
+                  Minimal. Original. Design. 
+                  <span className="text-white md:text-white/0 transition duration-300 md:group-hover:text-white/75 uppercase tracking-[0.20em] ml-1">
+                    Extravagant
+                  </span>
                 </p>
               </div>
 
               {/* === SOCIAL MEDIA LINKS === */}
-              <div className="flex items-center gap-4 pt-4">
+              <div className="flex items-center justify-center md:justify-start gap-6 pt-4">
                 {/* Facebook */}
                 <a
                   href=""//facebook.com/yourpage"
                   target="_blank"
                   rel="noopener noreferrer"
-                 className="group/social relative w-11 h-11 flex items-center justify-center hover:scale-105 transition-all duration-300"
+                  className="group/social relative w-11 h-11 flex items-center justify-center hover:scale-105 transition-all duration-300"
                 >
 
                   {/* White Icon (default) */}
@@ -461,60 +616,81 @@ export function Layout() {
             </div>
 
             {/* Shop */}
-            <div className="space-y-4">
-              <h4 className="font-medium tracking-widest uppercase text-sm">Shop</h4>
-              <ul className="space-y-3 text-sm text-gray-400">
-                <li><Link to="/shop" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">All Products</Link></li>
+            <div className="space-y-4 pt-6 border-t border-white/10 md:border-0 md:pt-0">
+              <button
+                onClick={() => toggleFooter("shop")}
+                className="w-full text-sm uppercase tracking-widest flex justify-between items-center md:block"
+              >
+                Shop
+                <span className="md:hidden">{footerOpen === "shop" ? "-" : "+"}</span>
+              </button>
+              <ul className={`space-y-3 text-sm text-gray-400 ${footerOpen === "shop" ? "block" : "hidden"} md:block`}>
+                <li><Link to="/shop" onClick={triggerHaptic} className="inline-flex leading-6 hover:text-white transition-colors tracking-wider py-2 text-base">All Products</Link></li>
                 {/* Custom Prints removed */}
-                <li><Link to="/shop?filter=new" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">New Arrivals</Link></li>
-                <li><Link to="/collections" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">Collections</Link></li>
-                <li><Link to="/sale" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">Sale</Link></li>
+                <li><Link to="/shop?filter=new" onClick={triggerHaptic} className="inline-flex leading-6 hover:text-white transition-colors tracking-wider py-2 text-base">New Arrivals</Link></li>
+                <li><Link to="/collections" onClick={triggerHaptic} className="inline-flex leading-6 hover:text-white transition-colors tracking-wider py-2 text-base">Collections</Link></li>
+                <li><Link to="/sale" onClick={triggerHaptic} className="inline-flex leading-6 hover:text-white transition-colors tracking-wider py-2 text-base">Sale</Link></li>
               </ul>
             </div>
 
             {/* Help */}
-            <div className="space-y-4">
-              <h4 className="font-medium tracking-widest uppercase text-sm">Help</h4>
-              <ul className="space-y-3 text-sm text-gray-400">
+            <div className="space-y-4 pt-6 border-t border-white/10 md:border-0 md:pt-0">
+              <button
+                onClick={() => toggleFooter("help")}
+                className="w-full text-sm uppercase tracking-widest flex justify-between items-center md:block"
+              >
+                Help
+                <span className="md:hidden">{footerOpen === "help" ? "-" : "+"}</span>
+              </button>
+              <ul className={`space-y-3 text-sm text-gray-400 ${footerOpen === "help" ? "block" : "hidden"} md:block`}>
                 <li>
                   <Link
                     to="/customer-service"
-                    className="inline-flex leading-6 hover:text-white transition-colors tracking-wider"
+                    onClick={triggerHaptic}
+                    className="inline-flex leading-6 hover:text-white transition-colors tracking-wider py-2 text-base"
                   >
                     Customer Service
                   </Link>
                 </li>
-                <li><Link to="/shipping" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">Shipping & Returns</Link></li>
-                <li><Link to="/size-guide" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">Size Guide</Link></li>
-                <li><Link to="/contact" className="inline-flex leading-6 hover:text-white transition-colors tracking-wider">Contact Us</Link></li>
+                <li><Link to="/shipping" onClick={triggerHaptic} className="inline-flex leading-6 hover:text-white transition-colors tracking-wider py-2 text-base">Shipping & Returns</Link></li>
+                <li><Link to="/size-guide" onClick={triggerHaptic} className="inline-flex leading-6 hover:text-white transition-colors tracking-wider py-2 text-base">Size Guide</Link></li>
+                <li><Link to="/contact" onClick={triggerHaptic} className="inline-flex leading-6 hover:text-white transition-colors tracking-wider py-2 text-base">Contact Us</Link></li>
               </ul>
             </div>
 
             {/* Newsletter */}
-            <div className="space-y-4 sm:col-span-2 lg:col-span-1 lg:max-w-md">
-              <h4 className="font-medium tracking-widest uppercase text-sm">Newsletter</h4>
-              <p className="max-w-md text-sm text-gray-400 leading-6">
-                Subscribe for exclusive offers and updates
-              </p>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
-                <input
-                  type="email"
-                  placeholder="Email"
-                  className="min-w-0 flex-1 bg-white/10 border border-white/20 px-4 py-3 text-sm focus:outline-none focus:border-white/40 tracking-wider"
-                />
-                <button className="w-full px-6 py-3 bg-white text-black hover:bg-gray-200 transition-colors text-sm tracking-widest uppercase sm:w-auto">
-                  Join
-                </button>
+            <div className="space-y-4 pt-6 border-t border-white/10 md:border-0 md:pt-0 sm:col-span-2 lg:col-span-1 lg:max-w-md">
+              <button
+                onClick={() => toggleFooter("newsletter")}
+                className="w-full text-sm uppercase tracking-widest flex justify-between items-center md:block"
+              >
+                Newsletter
+                <span className="md:hidden">{footerOpen === "newsletter" ? "-" : "+"}</span>
+              </button>
+              <div className={`${footerOpen === "newsletter" ? "block" : "hidden"} md:block`}>
+                <p className="max-w-md text-sm text-gray-400 leading-6">
+                  Subscribe for exclusive offers and updates
+                </p>
+                <div className="flex flex-col gap-3 mt-3">
+                  <input
+                    type="email"
+                    placeholder="Email"
+                    className="w-full bg-white/10 border border-white/20 px-4 py-3 text-base focus:outline-none focus:border-white/40 tracking-wider rounded-md"
+                  />
+                  <button className="w-full px-6 py-3 bg-white text-black hover:bg-gray-200 transition-colors text-sm tracking-widest uppercase rounded-md">
+                    Join
+                  </button>
+                </div>
               </div>
             </div>
           </div>
 
           {/* === PAYMENT METHODS SECTION === */}
           <div className="mt-12 border-t border-white/10 pt-8">
-            <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col items-center gap-6 md:flex-row md:items-center md:justify-between">
               {/* Payment Methods */}
-              <div className="flex items-center gap-1 flex-wrap justify-center">
-                <span className="text-xs uppercase tracking-wider text-white/60 mr-4 hidden sm:block">We accept:</span>
+              <div className="flex items-center gap-2 flex-wrap justify-center">
+                <span className="text-xs uppercase tracking-wider text-white/60 mr-4">We accept:</span>
 
                 {/* Cash on Delivery */}
                 <div className="group flex items-center gap-2 bg-white/5 px-3 py-2 rounded-lg">
@@ -560,10 +736,10 @@ export function Layout() {
               <div className="flex flex-col gap-4 text-center text-sm text-gray-400 md:flex-row md:items-center md:justify-between md:text-left">
                 <p>© 2026 clo. All rights reserved.</p>
                 <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 md:justify-end">
-                  <Link to="/privacy" className="hover:text-white transition-colors tracking-wider">
+                  <Link to="/privacy" onClick={triggerHaptic} className="hover:text-white transition-colors tracking-wider">
                     Privacy Policy
                   </Link>
-                  <Link to="/terms" className="hover:text-white transition-colors tracking-wider">
+                  <Link to="/terms" onClick={triggerHaptic} className="hover:text-white transition-colors tracking-wider">
                     Terms of Service
                   </Link>
                 </div>

@@ -1,61 +1,91 @@
-import { useProducts } from "../contexts/ProductsContext";
-import { ProductCard } from "../components/ProductCard";
+import { useEffect, useState } from "react";
+import { supabase } from "../../lib/supabase";
+import { Link } from "react-router-dom";
 
 export default function BestSellers() {
-  const { products } = useProducts();
+  const [products, setProducts] = useState<any[]>([]);
 
-  const sorted = [...products]
-    .map((p: any) => {
-      // Try ALL possible sales-related fields
-      const salesValue =
-        p.orders_count ??
-        p.sales_count ??
-        p.sold ??
-        p.total_orders ??
-        p.orderCount ??
-        0;
+  useEffect(() => {
+    const fetchBestSellers = async () => {
+      const { data, error } = await supabase
+        .from("products")
+        .select("*")
+        .gt("orders_count", 0)
+        .order("orders_count", { ascending: false })
+        .limit(24);
 
-      const sales = Number(salesValue);
+      if (error) {
+        console.error("Error fetching best sellers:", error);
+      } else {
+        setProducts(data || []);
+      }
+    };
 
-      return {
-        ...p,
-        sales: isNaN(sales) ? 0 : sales,
-      };
-    })
-    .sort((a: any, b: any) => b.sales - a.sales);
+    fetchBestSellers();
 
-  // Ensure we always show top items even if sales = 0
-  const finalProducts = sorted.slice(0, 24);
+    // 🔥 Realtime subscription
+    const channel = supabase
+      .channel("products-changes")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "products" },
+        () => {
+          fetchBestSellers();
+        }
+      )
+      .subscribe();
 
-  console.log("Best Sellers Data:", sorted);
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const displayProducts = products;
 
   return (
     <div className="pt-20">
-      {/* 🔥 HERO */}
-      <div className="bg-black text-white py-16 text-center">
-        <h1 className="text-4xl md:text-5xl tracking-[0.2em]">
-          BEST SELLERS
+      {/* Header */}
+      <div className="text-center py-12">
+        <h1 className="text-3xl md:text-5xl tracking-[0.2em] uppercase">
+          Best Sellers
         </h1>
         <p className="text-gray-400 mt-3 text-sm">
           Most loved by our customers
         </p>
       </div>
 
-      {/* PRODUCTS */}
-      <div className="max-w-7xl mx-auto px-4 py-12">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-          {finalProducts.map((product: any, index: number) => (
-            <div key={product.id} className="relative group">
+      {/* Products */}
+      <div className="max-w-7xl mx-auto px-4 pb-20">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+          {displayProducts.map((product: any) => (
+            <div key={product.id} className="relative">
               
-
-              {/* 🔥 SOLD BADGE */}
-              {product.sales !== undefined && (
-                <span className="absolute top-12 right-3 bg-black/80 text-white text-xs px-2 py-1 z-10">
-                  {product.sales} sold
+              {/* Sold badge */}
+              {(product.orders_count ?? 0) > 0 && (
+                <span className="absolute top-2 right-2 bg-black/80 text-white text-xs px-2 py-1 z-10">
+                  {product.orders_count} sold
                 </span>
               )}
 
-              <ProductCard product={product} />
+              <Link to={`/product/${product.slug || product.id}`} className="block group">
+                <div className="aspect-[3/4] bg-neutral-900 overflow-hidden">
+                  <img
+                    src={product.image}
+                    alt={product.name}
+                    className="w-full h-full object-cover group-hover:scale-105 transition"
+                  />
+                </div>
+
+                <div className="mt-2">
+                  <h2 className="text-sm text-white">
+                    {product.name}
+                  </h2>
+                  <p className="text-xs text-gray-400">
+                    Rs. {product.price}
+                  </p>
+                </div>
+              </Link>
+
             </div>
           ))}
         </div>

@@ -22,6 +22,8 @@ export interface Product {
   careInstructions?: string;
   createdAt?: string;
   updatedAt?: string;
+  sales_count?: number;
+  slug?: string;
 }
 
 interface ProductsContextType {
@@ -452,7 +454,9 @@ export const ProductsProvider: React.FC<{ children: ReactNode }> = ({ children }
           material: p?.material ?? "",
           careInstructions: p?.care_instructions ?? "",
           createdAt: p?.created_at ?? new Date().toISOString(),
-          updatedAt: p?.updated_at ?? new Date().toISOString()
+          updatedAt: p?.updated_at ?? new Date().toISOString(),
+          sales_count: p?.sales_count ?? 0,
+          slug: p?.slug || p?.id,
         })));
       }
     };
@@ -487,7 +491,9 @@ export const ProductsProvider: React.FC<{ children: ReactNode }> = ({ children }
       material: p?.material ?? "",
       careInstructions: p?.care_instructions ?? "",
       createdAt: p?.created_at ?? new Date().toISOString(),
-      updatedAt: p?.updated_at ?? new Date().toISOString()
+      updatedAt: p?.updated_at ?? new Date().toISOString(),
+      sales_count: p?.sales_count ?? 0,
+      slug: p?.slug || p?.id,
     })));
   };
 

@@ -2,13 +2,37 @@ import express from "express";
 import crypto from "crypto";
 import cors from "cors";
 import fetch from "node-fetch";
+import { createClient } from "@supabase/supabase-js";
 
 const app = express();
 const KHALTI_SECRET_KEY = process.env.KHALTI_SECRET_KEY;
 
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
+
 app.use(cors());
 
 app.use(express.json());
+
+async function incrementSales(items = []) {
+  for (const item of items) {
+    const productId = item.product_id || item.id;
+    const qty = item.quantity || 1;
+
+    if (!productId) continue;
+
+    const { error } = await supabase.rpc("increment_sales", {
+      product_id: productId,
+      qty,
+    });
+
+    if (error) {
+      console.error("❌ Failed to increment sales:", error);
+    }
+  }
+}
 
 app.get("/api/esewa", (req, res) => {
   res.json({ message: "eSewa API is running. Use POST to generate signature." });
@@ -63,6 +87,12 @@ app.post("/api/khalti/initiate", async (req, res) => {
 
     if (!response.ok) {
       return res.status(response.status).json(data);
+    }
+
+    if (data.status === "Completed") {
+      console.log("✅ Payment verified, updating sales");
+
+      await incrementSales(req.body.items || []);
     }
 
     res.json(data);
@@ -212,6 +242,8 @@ app.post("/api/esewa/verify", async (req, res) => {
     console.log("eSewa VERIFY RESPONSE:", text);
 
     if (text.includes("Success")) {
+      await incrementSales(req.body.items || []);
+
       return res.json({
         success: true,
         transaction_id: refId,

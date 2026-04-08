@@ -45,6 +45,8 @@ useEffect(() => {
 
   // Filter products
   let filteredProducts = [...products];
+  // Always sort by admin-defined display_order first
+  filteredProducts.sort((a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0));
 
   // --- Dynamic filter from URL ---
   const urlFilter = searchParams.get("filter");
@@ -63,7 +65,7 @@ useEffect(() => {
   }
 
   if (urlFilter === "new") {
-    filteredProducts.sort((a: any, b: any) => {
+    filteredProducts = [...filteredProducts].sort((a: any, b: any) => {
       const dateA = new Date(a.created_at || a.createdAt || 0).getTime();
       const dateB = new Date(b.created_at || b.createdAt || 0).getTime();
       return dateB - dateA;
@@ -71,7 +73,7 @@ useEffect(() => {
   }
 
   if (urlFilter === "popular") {
-    filteredProducts.sort((a: any, b: any) => {
+    filteredProducts = [...filteredProducts].sort((a: any, b: any) => {
       const scoreA = a.orders_count || 0;
       const scoreB = b.orders_count || 0;
       return scoreB - scoreA;
@@ -114,11 +116,11 @@ if (sortBy === "featured") {
 }
   // Sort products
   if (sortBy === "price-low") {
-    filteredProducts.sort((a, b) => a.price - b.price);
+    filteredProducts = [...filteredProducts].sort((a, b) => a.price - b.price);
   } else if (sortBy === "price-high") {
-    filteredProducts.sort((a, b) => b.price - a.price);
+    filteredProducts = [...filteredProducts].sort((a, b) => b.price - a.price);
   } else if (sortBy === "name") {
-    filteredProducts.sort((a, b) => a.name.localeCompare(b.name));
+    filteredProducts = [...filteredProducts].sort((a, b) => a.name.localeCompare(b.name));
   }
 
   const clearFilters = () => {

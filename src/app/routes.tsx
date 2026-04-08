@@ -25,7 +25,9 @@ import Collections from "./pages/Collections";
 import Sale from "./pages/Sale";
 import NewArrivals from "./pages/NewArrivals";
 import BestSellers from "./pages/BestSellers";
+import Wishlist from "./pages/Wishlist";
 import CollectionDetail from "./pages/CollectionDetail";
+
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -57,6 +59,7 @@ export const router = createBrowserRouter([
       { path: "sale", Component: Sale },
       { path: "new-arrivals", Component: NewArrivals },
       { path: "best-sellers", Component: BestSellers },
+      { path: "wishlist", Component: Wishlist },
       { path: "collections/:category", Component: CollectionDetail },
       { path: "*", Component: NotFound },
       

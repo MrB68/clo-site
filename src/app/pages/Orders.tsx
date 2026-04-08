@@ -161,7 +161,7 @@ export function Orders() {
       // 🔒 Fetch expected amount from DB
       const { data: existingOrder } = await supabase
         .from("orders")
-        .select("total")
+        .select("total, items")
         .or(`id.eq.${orderId},custom_design_id.eq.${orderId}`)
         .single();
 
@@ -182,6 +182,11 @@ export function Orders() {
         console.log("VERIFYING PAYMENT:", { orderId, refId, amt });
         console.log("FINAL AMOUNT USED:", Number(amt));
 
+        const orderItems =
+          existingOrder?.items && typeof existingOrder.items === "string"
+            ? JSON.parse(existingOrder.items)
+            : existingOrder?.items || [];
+
         const res = await fetch("/api/esewa", {
           method: "POST",
           headers: {
@@ -191,6 +196,7 @@ export function Orders() {
             oid: orderId,
             refId,
             amt: Number(amt),
+            items: orderItems,
           }),
         });
 

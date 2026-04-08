@@ -78,16 +78,20 @@ export function Register() {
         return;
       }
 
-      // Step 2: Insert into profiles table
+      // Step 2: Insert into profiles table (upsert, robust, use full_name)
       if (data.user) {
-        await supabase.from("profiles").insert([
-          {
+        const { error: profileError } = await supabase
+          .from("profiles")
+          .upsert({
             id: data.user.id,
             email: formData.email,
-            name: formData.name,
+            full_name: formData.name.trim(),
             role: "user",
-          },
-        ]);
+          });
+
+        if (profileError) {
+          console.error("Profile insert error:", profileError);
+        }
       }
 
       navigate("/");

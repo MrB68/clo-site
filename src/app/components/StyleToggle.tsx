@@ -2,6 +2,12 @@ import { motion } from "motion/react";
 import { Minus } from "lucide-react";
 import { useState } from "react";
 
+const triggerHaptic = () => {
+  if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+    navigator.vibrate(10);
+  }
+};
+
 interface StyleToggleProps {
   activeStyle?: "minimal" | "extravagant";
   onStyleChange?: (style: "minimal" | "extravagant") => void;
@@ -9,23 +15,44 @@ interface StyleToggleProps {
 
 export function StyleToggle({ activeStyle = "minimal", onStyleChange }: StyleToggleProps) {
   return (
-    <div className="inline-flex flex-nowrap border-2 border-white">
+    <div role="tablist" className="relative isolate grid grid-cols-2 w-full max-w-md rounded-full bg-white/5 backdrop-blur-md border border-white/10 p-1">
+      <motion.div
+        layout
+        transition={{ type: "spring", stiffness: 400, damping: 30 }}
+        className="pointer-events-none absolute inset-0 p-1 grid grid-cols-2"
+      >
+        <div
+          className={`rounded-full bg-gradient-to-b from-white/90 to-white/70 shadow-[0_8px_20px_rgba(255,255,255,0.18)] transition-all ${
+            activeStyle === "minimal" ? "col-start-1" : "col-start-2"
+          }`}
+        />
+      </motion.div>
       <button
-        onClick={() => onStyleChange?.("minimal")}
-        className={`whitespace-nowrap border-r border-white px-6 py-4 text-xs font-medium uppercase tracking-[0.2em] transition-all duration-300 sm:px-8 sm:text-sm ${
+        role="tab"
+        aria-selected={activeStyle === "minimal"}
+        onClick={() => {
+          triggerHaptic();
+          onStyleChange?.("minimal");
+        }}
+        className={`relative z-10 flex items-center justify-center whitespace-nowrap px-4 py-3 sm:px-6 text-xs sm:text-sm font-medium uppercase tracking-[0.2em] transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50 active:scale-[0.98] ${
           activeStyle === "minimal"
-            ? "bg-white text-black"
-            : "bg-transparent text-white"
+            ? "text-black font-semibold"
+            : "text-white/70 hover:text-white"
         }`}
       >
         Minimal
       </button>
       <button
-        onClick={() => onStyleChange?.("extravagant")}
-        className={`whitespace-nowrap px-6 py-4 text-xs font-medium uppercase tracking-[0.2em] transition-all duration-300 sm:px-8 sm:text-sm ${
+        role="tab"
+        aria-selected={activeStyle === "extravagant"}
+        onClick={() => {
+          triggerHaptic();
+          onStyleChange?.("extravagant");
+        }}
+        className={`relative z-10 flex items-center justify-center whitespace-nowrap px-4 py-3 sm:px-6 text-xs sm:text-sm font-medium uppercase tracking-[0.2em] transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50 active:scale-[0.98] ${
           activeStyle === "extravagant"
-            ? "bg-white text-black"
-            : "bg-transparent text-white"
+            ? "text-black font-semibold"
+            : "text-white/70 hover:text-white"
         }`}
       >
         Extravagant
@@ -61,32 +88,53 @@ export function StyleSwitch({ activeStyle: propActiveStyle, onStyleChange: propO
       className="flex flex-col items-center gap-6 px-8 py-16 transition-all duration-500"
     >
       <div className="flex items-center gap-4 opacity-50">
-        <div className="h-px w-12 bg-black transition-colors duration-300 dark:bg-white"></div>
-        <Minus size={16} className="text-black transition-colors duration-300 dark:text-white" />
-        <div className="h-px w-12 bg-black transition-colors duration-300 dark:bg-white"></div>
+        <div className="h-px w-12 bg-white"></div>
+        <Minus size={16} className="text-white" />
+        <div className="h-px w-12 bg-white"></div>
       </div>
       
       <div className="text-center space-y-2">
-        <p className="text-xs tracking-[0.3em] uppercase text-gray-600 dark:text-gray-400">
+        <p className="text-xs tracking-[0.3em] uppercase text-gray-400">
           Select Your Style
         </p>
-        <div className="inline-flex flex-nowrap border-2 border-black transition-colors duration-300 dark:border-white">
+        <div role="tablist" className="relative isolate grid grid-cols-2 w-full max-w-md rounded-full bg-white/5 backdrop-blur-md border border-white/10 p-1">
+          <motion.div
+            layout
+            transition={{ type: "spring", stiffness: 400, damping: 30 }}
+            className="pointer-events-none absolute inset-0 p-1 grid grid-cols-2"
+          >
+            <div
+              className={`rounded-full bg-gradient-to-b from-white/90 to-white/70 shadow-[0_8px_20px_rgba(255,255,255,0.18)] transition-all ${
+                activeStyle === "minimal" ? "col-start-1" : "col-start-2"
+              }`}
+            />
+          </motion.div>
           <button
-            onClick={() => handleChange("minimal")}
-            className={`whitespace-nowrap border-r px-6 py-4 text-xs font-medium uppercase tracking-[0.2em] transition-all duration-300 sm:px-8 sm:text-sm ${
+            role="tab"
+            aria-selected={activeStyle === "minimal"}
+            onClick={() => {
+              triggerHaptic();
+              handleChange("minimal");
+            }}
+            className={`relative z-10 flex items-center justify-center whitespace-nowrap px-4 py-3 sm:px-6 text-xs sm:text-sm font-medium uppercase tracking-[0.2em] transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50 active:scale-[0.98] ${
               activeStyle === "minimal"
-                ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black"
-                : "border-black bg-transparent text-black dark:border-white dark:text-white"
+                ? "text-black font-semibold"
+                : "text-white/70 hover:text-white"
             }`}
           >
             Minimal
           </button>
           <button
-            onClick={() => handleChange("extravagant")}
-            className={`whitespace-nowrap px-6 py-4 text-xs font-medium uppercase tracking-[0.2em] transition-all duration-300 sm:px-8 sm:text-sm ${
+            role="tab"
+            aria-selected={activeStyle === "extravagant"}
+            onClick={() => {
+              triggerHaptic();
+              handleChange("extravagant");
+            }}
+            className={`relative z-10 flex items-center justify-center whitespace-nowrap px-4 py-3 sm:px-6 text-xs sm:text-sm font-medium uppercase tracking-[0.2em] transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50 active:scale-[0.98] ${
               activeStyle === "extravagant"
-                ? "bg-black text-white dark:bg-white dark:text-black"
-                : "bg-transparent text-black dark:text-white"
+                ? "text-black font-semibold"
+                : "text-white/70 hover:text-white"
             }`}
           >
             Extravagant
@@ -94,7 +142,7 @@ export function StyleSwitch({ activeStyle: propActiveStyle, onStyleChange: propO
         </div>
       </div>
 
-      <div className="max-w-md text-center text-black transition-colors duration-500 dark:text-white">
+      <div className="max-w-md text-center text-white">
         <p className="text-sm leading-relaxed">
           {activeStyle === "extravagant"
             ? "Bold statements, avant-garde designs. Where luxury meets audacity—pieces for the daring."

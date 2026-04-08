@@ -1,5 +1,7 @@
 import { motion } from "motion/react";
 import { Link } from "react-router-dom";
+import { Heart } from "lucide-react";
+import { useWishlist } from "../contexts/WishlistContext";
 
 type ProductCardProps = {
   product: any;
@@ -7,6 +9,9 @@ type ProductCardProps = {
 };
 
 export function ProductCard({ product, hideBadge }: ProductCardProps) {
+  const { wishlist, addToWishlist, removeFromWishlist } = useWishlist();
+  const isWishlisted = wishlist?.some((item: any) => item.product_id === product.id);
+
   const isFeatured = product?.featured;
   const price = product.price ?? 0;
   const original =
@@ -54,6 +59,29 @@ export function ProductCard({ product, hideBadge }: ProductCardProps) {
             />
           )}
 
+          {/* WISHLIST BUTTON */}
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (isWishlisted) {
+                removeFromWishlist(product.id);
+              } else {
+                addToWishlist(product.id);
+              }
+            }}
+            className="absolute top-3 right-3 z-30 p-2 backdrop-blur-md bg-black/40 rounded-full hover:bg-black/60 transition"
+          >
+            <Heart
+              size={16}
+              className={`transition ${
+                isWishlisted
+                  ? "fill-red-500 text-red-500 scale-110"
+                  : "text-white"
+              }`}
+            />
+          </button>
+
           {/* SALE BADGE */}
           {!hideBadge && hasDiscount && !isOutOfStock && (
             <span className="absolute top-3 left-3 z-20 bg-black text-white px-3 py-1 text-[10px] tracking-[0.2em] uppercase shadow-md">
@@ -74,7 +102,7 @@ export function ProductCard({ product, hideBadge }: ProductCardProps) {
               initial={{ opacity: 0, scale: 0.8 }}
               whileInView={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.3 }}
-              className="absolute top-3 right-3 z-20 bg-red-600 text-white px-3 py-1 text-[10px] tracking-[0.2em] uppercase shadow-md"
+              className="absolute top-12 right-3 z-20 bg-red-600 text-white px-3 py-1 text-[10px] tracking-[0.2em] uppercase shadow-md"
             >
               -{discount}%
             </motion.span>

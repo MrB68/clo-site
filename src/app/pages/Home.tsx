@@ -160,9 +160,8 @@ export function Home() {
                 "https://images.unsplash.com/photo-1521334884684-d80222895322";
 
               return (
-                <Link to={`/collections/${category}`} className="block">
+                <Link key={category} to={`/collections/${category}`} className="block">
                   <motion.div
-                    key={category}
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}

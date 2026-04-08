@@ -2,6 +2,9 @@ import * as React from "react";
 import * as NavigationMenuPrimitive from "@radix-ui/react-navigation-menu";
 import { cva } from "class-variance-authority";
 import { ChevronDownIcon } from "lucide-react";
+import { Heart } from "lucide-react";
+import { Link } from "react-router-dom";
+import { useWishlist } from "../src/app/contexts/WishlistContext";
 
 import { cn } from "./utils";
 
@@ -13,6 +16,7 @@ function NavigationMenu({
 }: React.ComponentProps<typeof NavigationMenuPrimitive.Root> & {
   viewport?: boolean;
 }) {
+  const { wishlist } = useWishlist();
   return (
     <NavigationMenuPrimitive.Root
       data-slot="navigation-menu"
@@ -23,7 +27,20 @@ function NavigationMenu({
       )}
       {...props}
     >
-      {children}
+      <div className="flex items-center gap-4">
+        {children}
+
+        {/* Wishlist Icon */}
+        <Link to="/wishlist" className="relative">
+          <Heart size={18} className="text-white" />
+
+          {wishlist.length > 0 && (
+            <span className="absolute -top-2 -right-2 text-[10px] bg-red-500 text-white px-1.5 py-[1px] rounded-full">
+              {wishlist.length}
+            </span>
+          )}
+        </Link>
+      </div>
       {viewport && <NavigationMenuViewport />}
     </NavigationMenuPrimitive.Root>
   );

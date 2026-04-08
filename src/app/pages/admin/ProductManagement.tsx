@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "motion/react";
-import { Plus, Edit, Trash2, Package, Image, Star, Eye, EyeOff, Upload, X, Check, AlertCircle, RefreshCw } from "lucide-react";
+import { DndContext, closestCenter } from "@dnd-kit/core";
+import { SortableContext, rectSortingStrategy, useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { Plus, Edit, Trash2, Package, Image, Star, Eye, EyeOff, Upload, X, Check, AlertCircle, RefreshCw, GripVertical } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Textarea } from "../../components/ui/textarea";
@@ -38,6 +41,7 @@ interface Product {
   isNew?: boolean; // From original data
   createdAt: string;
   updatedAt: string;
+  display_order?: number;
 }
 
 function normalizeProductForStore(product: Product): Product {
@@ -122,7 +126,7 @@ export function ProductManagement() {
       if (error) {
         console.error('Error fetching products:', error);
       } else {
-        setProducts((data || []).map((p: any) => ({
+       const normalized = (data || []).map((p: any, index: number) => ({
           ...p,
           originalPrice: p?.original_price ?? undefined,
           images: Array.isArray(p?.images) ? p.images : (p?.image ? [p.image] : []),
@@ -135,8 +139,16 @@ export function ProductManagement() {
           rating: p?.rating ?? 0,
           reviews: p?.reviews ?? 0,
           createdAt: p?.created_at ?? new Date().toISOString(),
-          updatedAt: p?.updated_at ?? new Date().toISOString()
-        })));
+          updatedAt: p?.updated_at ?? new Date().toISOString(),
+
+          // 🔥 CRITICAL FIX
+          display_order:
+            typeof p?.display_order === "number"
+              ? p.display_order
+              : index,
+        }));
+
+setProducts(normalized);
       }
     };
 
@@ -173,6 +185,7 @@ export function ProductManagement() {
           reviews: product.reviews,
           created_at: product.createdAt,
           updated_at: new Date().toISOString(),
+          display_order: product.display_order ?? 0,
         };
 
         const { error } = await supabase.from("products").upsert(dbProduct);
@@ -183,7 +196,11 @@ export function ProductManagement() {
         }
       }
 
-      setProducts(updatedProducts);
+      setProducts(
+        [...updatedProducts].sort(
+          (a, b) => (a.display_order ?? 0) - (b.display_order ?? 0)
+        )
+      );
       toast.success("Changes saved to database");
     } catch (error) {
       console.error("Error saving products:", error);
@@ -214,28 +231,29 @@ export function ProductManagement() {
   const handleAddProduct = async () => {
     // Sanitize and prepare the new product object
     const newProduct: any = {
-  id: crypto.randomUUID(), // ✅ ADD THIS
+      id: crypto.randomUUID(), // ✅ ADD THIS
 
-  name: formData.name || "Untitled",
-  price: Number(formData.price) || 0,
-  original_price: formData.originalPrice ? Number(formData.originalPrice) : null,
-  description: formData.description || "",
-  category: formData.category || "general",
-  style: formData.style || "minimal",
-  image: formData.images?.[0] || "",
-  images: formData.images || [],
-  stock: Number(formData.stock) || 0,
-  featured: formData.featured ?? false,
-  rating: 0,
-  reviews: 0,
-  tags: formData.tags ? formData.tags.split(',').map(t => t.trim()) : [],
-  sizes: formData.sizes || [],
-  colors: formData.colors || [],
-  material: formData.material || "",
-  care_instructions: formData.careInstructions || "",
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString()
-};
+      name: formData.name || "Untitled",
+      price: Number(formData.price) || 0,
+      original_price: formData.originalPrice ? Number(formData.originalPrice) : null,
+      description: formData.description || "",
+      category: formData.category || "general",
+      style: formData.style || "minimal",
+      image: formData.images?.[0] || "",
+      images: formData.images || [],
+      stock: Number(formData.stock) || 0,
+      featured: formData.featured ?? false,
+      rating: 0,
+      reviews: 0,
+      tags: formData.tags ? formData.tags.split(',').map(t => t.trim()) : [],
+      sizes: formData.sizes || [],
+      colors: formData.colors || [],
+      material: formData.material || "",
+      care_instructions: formData.careInstructions || "",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+      , display_order: products.length
+    };
 
     // Debug log before insert
     console.log("INSERTING PRODUCT:", newProduct);
@@ -249,14 +267,15 @@ export function ProductManagement() {
 
     // UI: add new product to local state
     const uiProduct: Product = {
-  ...newProduct,
-  originalPrice: newProduct.original_price ?? undefined,
-  careInstructions: newProduct.care_instructions ?? "",
-  createdAt: newProduct.created_at,
-  updatedAt: newProduct.updated_at,
-};
+      ...newProduct,
+      originalPrice: newProduct.original_price ?? undefined,
+      careInstructions: newProduct.care_instructions ?? "",
+      createdAt: newProduct.created_at,
+      updatedAt: newProduct.updated_at,
+      display_order: newProduct.display_order
+    };
 
-setProducts(prev => [...prev, uiProduct]);
+    setProducts(prev => [...prev, uiProduct]);
 
     if (adminSession) {
       appendAdminAuditLog({
@@ -430,12 +449,15 @@ setProducts(prev => [...prev, uiProduct]);
     saveProducts(updatedProducts);
   };
 
-  const filteredProducts = products.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         product.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === "all" || product.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+  const sortedProducts = [...products].sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
+
+  const filteredProducts = sortedProducts
+    .filter(product => {
+      const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           product.description.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCategory = selectedCategory === "all" || product.category === selectedCategory;
+      return matchesSearch && matchesCategory;
+    });
 
   const addImageUrl = () => {
     if (imageUrlInput.trim()) {
@@ -532,6 +554,30 @@ setProducts(prev => [...prev, uiProduct]);
     }));
   };
 
+  // SortableItem for drag-and-drop
+  function SortableItem({ product, children }: any) {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+      id: product.id,
+    });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition: transition || "transform 250ms cubic-bezier(0.22, 1, 0.36, 1)",
+      zIndex: isDragging ? 50 : "auto",
+      opacity: isDragging ? 0.9 : 1,
+    };
+
+    return (
+      <div
+        ref={setNodeRef}
+        style={style}
+        className={`transition-all duration-200 ${isDragging ? "shadow-2xl scale-[1.04]" : ""}`}
+      >
+        {children({ attributes, listeners })}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 dark bg-gray-900 text-white min-h-screen">
       <div className="flex items-center justify-between">
@@ -553,7 +599,7 @@ setProducts(prev => [...prev, uiProduct]);
                   return;
                 }
 
-                setProducts((data || []).map((p: any) => ({
+                const normalized = (data || []).map((p: any, index: number) => ({
                   ...p,
                   originalPrice: p?.original_price ?? undefined,
                   images: Array.isArray(p?.images) ? p.images : (p?.image ? [p.image] : []),
@@ -566,8 +612,14 @@ setProducts(prev => [...prev, uiProduct]);
                   rating: p?.rating ?? 0,
                   reviews: p?.reviews ?? 0,
                   createdAt: p?.created_at ?? new Date().toISOString(),
-                  updatedAt: p?.updated_at ?? new Date().toISOString()
-                })));
+                  updatedAt: p?.updated_at ?? new Date().toISOString(),
+                  display_order:
+                    typeof p?.display_order === "number"
+                      ? p.display_order
+                      : index,
+                }));
+
+                setProducts(normalized);
 
                 toast.success('Synced with database');
               };
@@ -779,150 +831,232 @@ setProducts(prev => [...prev, uiProduct]);
       </div>
 
       {/* Products Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredProducts.map((product) => (
-          <motion.div
-            key={product.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <Card className="h-full dark:bg-gray-800 dark:border-gray-700">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="text-xl line-clamp-2">{product.name}</CardTitle>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Badge variant="secondary">{product.category}</Badge>
-                      <Badge variant="outline">{product.style || "minimal"}</Badge>
-                      {product.featured && <Badge variant="default">Featured</Badge>}
-                    </div>
-                  </div>
-                  <div className="flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => toggleFeature(product.id)}
-                      className={product.featured ? "text-yellow-600" : ""}
-                    >
-                      {product.featured ? <Eye size={20} /> : <EyeOff size={20} />}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => startEdit(product)}
-                    >
-                      <Edit size={20} />
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700">
-                          <Trash2 size={20} />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete Product</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Are you sure you want to delete "{product.name}"? This action cannot be undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => handleDeleteProduct(product)}
-                            className="bg-red-600 hover:bg-red-700"
+      <DndContext
+        collisionDetection={closestCenter}
+        onDragEnd={(event) => {
+          const { active, over } = event;
+          if (!over || active.id === over.id) return;
+
+          // use FULL sorted list (not filtered)
+          const oldIndex = sortedProducts.findIndex(p => p.id === active.id);
+          const newIndex = sortedProducts.findIndex(p => p.id === over.id);
+
+          if (oldIndex === -1 || newIndex === -1) return;
+
+          const newOrder = [...sortedProducts];
+          const [moved] = newOrder.splice(oldIndex, 1);
+          newOrder.splice(newIndex, 0, moved);
+
+          // 🔥 CRITICAL: reassign ALL display_order globally
+         const reordered = newOrder.map((p, index) => ({
+  ...p,
+  display_order: index,
+}));
+
+// 🔥 INSTANT UI (no delay, no snap back)
+setProducts(reordered);
+
+// 🔥 save silently in background
+saveProducts(reordered);
+        }}
+      >
+<SortableContext items={sortedProducts.map(p => p.id)} strategy={rectSortingStrategy}>          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredProducts.map((product) => (
+              <SortableItem key={product.id} product={product}>
+                {({ attributes, listeners }: any) => (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <Card className="h-full dark:bg-gray-800 dark:border-gray-700 transition-all duration-300 hover:shadow-lg hover:-translate-y-1">
+                      <CardHeader className="pb-3">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <CardTitle className="text-xl line-clamp-2">{product.name}</CardTitle>
+                            <div className="flex items-center gap-2 mt-1">
+                              <Badge variant="secondary">{product.category}</Badge>
+                              <Badge variant="outline">{product.style || "minimal"}</Badge>
+                              {product.featured && <Badge variant="default">Featured</Badge>}
+                            </div>
+                          </div>
+                          <div className="flex gap-1 items-center">
+                            <div
+                              {...attributes}
+                              {...listeners}
+                              className="cursor-grab active:cursor-grabbing p-1 mr-2 text-gray-400 hover:text-white transition"
+                            >
+                              <GripVertical size={18} />
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => toggleFeature(product.id)}
+                              className={product.featured ? "text-yellow-600" : ""}
+                            >
+                              {product.featured ? <Eye size={20} /> : <EyeOff size={20} />}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => startEdit(product)}
+                            >
+                              <Edit size={20} />
+                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700">
+                                  <Trash2 size={20} />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Product</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete "{product.name}"? This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleDeleteProduct(product)}
+                                    className="bg-red-600 hover:bg-red-700"
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        {product.images.length > 0 && (
+                          <div className="aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
+                            <img
+                              src={product.images[0]}
+                              alt={product.name}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.currentTarget.src = "/api/placeholder/300/300";
+                              }}
+                            />
+                          </div>
+                        )}
+
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                              ${product.price}
+                            </span>
+                            {product.originalPrice && (
+                              <span className="text-sm text-gray-400 dark:text-gray-400 line-through">
+                                ${product.originalPrice}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <Package size={16} className="text-gray-400 dark:text-gray-400" />
+                            <span className="text-sm text-gray-600 dark:text-gray-300">
+                              Stock: {product.stock}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <Star size={16} className="text-yellow-500 fill-current" />
+                            <span className="text-sm text-gray-600 dark:text-gray-300">
+                              {product.rating} ({product.reviews} reviews)
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => updateStock(product.id, product.stock - 1)}
+                            disabled={product.stock <= 0}
+                            className="dark:border-gray-600 dark:text-white"
                           >
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {product.images.length > 0 && (
-                  <div className="aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
-                    <img
-                      src={product.images[0]}
-                      alt={product.name}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        e.currentTarget.src = "/api/placeholder/300/300";
-                      }}
-                    />
-                  </div>
+                            -1
+                          </Button>
+                          <Input
+                            type="number"
+                            value={product.stock}
+                            onChange={(e) => updateStock(product.id, parseInt(e.target.value) || 0)}
+                            className="w-20 text-center dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                            min="0"
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => updateStock(product.id, product.stock + 1)}
+                            className="dark:border-gray-600 dark:text-white"
+                          >
+                            +1
+                          </Button>
+                        </div>
+
+                        {product.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {product.tags.map((tag, index) => (
+                              <Badge key={index} variant="outline" className="text-xs">
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              const currentIndex = products.findIndex(p => p.id === product.id);
+                              if (currentIndex <= 0) return;
+
+                              const newProducts = [...products];
+                              const temp = newProducts[currentIndex - 1].display_order;
+
+                              newProducts[currentIndex - 1].display_order = product.display_order ?? 0;
+                              newProducts[currentIndex].display_order = temp;
+
+                              saveProducts(newProducts);
+                            }}
+                            className="dark:border-gray-600 dark:text-white"
+                          >
+                            ↑
+                          </Button>
+
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              const currentIndex = products.findIndex(p => p.id === product.id);
+                              if (currentIndex === -1 || currentIndex >= products.length - 1) return;
+
+                              const newProducts = [...products];
+                              const temp = newProducts[currentIndex + 1].display_order;
+
+                              newProducts[currentIndex + 1].display_order = product.display_order ?? 0;
+                              newProducts[currentIndex].display_order = temp;
+
+                              saveProducts(newProducts);
+                            }}
+                            className="dark:border-gray-600 dark:text-white"
+                          >
+                            ↓
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
                 )}
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-2xl font-bold text-gray-900 dark:text-white">
-                      ${product.price}
-                    </span>
-                    {product.originalPrice && (
-                      <span className="text-sm text-gray-400 dark:text-gray-400 line-through">
-                        ${product.originalPrice}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Package size={16} className="text-gray-400 dark:text-gray-400" />
-                    <span className="text-sm text-gray-600 dark:text-gray-300">
-                      Stock: {product.stock}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Star size={16} className="text-yellow-500 fill-current" />
-                    <span className="text-sm text-gray-600 dark:text-gray-300">
-                      {product.rating} ({product.reviews} reviews)
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => updateStock(product.id, product.stock - 1)}
-                    disabled={product.stock <= 0}
-                    className="dark:border-gray-600 dark:text-white"
-                  >
-                    -1
-                  </Button>
-                  <Input
-                    type="number"
-                    value={product.stock}
-                    onChange={(e) => updateStock(product.id, parseInt(e.target.value) || 0)}
-                    className="w-20 text-center dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-                    min="0"
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => updateStock(product.id, product.stock + 1)}
-                    className="dark:border-gray-600 dark:text-white"
-                  >
-                    +1
-                  </Button>
-                </div>
-
-                {product.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {product.tags.map((tag, index) => (
-                      <Badge key={index} variant="outline" className="text-xs">
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
-      </div>
+              </SortableItem>
+            ))}
+          </div>
+        </SortableContext>
+      </DndContext>
 
       {/* Edit Product Dialog */}
       <Dialog open={!!editingProduct} onOpenChange={(open) => !open && setEditingProduct(null)}>
@@ -1159,7 +1293,7 @@ function ProductForm({
                 accept="image/*"
                 multiple
                 onChange={handleFileUpload}
-                className="file:mr-4 file:py-3 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 file:cursor-pointer dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                className="file:mr-4 file:py-3 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-gray-700 file:text-white hover:file:bg-gray-600 file:cursor-pointer dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:ring-0 focus:outline-none"
               />
               <p className="text-sm text-gray-600 dark:text-gray-300">
                 Or drag and drop images here

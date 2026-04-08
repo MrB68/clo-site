@@ -11,9 +11,9 @@ import {
 } from "../utils/customerProfile";
 import { nepalLocations } from "../utils/nepalLocations";
 
-import { supabase } from "../../lib/supabase"
+import { supabase } from "../../lib/supabase";
 export function Profile() {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const supabaseUser = user as any;
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [savedDetails, setSavedDetails] = useState<CustomerProfileDetails>({
@@ -32,11 +32,31 @@ export function Profile() {
     profileImage: "",
   });
 
+  const [profileName, setProfileName] = useState<string>("");
   const [stats, setStats] = useState({
     orders: 0,
     wishlist: 0,
     reviews: 0,
   });
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const fetchProfileName = async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("email")
+        .eq("id", user.id)
+        .single();
+
+      if (!error && data?.email) {
+        setProfileName("");
+      } else {
+        setProfileName("");
+      }
+    };
+
+    fetchProfileName();
+  }, [user?.id, user?.email]);
   const [authUser, setAuthUser] = useState<any>(null);
 useEffect(() => {
   const fetchAuthUser = async () => {
@@ -56,11 +76,14 @@ useEffect(() => {
 }, []);
 
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
     setIsSigningOut(true);
-    setTimeout(() => {
-      signOut();
-    }, 500);
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error(error);
+      toast.error("Failed to sign out");
+    }
+    setIsSigningOut(false);
   };
 
   const derivedName = useMemo(() => {
@@ -116,15 +139,34 @@ useEffect(() => {
 
     const fetchStats = async () => {
       try {
-        const { count } = await supabase
+        // Orders count
+        const { count: ordersCount } = await supabase
           .from("orders")
           .select("*", { count: "exact", head: true })
           .eq("user_id", user.id);
 
+        // Wishlist count
+        const { count: wishlistCount } = await supabase
+          .from("wishlist")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", user.id);
+
+        // Reviews count (if table exists)
+        let reviewsCount = 0;
+        try {
+          const { count } = await supabase
+            .from("reviews")
+            .select("*", { count: "exact", head: true })
+            .eq("user_id", user.id);
+          reviewsCount = count || 0;
+        } catch {
+          reviewsCount = 0;
+        }
+
         setStats({
-          orders: count || 0,
-          wishlist: 0,
-          reviews: 0,
+          orders: ordersCount || 0,
+          wishlist: wishlistCount || 0,
+          reviews: reviewsCount,
         });
       } catch (err) {
         console.error("Stats fetch error:", err);
@@ -257,6 +299,20 @@ useEffect(() => {
       },
     });
 
+    // 🔥 persist full_name to profiles table as well
+    if (user?.id) {
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .upsert({
+          id: user.id,
+          email: user.email,
+        });
+
+      if (profileError) {
+        console.error("Profile upsert error:", profileError);
+      }
+    }
+
     if (error) {
       console.error("Metadata update error:", error);
       toast.error("Failed to update profile");
@@ -277,11 +333,11 @@ useEffect(() => {
   if (!user) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center px-4">
-        <div className="bg-white text-black p-8 rounded-lg shadow-lg max-w-md w-full text-center">
+        <div className="bg-gray-900 border border-gray-800 text-white p-8 rounded-lg shadow-lg max-w-md w-full text-center">
           <h1 className="text-2xl font-bold mb-4 tracking-widest uppercase">
             Access Denied
           </h1>
-          <p className="text-gray-600 mb-6 tracking-wider">
+          <p className="text-gray-400 mb-6 tracking-wider">
             Please sign in to view your profile.
           </p>
           <Link
@@ -296,7 +352,7 @@ useEffect(() => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-black text-white">
       {/* Header */}
       <div className="bg-black text-white py-6 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -318,7 +374,7 @@ useEffect(() => {
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 text-white">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Profile Info */}
           <motion.div
@@ -326,7 +382,7 @@ useEffect(() => {
             animate={{ opacity: 1, y: 0 }}
             className="lg:col-span-2"
           >
-            <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="bg-gray-900 border border-gray-800 rounded-lg shadow-sm p-6">
               <h2 className="text-xl font-semibold mb-6 tracking-widest uppercase">
                 Account Information
               </h2>
@@ -338,14 +394,14 @@ useEffect(() => {
                       {savedDetails.profileImage || supabaseUser?.user_metadata?.avatar_url ? (
                         <img
                           src={savedDetails.profileImage || supabaseUser?.user_metadata?.avatar_url}
-                          alt={supabaseUser?.user_metadata?.full_name || `${savedDetails.firstName} ${savedDetails.lastName}`.trim() || "User"}
+                          alt={profileName || `${savedDetails.firstName} ${savedDetails.lastName}`.trim() || "User"}
                           className="h-full w-full object-cover"
                         />
                       ) : (
                         <User size={28} className="text-white" />
                       )}
                     </div>
-                    <label className="absolute -bottom-1 -right-1 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-white text-black shadow-md transition hover:bg-gray-100">
+                    <label className="absolute -bottom-1 -right-1 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-gray-900 border border-gray-800 text-white shadow-md transition hover:bg-gray-700">
                       <Camera size={14} />
                       <input
                         type="file"
@@ -366,43 +422,43 @@ useEffect(() => {
                   </div>
                   <div>
                     <h3 className="font-medium tracking-wider">
-                      {supabaseUser?.user_metadata?.full_name || `${savedDetails.firstName} ${savedDetails.lastName}`.trim() || "User"}
+                      {profileName || "User"}
                     </h3>
-                    <p className="text-sm text-gray-500 tracking-wider uppercase">
+                    <p className="text-sm text-gray-400 tracking-wider uppercase">
                       Member since {authUser?.created_at ? formatDate(authUser.created_at) : "N/A"}
                     </p>
                   </div>
                 </div>
-                <p className="text-xs text-gray-500 tracking-wider uppercase">
+                <p className="text-xs text-gray-400 tracking-wider uppercase">
                   Click the camera icon to upload your profile picture.
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-medium mb-2 tracking-wider uppercase text-gray-500">
+                    <label className="block text-sm font-medium mb-2 tracking-wider uppercase text-gray-400">
                       Full Name
                     </label>
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded">
+                    <div className="flex items-center gap-3 p-3 bg-gray-800 rounded">
                       <User size={16} className="text-gray-400" />
-                      <span className="tracking-wider">{supabaseUser?.user_metadata?.full_name || `${savedDetails.firstName} ${savedDetails.lastName}`.trim() || "User"}</span>
+                      <span className="tracking-wider">{profileName || `${savedDetails.firstName} ${savedDetails.lastName}`.trim() || "User"}</span>
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-2 tracking-wider uppercase text-gray-500">
+                    <label className="block text-sm font-medium mb-2 tracking-wider uppercase text-gray-400">
                       Email Address
                     </label>
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded">
+                    <div className="flex items-center gap-3 p-3 bg-gray-800 rounded">
                       <Mail size={16} className="text-gray-400" />
-                      <span className="tracking-wider">{user?.email || ""}</span>
+                      <span className="tracking-wider break-all">{user?.email || ""}</span>
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-2 tracking-wider uppercase text-gray-500">
+                    <label className="block text-sm font-medium mb-2 tracking-wider uppercase text-gray-400">
                       Member Since
                     </label>
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded">
+                    <div className="flex items-center gap-3 p-3 bg-gray-800 rounded">
                       <Calendar size={16} className="text-gray-400" />
                       <span className="tracking-wider">
                         {authUser?.created_at ? formatDate(authUser.created_at) : "N/A"}
@@ -411,10 +467,10 @@ useEffect(() => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-2 tracking-wider uppercase text-gray-500">
+                    <label className="block text-sm font-medium mb-2 tracking-wider uppercase text-gray-400">
                       Account Status
                     </label>
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded">
+                    <div className="flex items-center gap-3 p-3 bg-gray-800 rounded">
                       <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                       <span className="tracking-wider text-green-600">Active</span>
                     </div>
@@ -423,13 +479,13 @@ useEffect(() => {
               </div>
             </div>
 
-            <div className="mt-8 bg-white rounded-lg shadow-sm p-6">
+            <div className="mt-8 bg-gray-900 border border-gray-800 rounded-lg shadow-sm p-6">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-xl font-semibold tracking-widest uppercase">
                     Checkout Details
                   </h2>
-                  <p className="text-sm text-gray-600 tracking-wider">
+                  <p className="text-sm text-gray-400 tracking-wider">
                     Save your delivery information here to auto-fill checkout for this account.
                   </p>
                 </div>
@@ -444,7 +500,7 @@ useEffect(() => {
 
               <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-500">
+                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-400">
                     First Name
                   </label>
                   <input
@@ -452,11 +508,11 @@ useEffect(() => {
                     name="firstName"
                     value={savedDetails.firstName}
                     onChange={handleDetailsChange}
-                    className="w-full rounded border border-gray-300 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                    className="w-full rounded border border-gray-700 bg-gray-800 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-500">
+                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-400">
                     Last Name
                   </label>
                   <input
@@ -464,11 +520,11 @@ useEffect(() => {
                     name="lastName"
                     value={savedDetails.lastName}
                     onChange={handleDetailsChange}
-                    className="w-full rounded border border-gray-300 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                    className="w-full rounded border border-gray-700 bg-gray-800 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-500">
+                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-400">
                     Email
                   </label>
                   <input
@@ -476,11 +532,11 @@ useEffect(() => {
                     name="email"
                     value={savedDetails.email}
                     onChange={handleDetailsChange}
-                    className="w-full rounded border border-gray-300 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                    className="w-full rounded border border-gray-700 bg-gray-800 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-500">
+                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-400">
                     Phone
                   </label>
                   <input
@@ -488,18 +544,18 @@ useEffect(() => {
                     name="phone"
                     value={savedDetails.phone}
                     onChange={handleDetailsChange}
-                    className="w-full rounded border border-gray-300 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                    className="w-full rounded border border-gray-700 bg-gray-800 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-500">
+                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-400">
                     Province
                   </label>
                   <select
                     name="province"
                     value={savedDetails.province}
                     onChange={handleDetailsChange}
-                    className="w-full rounded border border-gray-300 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                    className="w-full rounded border border-gray-700 bg-gray-800 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
                   >
                     <option value="">Select Province</option>
                     {provinceOptions.map((province) => (
@@ -510,14 +566,14 @@ useEffect(() => {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-500">
+                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-400">
                     District
                   </label>
                   <select
                     name="district"
                     value={savedDetails.district}
                     onChange={handleDetailsChange}
-                    className="w-full rounded border border-gray-300 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                    className="w-full rounded border border-gray-700 bg-gray-800 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
                     disabled={!savedDetails.province}
                   >
                     <option value="">Select District</option>
@@ -529,14 +585,14 @@ useEffect(() => {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-500">
+                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-400">
                     City / Municipality
                   </label>
                   <select
                     name="city"
                     value={savedDetails.city}
                     onChange={handleDetailsChange}
-                    className="w-full rounded border border-gray-300 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                    className="w-full rounded border border-gray-700 bg-gray-800 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
                     disabled={!savedDetails.province}
                   >
                     <option value="">Select City / Municipality</option>
@@ -548,7 +604,7 @@ useEffect(() => {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-500">
+                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-400">
                     Area / Tole
                   </label>
                   <input
@@ -556,11 +612,11 @@ useEffect(() => {
                     name="area"
                     value={savedDetails.area}
                     onChange={handleDetailsChange}
-                    className="w-full rounded border border-gray-300 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                    className="w-full rounded border border-gray-700 bg-gray-800 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-500">
+                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-400">
                     Ward Number
                   </label>
                   <input
@@ -568,11 +624,11 @@ useEffect(() => {
                     name="wardNumber"
                     value={savedDetails.wardNumber}
                     onChange={handleDetailsChange}
-                    className="w-full rounded border border-gray-300 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                    className="w-full rounded border border-gray-700 bg-gray-800 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-500">
+                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-400">
                     Landmark
                   </label>
                   <input
@@ -580,11 +636,11 @@ useEffect(() => {
                     name="landmark"
                     value={savedDetails.landmark}
                     onChange={handleDetailsChange}
-                    className="w-full rounded border border-gray-300 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                    className="w-full rounded border border-gray-700 bg-gray-800 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
                   />
                 </div>
                 <div className="md:col-span-2">
-                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-500">
+                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-400">
                     House / Street Address
                   </label>
                   <input
@@ -592,11 +648,11 @@ useEffect(() => {
                     name="address"
                     value={savedDetails.address}
                     onChange={handleDetailsChange}
-                    className="w-full rounded border border-gray-300 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                    className="w-full rounded border border-gray-700 bg-gray-800 text-white px-4 py-3 tracking-wider focus:border-white focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-500">
+                  <label className="mb-2 block text-sm font-medium uppercase tracking-wider text-gray-400">
                     Postal Code
                   </label>
                   <input
@@ -604,7 +660,7 @@ useEffect(() => {
                     name="postalCode"
                     value={savedDetails.postalCode}
                     onChange={handleDetailsChange}
-                    className="w-full rounded border border-gray-300 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                    className="w-full rounded border border-gray-700 bg-gray-800 text-white px-4 py-3 tracking-wider focus:border-white focus:outline-none"
                   />
                 </div>
               </div>
@@ -618,27 +674,27 @@ useEffect(() => {
             transition={{ delay: 0.1 }}
             className="space-y-6"
           >
-            <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="bg-gray-900 border border-gray-800 rounded-lg shadow-sm p-6">
               <h3 className="font-semibold mb-4 tracking-widest uppercase">
                 Quick Actions
               </h3>
               <div className="space-y-3">
                 <Link
                   to="/orders"
-                  className="block w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors tracking-wider uppercase text-sm"
+                  className="block w-full text-left px-4 py-3 bg-gray-800 hover:bg-gray-700 transition-colors tracking-wider uppercase text-sm"
                 >
                   View Orders
                 </Link>
                 <Link
                   to="/shop"
-                  className="block w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors tracking-wider uppercase text-sm"
+                  className="block w-full text-left px-4 py-3 bg-gray-800 hover:bg-gray-700 transition-colors tracking-wider uppercase text-sm"
                 >
                   Continue Shopping
                 </Link>
                 <button
                   onClick={handleSignOut}
                   disabled={isSigningOut}
-                  className="w-full text-left px-4 py-3 bg-red-50 hover:bg-red-100 text-red-600 transition-colors tracking-wider uppercase text-sm disabled:opacity-50"
+                  className="w-full text-left px-4 py-3 bg-red-900/30 hover:bg-red-900/50 text-red-600 transition-colors tracking-wider uppercase text-sm disabled:opacity-50"
                 >
                   {isSigningOut ? "Signing Out..." : "Sign Out"}
                 </button>
@@ -646,25 +702,25 @@ useEffect(() => {
             </div>
 
             {/* Account Stats */}
-            <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="bg-gray-900 border border-gray-800 rounded-lg shadow-sm p-6">
               <h3 className="font-semibold mb-4 tracking-widest uppercase">
                 Account Stats
               </h3>
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600 tracking-wider uppercase">
+                  <span className="text-sm text-gray-400 tracking-wider uppercase">
                     Total Orders
                   </span>
                   <span className="font-medium tracking-wider">{stats.orders}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600 tracking-wider uppercase">
+                  <span className="text-sm text-gray-400 tracking-wider uppercase">
                     Wishlist Items
                   </span>
                   <span className="font-medium tracking-wider">{stats.wishlist}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600 tracking-wider uppercase">
+                  <span className="text-sm text-gray-400 tracking-wider uppercase">
                     Reviews Written
                   </span>
                   <span className="font-medium tracking-wider">{stats.reviews}</span>
