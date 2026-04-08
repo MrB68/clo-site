@@ -38,7 +38,7 @@ export default function CollectionDetail() {
     "/placeholder.jpg";
 
   return (
-    <div className="bg-white text-black dark:bg-black dark:text-white">
+    <div className="bg-black text-white min-h-screen">
       
       {/* HERO */}
       <section className="relative h-[50vh] flex items-center justify-center overflow-hidden">
@@ -59,12 +59,12 @@ export default function CollectionDetail() {
       <div className="pt-16 pb-20 px-4 max-w-7xl mx-auto">
         
         {/* FILTER BAR */}
-        <div className="flex justify-between items-center mb-8 border-b border-black/10 dark:border-white/10 pb-4">
+        <div className="flex justify-between items-center mb-8 border-b border-white/10 pb-4">
           <span className="text-sm tracking-wide">
             {filteredProducts.length} Products
           </span>
 
-          <select className="bg-transparent border border-black/20 dark:border-white/20 px-3 py-1 text-sm">
+          <select className="bg-neutral-900 border border-white/20 px-3 py-1 text-sm text-white">
             <option>Sort by</option>
             <option>Price: Low to High</option>
             <option>Price: High to Low</option>
@@ -73,7 +73,7 @@ export default function CollectionDetail() {
 
         {filteredProducts.length === 0 ? (
           <div className="text-center py-20">
-            <p className="text-gray-500">
+            <p className="text-gray-400">
               No products available in this collection yet.
             </p>
           </div>
@@ -82,7 +82,7 @@ export default function CollectionDetail() {
             {filteredProducts.map((product) => (
               <div
                 key={product.id}
-                className="group relative overflow-hidden bg-white dark:bg-black transition-all duration-500 hover:shadow-2xl"
+                className="group relative overflow-hidden bg-neutral-900 transition-all duration-500 hover:shadow-2xl"
               >
                 <div className="relative">
                   <div className="overflow-hidden relative">
