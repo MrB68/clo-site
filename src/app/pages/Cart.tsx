@@ -82,13 +82,10 @@ export function Cart() {
   const [stockMap, setStockMap] = useState<Record<string, number>>({});
 
   const handleCheckout = () => {
-    if (!user) {
-      navigate("/signin?redirect=/checkout");
-      return;
-    }
-
-    // pass a flag so checkout knows to clear cart after success
-    navigate("/checkout", { state: { fromCart: true } });
+    // 🔥 Allow guest checkout
+    // If user exists → normal flow
+    // If not → still proceed as guest
+    navigate("/checkout", { state: { fromCart: true, guest: !user } });
   };
 
   const [cartItems, setCartItems] = useState<CartItem[]>(() =>
@@ -262,17 +259,17 @@ export function Cart() {
 
   if (cartItems.length === 0) {
     return (
-      <div className="min-h-screen bg-white pt-20 text-black transition-colors duration-300 dark:bg-black dark:text-white">
+      <div className="min-h-screen bg-black pt-20 text-white">
         <div className="max-w-7xl mx-auto px-4 py-24 text-center space-y-6">
-          <ShoppingBag size={64} className="mx-auto text-gray-400 dark:text-gray-500" />
+          <ShoppingBag size={64} className="mx-auto text-gray-400" />
           <h2 className="text-3xl">Your Cart is Empty</h2>
-          <p className="text-gray-600 dark:text-gray-400">
+          <p className="text-gray-400">
             Looks like you haven't added anything yet.
           </p>
           <button
             type="button"
             onClick={() => window.location.assign("/shop")}
-            className="inline-flex items-center gap-2 bg-black px-8 py-4 text-white transition-colors hover:bg-neutral-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
+            className="inline-flex items-center gap-2 bg-white px-8 py-4 text-black transition-colors hover:bg-neutral-200"
           >
             Continue Shopping <ArrowRight size={18} />
           </button>
@@ -282,11 +279,11 @@ export function Cart() {
   }
 
   return (
-    <div className="bg-white pt-20 text-black transition-colors duration-300 dark:bg-black dark:text-white">
+    <div className="bg-black pt-20 text-white">
       {/* Header */}
       <div className="bg-black text-white py-16 text-center">
         <h1 className="text-4xl tracking-wider mb-2">YOUR CART</h1>
-        <p className="text-gray-400 dark:text-gray-500">{totalItemCount} items</p>
+        <p className="text-gray-400">{totalItemCount} items</p>
       </div>
 
       {/* Content */}
@@ -298,7 +295,7 @@ export function Cart() {
               {/* Image */}
               <Link
                 to={`/product/${item.product.id}`}
-                className="h-40 bg-gray-100 transition-colors duration-300 dark:bg-neutral-900"
+                className="h-40 bg-neutral-900"
               >
                 <img
                   src={item.product.image}
@@ -317,13 +314,13 @@ export function Cart() {
                     {item.product.name}
                   </Link>
 
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                  <p className="text-sm text-gray-400">
                     {item.product.category}
                   </p>
 
                   <p className="text-sm">Size: {item.selectedSize}</p>
                   <p className="text-sm">Color: {item.selectedColor}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                  <p className="text-xs text-gray-400">
                     {stockMap[item.productId] === 0
                       ? "Out of stock"
                       : `Available: ${stockMap[item.productId] ?? 0}`}
@@ -335,7 +332,7 @@ export function Cart() {
                   <div className="flex border border-black/15 dark:border-white/15">
                     <button
                       onClick={() => updateQuantity(index, -1)}
-                      className="px-3 py-2 transition-colors hover:bg-gray-100 dark:hover:bg-neutral-900"
+                      className="px-3 py-2 transition-colors hover:bg-neutral-900"
                     >
                       <Minus size={16} />
                     </button>
@@ -346,7 +343,7 @@ export function Cart() {
                       className={`px-3 py-2 transition-colors ${
                         (stockMap[item.productId] ?? 0) <= item.quantity
                           ? "text-gray-400 cursor-not-allowed"
-                          : "hover:bg-gray-100 dark:hover:bg-neutral-900"
+                          : "hover:bg-neutral-900"
                       }`}
                     >
                       <Plus size={16} />
@@ -375,7 +372,7 @@ export function Cart() {
         </div>
 
         {/* Summary */}
-        <div className="h-fit space-y-6 border border-black/10 bg-gray-50 p-8 transition-colors duration-300 dark:border-white/10 dark:bg-neutral-950">
+        <div className="h-fit space-y-6 border border-white/10 bg-neutral-950 p-8">
           <h2 className="text-2xl">Order Summary</h2>
 
           <div className="flex justify-between">
@@ -393,44 +390,51 @@ export function Cart() {
                 : `NPR ${shipping.toLocaleString("en-NP")}`}
             </span>
           </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400">
+          <p className="text-xs text-gray-400">
             Final shipping cost will be confirmed at checkout based on your location.
           </p>
 
-          <div className="flex justify-between border-t border-black/10 pt-3 text-lg dark:border-white/10">
+          <div className="flex justify-between border-t border-white/10 pt-3 text-lg">
             <span>Total</span>
             <span>NPR {total.toLocaleString("en-NP")}</span>
           </div>
 
           {!user && (
             <div className="mb-4 space-y-3">
-              <div className="p-3 border border-black/10 text-sm dark:border-white/10">
-                You are not signed in. Sign in to securely place your order.
+              <div className="p-3 border border-white/10 text-sm">
+                Checkout as guest or sign in for faster checkout.
               </div>
+
               <button
                 type="button"
                 onClick={() => navigate("/signin")}
-                className="w-full border border-black py-2 text-sm hover:bg-black hover:text-white transition dark:border-white"
+                className="w-full border border-white py-2 text-sm hover:bg-white hover:text-black transition"
               >
                 Sign In
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCheckout}
+                className="w-full bg-white text-black py-2 text-sm hover:bg-neutral-200 transition"
+              >
+                Checkout as Guest
               </button>
             </div>
           )}
           <button
             type="button"
             onClick={handleCheckout}
-            disabled={!user || hasInvalidQty}
+            disabled={hasInvalidQty}
             className={`w-full py-4 transition ${
-              user
-                ? "bg-black text-white hover:bg-gray-900 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
-                : "bg-gray-300 text-gray-600 cursor-not-allowed dark:bg-neutral-800 dark:text-gray-500"
+              hasInvalidQty
+                ? "bg-neutral-800 text-gray-500 cursor-not-allowed"
+                : "bg-white text-black hover:bg-neutral-200"
             }`}
           >
-            {!user
-              ? "Sign in to Checkout"
-              : hasInvalidQty
+            {hasInvalidQty
               ? "Fix quantity to proceed"
-              : "Checkout"}
+              : "Proceed to Checkout"}
           </button>
         </div>
       </div>

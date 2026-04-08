@@ -53,6 +53,7 @@ export function Register() {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
+    if (isLoading) return;
     e.preventDefault();
     setError("");
 
@@ -68,7 +69,12 @@ export function Register() {
       });
 
       if (error) {
-        setError(error.message);
+        if (error.message.includes("rate limit")) {
+          setError("Too many attempts. Please wait a minute and try again.");
+        } else {
+          setError(error.message);
+        }
+        setIsLoading(false);
         return;
       }
 

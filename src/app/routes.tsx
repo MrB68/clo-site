@@ -59,6 +59,7 @@ export const router = createBrowserRouter([
       { path: "best-sellers", Component: BestSellers },
       { path: "collections/:category", Component: CollectionDetail },
       { path: "*", Component: NotFound },
+      
     ],
   },
   {

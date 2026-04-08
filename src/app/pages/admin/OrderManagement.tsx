@@ -282,7 +282,7 @@ export function OrderManagement() {
     setRemarksDraft(
       Object.fromEntries(order.items.map((item: { id: any; adminRemark: any; }) => [String(item.id), item.adminRemark ?? ""]))
     );
-    setExchangeResponseDraft(order.exchangeRequest?.adminMessage ?? "");
+    setExchangeResponseDraft(order.exchange_request?.adminMessage ?? "");
   };
 
   const handlePrintOrder = (order: Order) => {
@@ -578,10 +578,10 @@ export function OrderManagement() {
 
   const handleExchangeDecision = async (orderId: string, decision: "approved" | "rejected") => {
     const order = orders.find((o) => o.id === orderId);
-    if (!order || !order.exchangeRequest) return;
+    if (!order || !order.exchange_request) return;
 
     const updatedExchange = {
-      ...order.exchangeRequest,
+      ...order.exchange_request,
       status: decision,
       adminMessage: exchangeResponseDraft.trim(),
       reviewedAt: new Date().toISOString(),
@@ -592,7 +592,7 @@ export function OrderManagement() {
       .from("orders")
       .update({
         status: decision === "approved" ? "exchange_requested" : "delivered",
-        exchangeRequest: updatedExchange,
+        exchange_request: updatedExchange,
       })
       .eq("order_code", orderId);
 
@@ -1121,35 +1121,35 @@ export function OrderManagement() {
 
                 </div>
               </div>
-              {selectedOrder.exchangeRequest ? (
+              {selectedOrder.exchange_request ? (
                 <div className="space-y-4 border-t border-zinc-800 pt-4">
                   <div>
                     <h4 className="font-medium mb-2 tracking-wider uppercase">Exchange Request</h4>
                     <p className="text-sm tracking-wider text-gray-300">
-                      {selectedOrder.exchangeRequest.reason}
+                      {selectedOrder.exchange_request.reason}
                     </p>
                     <p className="mt-2 text-xs uppercase tracking-wider text-gray-400">
-                      Status: {selectedOrder.exchangeRequest.status.replace("_", " ")}
+                      Status: {selectedOrder.exchange_request.status.replace("_", " ")}
                     </p>
-                    {selectedOrder.exchangeRequest.reviewedBy ? (
+                    {selectedOrder.exchange_request.reviewedBy ? (
                       <p className="mt-1 text-xs uppercase tracking-wider text-gray-400">
-                        Reviewed by {selectedOrder.exchangeRequest.reviewedBy}
+                        Reviewed by {selectedOrder.exchange_request.reviewedBy}
                       </p>
                     ) : null}
-                    {selectedOrder.exchangeRequest.adminMessage ? (
+                    {selectedOrder.exchange_request.adminMessage ? (
                       <div className="mt-3 rounded border border-zinc-800 bg-zinc-800 p-3">
                         <p className="text-xs uppercase tracking-wider text-gray-400">
                           Message to Customer
                         </p>
                         <p className="mt-2 text-sm text-gray-300">
-                          {selectedOrder.exchangeRequest.adminMessage}
+                          {selectedOrder.exchange_request.adminMessage}
                         </p>
                       </div>
                     ) : null}
                   </div>
-                  {selectedOrder.exchangeRequest.images.length > 0 ? (
+                  {selectedOrder.exchange_request.images.length > 0 ? (
                     <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                      {selectedOrder.exchangeRequest.images.map((image: string | undefined, index: number) => (
+                      {selectedOrder.exchange_request.images.map((image: string | undefined, index: number) => (
                         <img
                           key={`${selectedOrder.id}-exchange-${index}`}
                           src={image}
@@ -1159,7 +1159,7 @@ export function OrderManagement() {
                       ))}
                     </div>
                   ) : null}
-                  {selectedOrder.exchangeRequest.status === "pending" ? (
+                  {selectedOrder.exchange_request.status === "pending" ? (
                     <div className="space-y-4">
                       <div>
                         <label className="mb-2 block text-xs uppercase tracking-wider text-gray-400">

@@ -52,22 +52,30 @@ export function Orders() {
 
   useEffect(() => {
     const fetchOrders = async () => {
-      if (!user) return;
+      const guestEmail = localStorage.getItem("guest_email");
+
+      if (!user && !guestEmail) return;
 
       const { data, error } = await supabase
         .from("orders")
         .select("*")
-        .or(`user_id.eq.${user.id},customer_email.eq.${user.email}`)
+        .or(`user_id.eq.${user?.id || "null"},customer_email.eq.${user?.email || guestEmail}`)
         .order("created_at", { ascending: false });
 
       console.log("FETCHED USER ORDERS:", data);
 
       if (!error && data) {
         // 🔥 fetch custom designs (pending)
-        const { data: customDesigns } = await supabase
-          .from("custom_designs")
-          .select("*")
-          .eq("user_id", user.id);
+        let customDesigns: any[] = [];
+
+        if (user?.id) {
+          const { data } = await supabase
+            .from("custom_designs")
+            .select("*")
+            .eq("user_id", user.id);
+
+          customDesigns = data || [];
+        }
 
         // map designs
         const customDesignMap: any[] = (customDesigns || []).map((design: any) => ({
@@ -151,24 +159,24 @@ export function Orders() {
 
       if (!orderId || !refId || !amt) return;
       // 🔒 Fetch expected amount from DB
-const { data: existingOrder } = await supabase
-  .from("orders")
-  .select("total")
-  .or(`id.eq.${orderId},custom_design_id.eq.${orderId}`)
-  .single();
+      const { data: existingOrder } = await supabase
+        .from("orders")
+        .select("total")
+        .or(`id.eq.${orderId},custom_design_id.eq.${orderId}`)
+        .single();
 
-const expectedTotal = Number(existingOrder?.total || 0);
+      const expectedTotal = Number(existingOrder?.total || 0);
 
-// 🚨 Reject if mismatch
-if (!expectedTotal || Math.abs(expectedTotal - Number(amt)) > 1) {
-  console.error("AMOUNT MISMATCH:", {
-    expected: expectedTotal,
-    paid: amt,
-  });
+      // 🚨 Reject if mismatch
+      if (!expectedTotal || Math.abs(expectedTotal - Number(amt)) > 1) {
+        console.error("AMOUNT MISMATCH:", {
+          expected: expectedTotal,
+          paid: amt,
+        });
 
-  toast.error("Payment amount mismatch. Verification failed ❌");
-  return;
-}
+        toast.error("Payment amount mismatch. Verification failed ❌");
+        return;
+      }
 
       try {
         console.log("VERIFYING PAYMENT:", { orderId, refId, amt });
@@ -335,30 +343,30 @@ if (!expectedTotal || Math.abs(expectedTotal - Number(amt)) > 1) {
     }));
   }, [products, storedOrders]);
 
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center px-4">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white text-black p-8 rounded-lg shadow-lg max-w-md w-full text-center"
-        >
-          <h1 className="text-2xl font-bold mb-4 tracking-widest uppercase">
-            Access Denied
-          </h1>
-          <p className="text-gray-600 mb-6 tracking-wider">
-            Please sign in to view your orders.
-          </p>
-          <Link
-            to="/signin"
-            className="inline-block bg-black text-white px-6 py-3 hover:bg-gray-800 transition-colors tracking-widest uppercase text-sm"
-          >
-            Sign In
-          </Link>
-        </motion.div>
-      </div>
-    );
-  }
+  //if (!user) {
+  //return (
+  // <div className="min-h-screen bg-black text-white flex items-center justify-center px-4">
+  //    <motion.div
+  //    initial={{ opacity: 0, y: 20 }}
+  //  animate={{ opacity: 1, y: 0 }}
+  //   className="bg-white text-black p-8 rounded-lg shadow-lg max-w-md w-full text-center"
+  // >
+  // <h1 className="text-2xl font-bold mb-4 tracking-widest uppercase">
+  //   Access Denied
+  // </h1>
+  //    <p className="text-gray-600 mb-6 tracking-wider">
+  //      Please sign in to view your orders.
+  //    </p>
+  //</motion.div>    <Link
+  //   to="/signin"
+  ////      className="inline-block bg-black text-white px-6 py-3 hover:bg-gray-800 transition-colors tracking-widest uppercase text-sm"
+  //    >
+  //      Sign In
+  //    </Link>
+  //    </motion.div>
+  //  </div>
+  // );
+  // }
 
   const getStatusIcon = (status: CustomerOrder["status"]) => {
     switch (status) {
@@ -414,7 +422,7 @@ if (!expectedTotal || Math.abs(expectedTotal - Number(amt)) > 1) {
   };
 
   const getExchangeStatusLabel = (order: CustomerOrder) => {
-    switch (order.exchangeRequest?.status) {
+    switch (order.exchange_request?.status) {
       case "pending":
         return "Exchange Request Pending";
       case "approved":
@@ -464,15 +472,15 @@ if (!expectedTotal || Math.abs(expectedTotal - Number(amt)) > 1) {
       return;
     }
 
-   const meta = (user as any)?.user_metadata || {};
+    const meta = (user as any)?.user_metadata || {};
 
-const customerName =
-  meta.full_name ||
-  meta.name ||
-  user.email?.split("@")[0] ||
-  "User";
+    const customerName =
+      meta.full_name ||
+      meta.name ||
+      user.email?.split("@")[0] ||
+      "User";
 
-   await supabase.from("reviews").insert([
+    await supabase.from("reviews").insert([
       {
         order_id: reviewDraft.orderId,
         customer_name: customerName,
@@ -496,7 +504,7 @@ const customerName =
       (review) =>
         review.order_id === orderId &&
         review.product_id === productId &&
-        (review.customer_email || "").toLowerCase() === user.email.toLowerCase()
+        (review.customer_email || "").toLowerCase() === (user?.email || "").toLowerCase()
     );
 
   const getSubmittedReview = (orderId: string, productId: string) =>
@@ -504,7 +512,7 @@ const customerName =
       (review) =>
         review.order_id === orderId &&
         review.product_id === productId &&
-        (review.customer_email || "").toLowerCase() === user.email.toLowerCase()
+        (review.customer_email || "").toLowerCase() === (user?.email || "").toLowerCase()
     );
 
   const getReviewStatusLabel = (status: StoredReview["status"]) => {
@@ -535,8 +543,8 @@ const customerName =
   const openExchangeModal = (order: CustomerOrder) => {
     setSelectedExchangeOrder(order);
     setExchangeDraft({
-      reason: order.exchangeRequest?.reason ?? "",
-      images: order.exchangeRequest?.images ?? [],
+      reason: order.exchange_request?.reason ?? "",
+      images: order.exchange_request?.images ?? [],
     });
   };
 
@@ -550,23 +558,31 @@ const customerName =
       return;
     }
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("orders")
       .update({
         status: "exchange_requested",
-        exchangeRequest: {
+        exchange_request: {
           status: "pending",
           reason: exchangeDraft.reason.trim(),
           images: exchangeDraft.images,
           requestedAt: new Date().toISOString(),
         },
       })
-      .eq("id", selectedExchangeOrder.id);
+      // 🔥 Allow exchange request for both logged-in users and guests (match by id OR email)
+      .or(`id.eq.${selectedExchangeOrder.id},customer_email.eq.${user?.email || localStorage.getItem("guest_email")}`)
+      .select();
 
-    if (!error) {
+    console.log("EXCHANGE UPDATE RESULT:", { data, error });
+
+    if (!error && data && data.length > 0) {
       toast.success("Exchange request sent for admin review");
       setSelectedExchangeOrder(null);
       setExchangeDraft({ reason: "", images: [] });
+    }
+    if (error || !data || data.length === 0) {
+      console.error("Exchange request failed:", error);
+      toast.error("Failed to send exchange request");
     }
   };
 
@@ -598,7 +614,7 @@ const customerName =
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-24">
+    <div className="min-h-screen bg-black text-white pt-24">
       {/* Header */}
       <div className="bg-black text-white py-6 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -622,10 +638,10 @@ const customerName =
             className="text-center py-16"
           >
             <Package size={64} className="mx-auto text-gray-300 mb-4" />
-            <h2 className="text-2xl font-semibold mb-2 tracking-widest uppercase">
+            <h2 className="text-2xl font-semibold mb-2 tracking-widest uppercase text-white">
               No Orders Yet
             </h2>
-            <p className="text-gray-600 mb-6 tracking-wider">
+            <p className="text-gray-400 mb-6 tracking-wider">
               You haven't placed any orders yet. Start shopping to see your orders here.
             </p>
             <Link
@@ -646,10 +662,10 @@ const customerName =
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
-                className="bg-white rounded-lg shadow-sm overflow-hidden"
+                className="bg-neutral-900 rounded-lg shadow-sm overflow-hidden border border-white/10"
               >
                 {/* Order Header */}
-                <div className="bg-gray-50 px-6 py-4 border-b">
+                <div className="bg-neutral-900 px-6 py-4 border-b border-white/10">
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="font-semibold tracking-wider uppercase">
@@ -658,7 +674,7 @@ const customerName =
                           (order.is_custom && order.custom_design_id ? order.custom_design_id : order.id)
                         )}
                       </h3>
-                      <p className="text-sm text-gray-600 tracking-wider">
+                      <p className="text-sm text-gray-400 tracking-wider">
                         Placed on {formatDate(order.created_at || order.date)}
                       </p>
                     </div>
@@ -676,7 +692,7 @@ const customerName =
                   </div>
                   {/* ADMIN STATUS + MESSAGE */}
                   {order.admin_status ? (
-                    <p className="text-xs mt-1 uppercase tracking-wider text-gray-500">
+                    <p className="text-xs mt-1 uppercase tracking-wider text-gray-400">
                       {order.admin_status === "approved" && "Approved by Admin"}
                       {order.admin_status === "rejected" && "Rejected by Admin"}
                     </p>
@@ -702,44 +718,44 @@ const customerName =
                         )}
                         <div className="flex-1">
                           <h4 className="font-medium tracking-wider">{item.name}</h4>
-                          <p className="text-sm text-gray-600 tracking-wider">
+                          <p className="text-sm text-gray-400 tracking-wider">
                             Quantity: {item.quantity}
                           </p>
                         </div>
                         <div className="text-right">
                           <p className="font-medium tracking-wider">
-                          {(() => {
-                            const rawPrice =
-                              order.total ??
-                              order.approved_price ??
-                              order.custom_designs?.approved_price ??
-                              0;
-                            const price =
-                              typeof rawPrice === "string"
-                                ? parseFloat(rawPrice)
-                                : Number(rawPrice || 0);
-
-
-                            if (order.is_custom && (!order.approved_price && !order.custom_designs?.approved_price)) {
-                              return "Awaiting Pricing";
-                            }
-
-                            if (order.is_custom && (order.approved_price || order.custom_designs?.approved_price)) {
-                              const customRawPrice =
+                            {(() => {
+                              const rawPrice =
+                                order.total ??
                                 order.approved_price ??
                                 order.custom_designs?.approved_price ??
                                 0;
-                              const customPrice =
-                                typeof customRawPrice === "string"
-                                  ? parseFloat(customRawPrice)
-                                  : Number(customRawPrice || 0);
-                              return `NPR ${customPrice.toLocaleString()}`;
-                            }
+                              const price =
+                                typeof rawPrice === "string"
+                                  ? parseFloat(rawPrice)
+                                  : Number(rawPrice || 0);
 
-                            return item.price
-                              ? `NPR ${item.price.toLocaleString()}`
-                              : "Included in order";
-                          })()}
+
+                              if (order.is_custom && (!order.approved_price && !order.custom_designs?.approved_price)) {
+                                return "Awaiting Pricing";
+                              }
+
+                              if (order.is_custom && (order.approved_price || order.custom_designs?.approved_price)) {
+                                const customRawPrice =
+                                  order.approved_price ??
+                                  order.custom_designs?.approved_price ??
+                                  0;
+                                const customPrice =
+                                  typeof customRawPrice === "string"
+                                    ? parseFloat(customRawPrice)
+                                    : Number(customRawPrice || 0);
+                                return `NPR ${customPrice.toLocaleString()}`;
+                              }
+
+                              return item.price
+                                ? `NPR ${item.price.toLocaleString()}`
+                                : "Included in order";
+                            })()}
                           </p>
                           {order.status === "delivered" ? (
                             hasSubmittedReview(order.id, item.id) ? (
@@ -752,7 +768,7 @@ const customerName =
                               <button
                                 type="button"
                                 onClick={() => openReviewModal(order.id, item.id, item.name)}
-                                className="mt-2 text-xs uppercase tracking-wider text-blue-600 hover:text-blue-800"
+                                className="mt-2 text-xs uppercase tracking-wider text-blue-400 hover:text-blue-200"
                               >
                                 Write Review
                               </button>
@@ -760,38 +776,14 @@ const customerName =
                           ) : null}
                         </div>
                       </div>
-                      {order.exchangeRequest ? (
-                        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
-                          <p className="text-xs uppercase tracking-wider text-amber-700">
-                            {getExchangeStatusLabel(order)}
-                          </p>
-                          <p className="mt-2 text-sm text-gray-700">
-                            {order.exchangeRequest.reason}
-                          </p>
-                          {order.exchangeRequest.adminMessage ? (
-                            <div className="mt-3 rounded border border-amber-200 bg-white/70 p-3">
-                              <p className="text-xs uppercase tracking-wider text-gray-500">
-                                Admin Message
-                              </p>
-                              <p className="mt-2 text-sm text-gray-700">
-                                {order.exchangeRequest.adminMessage}
-                              </p>
-                            </div>
-                          ) : null}
-                          {order.exchangeRequest.reviewedBy ? (
-                            <p className="mt-2 text-xs uppercase tracking-wider text-gray-500">
-                              Reviewed by {order.exchangeRequest.reviewedBy}
-                            </p>
-                          ) : null}
-                        </div>
-                      ) : null}
+                    {/* Exchange Request block moved outside items loop */}
                       {/* ADMIN MESSAGE DISPLAY */}
                       {order.admin_message ? (
-                        <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
-                          <p className="text-xs uppercase tracking-wider text-gray-500">
+                        <div className="mt-3 rounded-lg border border-gray-200 bg-neutral-900 p-4">
+                          <p className="text-xs uppercase tracking-wider text-gray-400">
                             Admin Message
                           </p>
-                          <p className="mt-2 text-sm text-gray-700">
+                          <p className="mt-2 text-sm text-gray-300">
                             {order.admin_message}
                           </p>
                         </div>
@@ -803,11 +795,11 @@ const customerName =
                         }
 
                         return (
-                          <div className="mt-3 rounded-lg border border-black/10 bg-gray-50 p-4">
-                            <p className="text-xs uppercase tracking-wider text-gray-500">
+                          <div className="mt-3 rounded-lg border border-black/10 bg-neutral-900 p-4">
+                            <p className="text-xs uppercase tracking-wider text-gray-400">
                               Reply from {submittedReview.adminReplyBy || "Admin"}
                             </p>
-                            <p className="mt-2 text-sm text-gray-700">
+                            <p className="mt-2 text-sm text-gray-300">
                               {submittedReview.adminReply}
                             </p>
                           </div>
@@ -816,9 +808,49 @@ const customerName =
                     </div>
                   ))}
                 </div>
+                {/* Exchange Request (order-level) */}
+                {order.exchange_request ? (
+                  <div className="mt-4 rounded-lg border border-amber-400/30 bg-amber-900/20 p-4">
+                    <p className="text-xs uppercase tracking-wider text-amber-300">
+                      {getExchangeStatusLabel(order)}
+                    </p>
+                    <p className="mt-2 text-sm text-gray-200">
+                      {order.exchange_request?.reason}
+                    </p>
+
+                    {order.exchange_request?.images?.length > 0 && (
+                      <div className="mt-3 grid grid-cols-3 gap-3">
+                        {order.exchange_request.images.map((img: string, i: number) => (
+                          <img
+                            key={i}
+                            src={img}
+                            className="h-24 w-full rounded object-cover"
+                          />
+                        ))}
+                      </div>
+                    )}
+
+                    {order.exchange_request?.adminMessage ? (
+                      <div className="mt-3 rounded border border-amber-400/30 bg-black/40 p-3">
+                        <p className="text-xs uppercase tracking-wider text-gray-300">
+                          Admin Message
+                        </p>
+                        <p className="mt-2 text-sm text-gray-200">
+                          {order.exchange_request?.adminMessage}
+                        </p>
+                      </div>
+                    ) : null}
+
+                    {order.exchange_request?.reviewedBy ? (
+                      <p className="mt-2 text-xs uppercase tracking-wider text-gray-400">
+                        Reviewed by {order.exchange_request?.reviewedBy}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 {/* Order Footer */}
-                <div className="bg-gray-50 px-6 py-4 border-t">
+                <div className="bg-neutral-900 px-6 py-4 border-t border-white/10">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
                       {(() => {
@@ -831,7 +863,7 @@ const customerName =
                             ? parseFloat(rawPrice)
                             : Number(rawPrice || 0);
 
-                       
+
                         return (
                           order.is_custom &&
                           (order.approved_price || order.custom_designs?.approved_price) &&
@@ -872,12 +904,12 @@ const customerName =
 
                             // redirect to checkout with explicit payment mode
                             const orderIdentifier =
-                            order.is_custom && order.custom_design_id
-                              ? order.custom_design_id
-                              : order.id;
+                              order.is_custom && order.custom_design_id
+                                ? order.custom_design_id
+                                : order.id;
 
-                          window.location.href = `/checkout?orderId=${orderIdentifier}&custom=true&mode=payment`;
-                                                    }}
+                            window.location.href = `/checkout?orderId=${orderIdentifier}&custom=true&mode=payment`;
+                          }}
                           className="text-sm bg-black text-white px-4 py-2 hover:bg-gray-800 tracking-wider uppercase"
                         >
                           {order._processing ? "Redirecting..." : "Pay Now"}
@@ -886,14 +918,14 @@ const customerName =
                       <button
                         type="button"
                         onClick={() => setSelectedOrderDetails(order)}
-                        className="text-sm text-blue-600 hover:text-blue-800 tracking-wider uppercase"
+                        className="text-sm text-blue-400 hover:text-blue-200 tracking-wider uppercase"
                       >
                         View Details
                       </button>
                       <button
                         type="button"
                         onClick={() => setSelectedTrackingOrder(order)}
-                        className="text-sm text-blue-600 hover:text-blue-800 tracking-wider uppercase"
+                        className="text-sm text-blue-400 hover:text-blue-200 tracking-wider uppercase"
                         disabled={
                           order.status === "cancelled" ||
                           order.status === "returned" ||
@@ -902,18 +934,18 @@ const customerName =
                       >
                         Track Order
                       </button>
-                      {order.status === "delivered" && !order.exchangeRequest ? (
+                      {order.status === "delivered" && !order.exchange_request ? (
                         <button
                           type="button"
                           onClick={() => openExchangeModal(order)}
-                          className="text-sm text-amber-700 hover:text-amber-900 tracking-wider uppercase"
+                          className="text-sm text-amber-400 hover:text-amber-200 tracking-wider uppercase"
                         >
                           Request Exchange
                         </button>
                       ) : null}
                     </div>
                     <div className="text-right">
-                      <p className="text-sm text-gray-600 tracking-wider uppercase">
+                      <p className="text-sm text-gray-400 tracking-wider uppercase">
                         Total
                       </p>
                       <p className="font-semibold tracking-wider">
@@ -948,7 +980,7 @@ const customerName =
                             : "Awaiting Pricing";
                         })()}
                       </p>
-                      <p className="text-xs mt-1 uppercase tracking-wider text-gray-500">
+                      <p className="text-xs mt-1 uppercase tracking-wider text-gray-400">
                         {(order.payment_status === "paid") ? "Paid" : "Unpaid"}
                       </p>
                     </div>
@@ -965,7 +997,7 @@ const customerName =
           <motion.div
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-xl rounded-lg bg-white shadow-xl"
+            className="w-full max-w-xl rounded-lg bg-black text-white shadow-xl border border-white/10"
           >
             <div className="border-b px-6 py-4">
               <h3 className="text-xl font-semibold tracking-wider uppercase">
@@ -1210,7 +1242,7 @@ const customerName =
           <motion.div
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-xl rounded-lg bg-white shadow-xl"
+            className="w-full max-w-xl rounded-lg bg-black text-white shadow-xl border border-white/10"
           >
             <div className="flex items-center justify-between border-b px-6 py-4">
               <h3 className="text-xl font-semibold tracking-wider uppercase">Track Order</h3>
@@ -1229,10 +1261,10 @@ const customerName =
                   <div key={step} className="flex items-start gap-3">
                     <div
                       className={`mt-1 h-3 w-3 rounded-full ${state === "complete"
-                          ? "bg-green-500"
-                          : state === "cancelled"
-                            ? "bg-red-500"
-                            : "bg-gray-300"
+                        ? "bg-green-500"
+                        : state === "cancelled"
+                          ? "bg-red-500"
+                          : "bg-gray-300"
                         }`}
                     />
                     <div>
@@ -1269,19 +1301,19 @@ const customerName =
           <motion.div
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-xl rounded-lg bg-white shadow-xl"
+            className="w-full max-w-xl rounded-lg bg-black text-white shadow-xl border border-white/10"
           >
             <div className="border-b px-6 py-4">
               <h3 className="text-xl font-semibold tracking-wider uppercase">
                 Request Exchange
               </h3>
-              <p className="mt-1 text-sm text-gray-600">
+              <p className="mt-1 text-sm text-gray-400">
                 Add the reason and photos. Exchange only proceeds after admin approval.
               </p>
             </div>
             <div className="space-y-4 px-6 py-6">
               <div>
-                <label className="mb-2 block text-sm uppercase tracking-wider text-gray-500">
+                <label className="mb-2 block text-sm uppercase tracking-wider text-gray-400">
                   Reason
                 </label>
                 <textarea
@@ -1290,12 +1322,12 @@ const customerName =
                     setExchangeDraft((current) => ({ ...current, reason: event.target.value }))
                   }
                   rows={5}
-                  className="w-full resize-none border border-gray-300 px-4 py-3 focus:border-black focus:outline-none"
+                  className="w-full resize-none border border-white/10 bg-neutral-900 text-white px-4 py-3 focus:border-white focus:outline-none"
                   placeholder="Describe the sizing issue, defect, or exchange reason"
                 />
               </div>
               <div>
-                <label className="mb-2 block text-sm uppercase tracking-wider text-gray-500">
+                <label className="mb-2 block text-sm uppercase tracking-wider text-gray-400">
                   Photos
                 </label>
                 <input
@@ -1303,9 +1335,9 @@ const customerName =
                   accept="image/*"
                   multiple
                   onChange={handleExchangeImagesChange}
-                  className="w-full text-sm"
+                  className="w-full text-sm text-white file:bg-white file:text-black file:border-none file:px-3 file:py-1 file:cursor-pointer"
                 />
-                <p className="mt-2 text-xs text-gray-500">
+                <p className="mt-2 text-xs text-gray-400">
                   You can upload up to 3 images.
                 </p>
                 {exchangeDraft.images.length > 0 ? (
@@ -1326,14 +1358,14 @@ const customerName =
               <button
                 type="button"
                 onClick={() => setSelectedExchangeOrder(null)}
-                className="px-4 py-2 text-sm uppercase tracking-wider text-gray-600 hover:text-black"
+                className="px-4 py-2 text-sm uppercase tracking-wider text-gray-400 hover:text-white"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleSubmitExchangeRequest}
-                className="bg-black px-5 py-2 text-sm uppercase tracking-wider text-white transition-colors hover:bg-gray-800"
+                className="bg-white text-black px-5 py-2 text-sm uppercase tracking-wider transition-colors hover:bg-gray-200"
               >
                 Send Request
               </button>

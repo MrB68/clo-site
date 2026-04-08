@@ -470,10 +470,10 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
 
   const handleShippingSubmit = () => {
     // 🚫 Block if not signed in
-    if (!user) {
-      toast.error("Please sign in to continue checkout");
-      return;
-    }
+    //if (!user) {
+     // toast.error("Please sign in to continue checkout");
+     // return;
+   // }
 
     if (validateShippingForm()) {
       setStep("payment");
@@ -623,10 +623,10 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
   const handlePaymentSubmit = () => {
     if (isProcessingPayment) return;
 
-    if (!user) {
-      toast.error("Please sign in to continue checkout");
-      return;
-    }
+   // if (!user) {
+    //  toast.error("Please sign in to continue checkout");
+    //  return;
+   /// }
 
     if (checkoutItems.length === 0) {
       toast.error("Your cart is empty");
@@ -997,15 +997,16 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
         ].filter(Boolean).join(", ");
 
         // Ensure user is not null before accessing user?.id
-        if (!user) {
-          toast.error("Please sign in to continue checkout");
-          return;
-        }
+        //if (!user) {
+         // toast.error("Please sign in to continue checkout");
+          //return;
+       // }
         const { error } = await supabase.from("orders").insert([
           {
             id: orderId,
             order_code: orderCode,
-            user_id: user?.id || null,
+           // user_id: user?.id || null,
+           user_id: user?.id ?? null,
 
             customer_name: `${customer.firstName || ""} ${customer.lastName || ""}`,
             customer_email: (customer.email || "").toLowerCase(),
@@ -1468,7 +1469,7 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
               </div>
               <button
                 onClick={handleShippingSubmit}
-                disabled={!user}
+                // disabled={!user}
                 className="w-full bg-black text-white py-4 font-medium hover:bg-gray-900 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
               >
                 Continue to Payment
