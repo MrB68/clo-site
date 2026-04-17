@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Product Sync Test</title>
+</head>
+<body>
+    <h1>Product Synchronization Test</h1>
+    <button id="saveTestProduct">Save Test Product</button>
+    <button id="loadProducts">Load Products</button>
+    <button id="clearStorage">Clear Storage</button>
+    <div id="output"></div>
+
+    <script>
+        const output = document.getElementById('output');
+
+        function log(message) {
+            output.innerHTML += '<p>' + message + '</p>';
+            console.log(message);
+        }
+
+        document.getElementById('saveTestProduct').addEventListener('click', () => {
+            const testProduct = {
+                id: '1',
+                name: 'Updated Test Product',
+                price: 50000,
+                category: 'women',
+                style: 'minimal',
+                image: 'https://example.com/updated-image.jpg',
+                images: ['https://example.com/updated-image.jpg', 'https://example.com/another-image.jpg'],
+                description: 'This is an updated test product',
+                sizes: ['S', 'M', 'L'],
+                colors: ['Black'],
+                stock: 5,
+                featured: true,
+                rating: 0,
+                reviews: 0,
+                tags: ['test'],
+                material: 'Cotton',
+                careInstructions: 'Machine wash cold',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+
+            const products = [testProduct];
+            localStorage.setItem('mainProducts', JSON.stringify(products));
+            log('Test product saved to localStorage');
+
+            // Dispatch custom event to simulate admin update
+            window.dispatchEvent(new CustomEvent('productsUpdated'));
+            log('Custom event dispatched');
+        });
+
+        document.getElementById('loadProducts').addEventListener('click', () => {
+            const saved = localStorage.getItem('mainProducts');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                log('Loaded products: ' + parsed.length);
+                if (parsed.length > 0) {
+                    log('First product name: ' + parsed[0].name);
+                    log('First product image: ' + parsed[0].image);
+                    log('First product images: ' + JSON.stringify(parsed[0].images));
+                }
+            } else {
+                log('No products found in localStorage');
+            }
+        });
+
+        document.getElementById('clearStorage').addEventListener('click', () => {
+            localStorage.removeItem('mainProducts');
+            log('localStorage cleared');
+        });
+
+        // Listen for storage changes
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'mainProducts') {
+                log('Storage event detected for mainProducts');
+            }
+        });
+
+        // Listen for custom events
+        window.addEventListener('productsUpdated', () => {
+            log('Custom productsUpdated event received');
+        });
+
+        log('Test page loaded. Click buttons to test synchronization.');
+    </script>
+</body>
+</html>
