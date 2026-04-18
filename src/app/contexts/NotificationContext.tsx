@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useRef, ReactNode } from "react";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "./AuthContext";
 import toast from "react-hot-toast";
@@ -31,6 +31,13 @@ interface Notification {
   message: string;
   is_read: boolean;
   created_at: string;
+  meta?: {
+    order_id?: string;
+    order_code?: string;
+    total?: number;
+    status?: string;
+    link?: string;
+  };
 }
 
 interface NotificationContextType {
@@ -68,27 +75,22 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     saveToCache(notifications);
   }, [notifications]);
 
-  const channelRef = { current: null as BroadcastChannel | null };
-  let activeChannel: any = null;
+  const channelRef = useRef<BroadcastChannel | null>(null);
+  const activeChannelRef = useRef<any>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined" && "BroadcastChannel" in window) {
       channelRef.current = new BroadcastChannel("notifications_channel");
+
+      channelRef.current.onmessage = (event) => {
+        const incoming = event.data as Notification[];
+        setNotifications((prev) => mergeUnique(incoming, prev));
+      };
     }
 
     return () => {
       channelRef.current?.close();
-    };
-  }, []);
-
-  useEffect(() => {
-    channelRef.current && (channelRef.current.onmessage = (event) => {
-      const incoming = event.data as Notification[];
-      setNotifications((prev) => mergeUnique(incoming, prev));
-    });
-
-    return () => {
-      channelRef.current?.close();
+      channelRef.current = null;
     };
   }, []);
 
@@ -106,15 +108,17 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
-      if (!error && data) {
-        setNotifications((prev) => {
-          const updated = mergeUnique(data as Notification[], prev);
-          channelRef.current?.postMessage(data);
-          return updated;
-        });
-        if (data && data.length > 0) {
-          playNotificationSound();
-        }
+      if (error || !data) {
+        return;
+      }
+
+      setNotifications((prev) => {
+        const updated = mergeUnique(data as Notification[], prev);
+        channelRef.current?.postMessage(data);
+        return updated;
+      });
+      if (data && data.length > 0) {
+        playNotificationSound();
       }
     };
 
@@ -127,8 +131,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user?.id) return;
 
-    if (activeChannel) {
-      supabase.removeChannel(activeChannel);
+    if (activeChannelRef.current) {
+      supabase.removeChannel(activeChannelRef.current);
     }
 
     const channel = supabase
@@ -142,8 +146,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           filter: `user_id=eq.${user.id}`,
         },
         (payload) => {
-          console.log("🔥 REALTIME NOTIFICATION:", payload);
-
           const incoming = payload.new as Notification;
 
           setNotifications((prev) => {
@@ -152,9 +154,36 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
             return updated;
           });
 
-          toast.custom(() => (
-            <div className="bg-black text-white px-5 py-3 rounded-xl border border-white/10 uppercase tracking-wider">
-              {incoming.title || "New Notification"}
+          const meta = incoming.meta || {};
+          const link = meta.link || (meta.order_id ? `/orders/${meta.order_id}` : undefined);
+
+          toast.custom((t) => (
+            <div className="bg-black text-white p-4 rounded-xl border border-white/10 w-[320px]">
+              <p className="text-sm font-semibold">{incoming.title}</p>
+
+              {incoming.message && (
+                <p className="text-xs text-gray-400 mt-1">{incoming.message}</p>
+              )}
+
+              {(meta.order_code || meta.total || meta.status) && (
+                <div className="mt-2 text-[11px] text-gray-500 flex gap-2 flex-wrap">
+                  {meta.order_code && <span>#{meta.order_code}</span>}
+                  {meta.total && <span>Rs {meta.total}</span>}
+                  {meta.status && <span className="uppercase">{meta.status}</span>}
+                </div>
+              )}
+
+              {link && (
+                <button
+                  onClick={() => {
+                    toast.dismiss(t.id);
+                    window.location.href = link;
+                  }}
+                  className="mt-3 text-[11px] border border-white/20 px-3 py-1 rounded hover:bg-white/10"
+                >
+                  View Details
+                </button>
+              )}
             </div>
           ));
 
@@ -168,25 +197,15 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
             }
           } catch {}
 
-          // 🔗 open order page when notification clicked (toast handler will use this)
-          window.dispatchEvent(
-            new CustomEvent("notification-click", {
-              detail: {
-                orderId: incoming.id,
-              },
-            })
-          );
         }
       )
-      .subscribe((status) => {
-        console.log("Realtime status:", status);
-      });
+      .subscribe();
 
-    activeChannel = channel;
+    activeChannelRef.current = channel;
 
     return () => {
       supabase.removeChannel(channel);
-      activeChannel = null;
+      activeChannelRef.current = null;
     };
   }, [user?.id]);
 

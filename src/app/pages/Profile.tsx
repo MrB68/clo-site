@@ -380,7 +380,7 @@ useEffect(() => {
   if (!user) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center px-4">
-        <div className="bg-gray-900 border border-gray-800 text-white p-8 rounded-lg shadow-lg max-w-md w-full text-center">
+        <div className="bg-zinc-900 border border-zinc-800 text-white p-8 rounded-lg shadow-lg max-w-md w-full text-center">
           <h1 className="text-2xl font-bold mb-4 tracking-widest uppercase">
             Access Denied
           </h1>
@@ -389,7 +389,7 @@ useEffect(() => {
           </p>
           <Link
             to="/signin"
-            className="inline-block bg-black text-white px-6 py-3 hover:bg-gray-800 transition-colors tracking-widest uppercase text-sm"
+            className="inline-block bg-black text-white px-6 py-3 hover:bg-zinc-800 transition-colors tracking-widest uppercase text-sm"
           >
             Sign In
           </Link>
@@ -429,7 +429,7 @@ useEffect(() => {
             animate={{ opacity: 1, y: 0 }}
             className="lg:col-span-2"
           >
-            <div className="bg-gray-900 border border-gray-800 rounded-lg shadow-sm p-6">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-lg shadow-sm p-6">
               <h2 className="text-xl font-semibold mb-6 tracking-widest uppercase">
                 Account Information
               </h2>
@@ -448,7 +448,7 @@ useEffect(() => {
                         <User size={28} className="text-white" />
                       )}
                     </div>
-                    <label className="absolute -bottom-1 -right-1 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-gray-900 border border-gray-800 text-white shadow-md transition hover:bg-gray-700">
+                    <label className="absolute -bottom-1 -right-1 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-zinc-900 border border-zinc-800 text-white shadow-md transition hover:bg-zinc-700">
                       <Camera size={14} />
                       <input
                         type="file"
@@ -485,7 +485,7 @@ useEffect(() => {
                     <label className="block text-sm font-medium mb-2 tracking-wider uppercase text-gray-400">
                       Full Name
                     </label>
-                    <div className="flex items-center gap-3 p-3 bg-gray-800 rounded">
+                    <div className="flex items-center gap-3 p-3 bg-zinc-800 rounded">
                       <User size={16} className="text-gray-400" />
                       <span className="tracking-wider">{profileName || `${savedDetails.firstName} ${savedDetails.lastName}`.trim() || "User"}</span>
                     </div>
@@ -495,7 +495,7 @@ useEffect(() => {
                     <label className="block text-sm font-medium mb-2 tracking-wider uppercase text-gray-400">
                       Email Address
                     </label>
-                    <div className="flex items-center gap-3 p-3 bg-gray-800 rounded">
+                    <div className="flex items-center gap-3 p-3 bg-zinc-800 rounded">
                       <Mail size={16} className="text-gray-400" />
                       <span className="tracking-wider break-all">{user?.email || ""}</span>
                     </div>
@@ -505,7 +505,7 @@ useEffect(() => {
                     <label className="block text-sm font-medium mb-2 tracking-wider uppercase text-gray-400">
                       Member Since
                     </label>
-                    <div className="flex items-center gap-3 p-3 bg-gray-800 rounded">
+                    <div className="flex items-center gap-3 p-3 bg-zinc-800 rounded">
                       <Calendar size={16} className="text-gray-400" />
                       <span className="tracking-wider">
                         {authUser?.created_at ? formatDate(authUser.created_at) : "N/A"}
@@ -517,16 +517,16 @@ useEffect(() => {
                     <label className="block text-sm font-medium mb-2 tracking-wider uppercase text-gray-400">
                       Account Status
                     </label>
-                    <div className="flex items-center gap-3 p-3 bg-gray-800 rounded">
-                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <span className="tracking-wider text-green-600">Active</span>
+                    <div className="flex items-center gap-3 p-3 bg-zinc-800 rounded">
+                      <div className="w-2 h-2 bg-white rounded-full"></div>
+                      <span className="tracking-wider text-white">Active</span>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="mt-8 bg-gray-900 border border-gray-800 rounded-lg shadow-sm p-6">
+            <div className="mt-8 bg-zinc-900 border border-zinc-800 rounded-lg shadow-sm p-6">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-xl font-semibold tracking-widest uppercase">
@@ -539,7 +539,7 @@ useEffect(() => {
                 <button
                   type="button"
                   onClick={handleSaveDetails}
-                  className="bg-black px-5 py-3 text-sm uppercase tracking-widest text-white transition-colors hover:bg-gray-800"
+                  className="bg-white px-5 py-3 text-sm uppercase tracking-widest text-black transition-colors hover:bg-gray-200"
                 >
                   Save Details
                 </button>
@@ -555,7 +555,7 @@ useEffect(() => {
                     name="firstName"
                     value={savedDetails.firstName}
                     onChange={handleDetailsChange}
-                    className="w-full rounded border border-gray-700 bg-gray-800 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                    className="w-full rounded border border-zinc-700 bg-zinc-800 px-4 py-3 tracking-wider focus:border-white focus:outline-none"
                   />
                 </div>
                 <div>
@@ -567,7 +567,7 @@ useEffect(() => {
                     name="lastName"
                     value={savedDetails.lastName}
                     onChange={handleDetailsChange}
-                    className="w-full rounded border border-gray-700 bg-gray-800 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                    className="w-full rounded border border-zinc-700 bg-zinc-800 px-4 py-3 tracking-wider focus:border-white focus:outline-none"
                   />
                 </div>
                 <div>
@@ -579,7 +579,7 @@ useEffect(() => {
                     name="email"
                     value={savedDetails.email}
                     onChange={handleDetailsChange}
-                    className="w-full rounded border border-gray-700 bg-gray-800 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                    className="w-full rounded border border-zinc-700 bg-zinc-800 px-4 py-3 tracking-wider focus:border-white focus:outline-none"
                   />
                 </div>
                 <div>
@@ -591,7 +591,7 @@ useEffect(() => {
                     name="phone"
                     value={savedDetails.phone}
                     onChange={handleDetailsChange}
-                    className="w-full rounded border border-gray-700 bg-gray-800 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                    className="w-full rounded border border-zinc-700 bg-zinc-800 px-4 py-3 tracking-wider focus:border-white focus:outline-none"
                   />
                 </div>
                 <div>
@@ -602,7 +602,7 @@ useEffect(() => {
                     name="province"
                     value={savedDetails.province}
                     onChange={handleDetailsChange}
-                    className="w-full rounded border border-gray-700 bg-gray-800 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                    className="w-full rounded border border-zinc-700 bg-zinc-800 px-4 py-3 tracking-wider focus:border-white focus:outline-none"
                   >
                     <option value="">Select Province</option>
                     {provinceOptions.map((province) => (
@@ -620,7 +620,7 @@ useEffect(() => {
                     name="district"
                     value={savedDetails.district}
                     onChange={handleDetailsChange}
-                    className="w-full rounded border border-gray-700 bg-gray-800 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                    className="w-full rounded border border-zinc-700 bg-zinc-800 px-4 py-3 tracking-wider focus:border-white focus:outline-none"
                     disabled={!savedDetails.province}
                   >
                     <option value="">Select District</option>
@@ -639,7 +639,7 @@ useEffect(() => {
                     name="city"
                     value={savedDetails.city}
                     onChange={handleDetailsChange}
-                    className="w-full rounded border border-gray-700 bg-gray-800 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                    className="w-full rounded border border-zinc-700 bg-zinc-800 px-4 py-3 tracking-wider focus:border-white focus:outline-none"
                     disabled={!savedDetails.province}
                   >
                     <option value="">Select City / Municipality</option>
@@ -659,7 +659,7 @@ useEffect(() => {
                     name="area"
                     value={savedDetails.area}
                     onChange={handleDetailsChange}
-                    className="w-full rounded border border-gray-700 bg-gray-800 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                    className="w-full rounded border border-zinc-700 bg-zinc-800 px-4 py-3 tracking-wider focus:border-white focus:outline-none"
                   />
                 </div>
                 <div>
@@ -671,7 +671,7 @@ useEffect(() => {
                     name="wardNumber"
                     value={savedDetails.wardNumber}
                     onChange={handleDetailsChange}
-                    className="w-full rounded border border-gray-700 bg-gray-800 px-4 py-3 tracking-wider focus:border-black focus:outline-none"
+                    className="w-full rounded border border-zinc-700 bg-zinc-800 px-4 py-3 tracking-wider focus:border-white focus:outline-none"
                   />
                 </div>
                 <div>
@@ -695,7 +695,7 @@ useEffect(() => {
                     name="address"
                     value={savedDetails.address}
                     onChange={handleDetailsChange}
-                    className="w-full rounded border border-gray-700 bg-gray-800 text-white px-4 py-3 tracking-wider focus:border-white focus:outline-none"
+                    className="w-full rounded border border-zinc-700 bg-zinc-800 text-white px-4 py-3 tracking-wider focus:border-white focus:outline-none"
                   />
                 </div>
                 <div>
@@ -707,7 +707,7 @@ useEffect(() => {
                     name="postalCode"
                     value={savedDetails.postalCode}
                     onChange={handleDetailsChange}
-                    className="w-full rounded border border-gray-700 bg-gray-800 text-white px-4 py-3 tracking-wider focus:border-white focus:outline-none"
+                    className="w-full rounded border border-zinc-700 bg-zinc-800 text-white px-4 py-3 tracking-wider focus:border-white focus:outline-none"
                   />
                 </div>
               </div>
@@ -721,20 +721,20 @@ useEffect(() => {
             transition={{ delay: 0.1 }}
             className="space-y-6"
           >
-            <div className="bg-gray-900 border border-gray-800 rounded-lg shadow-sm p-6">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-lg shadow-sm p-6">
               <h3 className="font-semibold mb-4 tracking-widest uppercase">
                 Quick Actions
               </h3>
               <div className="space-y-3">
                 <Link
                   to="/orders"
-                  className="block w-full text-left px-4 py-3 bg-gray-800 hover:bg-gray-700 transition-colors tracking-wider uppercase text-sm"
+                  className="block w-full text-left px-4 py-3 bg-zinc-800 hover:bg-zinc-700 transition-colors tracking-wider uppercase text-sm"
                 >
                   View Orders
                 </Link>
                 <Link
                   to="/shop"
-                  className="block w-full text-left px-4 py-3 bg-gray-800 hover:bg-gray-700 transition-colors tracking-wider uppercase text-sm"
+                  className="block w-full text-left px-4 py-3 bg-zinc-800 hover:bg-zinc-700 transition-colors tracking-wider uppercase text-sm"
                 >
                   Continue Shopping
                 </Link>
@@ -749,7 +749,7 @@ useEffect(() => {
             </div>
 
             {/* Account Stats */}
-            <div className="bg-gray-900 border border-gray-800 rounded-lg shadow-sm p-6">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-lg shadow-sm p-6">
               <h3 className="font-semibold mb-4 tracking-widest uppercase">
                 Account Stats
               </h3>

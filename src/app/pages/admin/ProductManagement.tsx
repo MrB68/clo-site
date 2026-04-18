@@ -79,7 +79,7 @@ const categories = [
 ];
 
 const sizes = ["XS", "S", "M", "L", "XL", "XXL"];
-const colors = ["Black", "White", "Red", "Blue", "Green", "Yellow", "Purple", "Pink", "Gray", "Brown"];
+const colors = ["Black", "White", "Red", "Blue", "Green", "Yellow", "Purple", "Pink", "Grey", "Brown"];
 
 export function ProductManagement() {
   const adminSession = getAdminSession();
@@ -611,7 +611,7 @@ setProducts(normalized);
   }
 
   return (
-    <div className="space-y-6 bg-gray-900 text-white min-h-screen">
+    <div className="space-y-6 bg-zinc-900 text-white min-h-screen">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Product Management</h2>
@@ -713,14 +713,14 @@ setProducts(normalized);
             placeholder="New collection name"
             value={newCollection}
             onChange={(e) => setNewCollection(e.target.value)}
-            className="dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+            className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
           />
           <div className="flex flex-col gap-2">
             <Input
               placeholder="Collection image URL (optional)"
               value={collectionImage}
               onChange={(e) => setCollectionImage(e.target.value)}
-              className="dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+            className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
             />
             <Input
               type="file"
@@ -737,7 +737,7 @@ setProducts(normalized);
                   toast.error("Failed to process image");
                 }
               }}
-              className="dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+            className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
             />
           </div>
           <Button
@@ -845,10 +845,10 @@ setProducts(normalized);
           placeholder="Search products..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="max-w-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+          className="max-w-sm dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
         />
         <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-          <SelectTrigger className="w-48 dark:bg-gray-800 dark:border-gray-700 dark:text-white">
+          <SelectTrigger className="w-48 dark:bg-zinc-800 dark:border-zinc-700 dark:text-white">
             <SelectValue placeholder="All Categories" />
           </SelectTrigger>
           <SelectContent>
@@ -901,7 +901,7 @@ saveProducts(reordered);
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <Card className="h-full flex flex-col dark:bg-gray-800 dark:border-gray-700 transition-all duration-300 hover:shadow-lg hover:-translate-y-1">
+                    <Card className="h-full flex flex-col dark:bg-zinc-800 dark:border-zinc-700 transition-all duration-300 hover:shadow-lg hover:-translate-y-1">
                       <CardHeader className="pb-3 relative">
                         <div
                           {...attributes}
@@ -914,7 +914,7 @@ saveProducts(reordered);
                           <div className="flex-1 min-w-0 overflow-hidden pl-6">
                             <CardTitle
                               title={product.name}
-                              className="text-sm font-medium leading-snug pr-2 line-clamp-2 max-w-full text-gray-200 hover:line-clamp-none hover:bg-gray-800 hover:z-10 hover:relative hover:px-2 hover:py-1 hover:rounded transition-all duration-200"
+                              className="text-sm font-medium leading-snug pr-2 line-clamp-2 max-w-full text-gray-200 hover:line-clamp-none hover:bg-zinc-800 hover:z-10 hover:relative hover:px-2 hover:py-1 hover:rounded transition-all duration-200"
                             >
                               {product.name}
                             </CardTitle>
@@ -971,7 +971,7 @@ saveProducts(reordered);
                       </CardHeader>
                       <CardContent className="space-y-4 flex-1 flex flex-col justify-between">
                         {product.images.length > 0 && (
-                          <div className="aspect-[4/5] rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
+                          <div className="aspect-[4/5] rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800">
                             <img
                               src={product.images[0]}
                               alt={product.name}
@@ -1040,7 +1040,7 @@ saveProducts(reordered);
 
                                 saveProducts(newProducts);
                               }}
-                              className="dark:border-gray-600 dark:text-white"
+                              className="dark:border-zinc-600 dark:text-white"
                             >
                               ↑
                             </Button>
@@ -1060,7 +1060,7 @@ saveProducts(reordered);
 
                                 saveProducts(newProducts);
                               }}
-                              className="dark:border-gray-600 dark:text-white"
+                              className="dark:border-zinc-600 dark:text-white"
                             >
                               ↓
                             </Button>
@@ -1078,7 +1078,7 @@ saveProducts(reordered);
 
       {/* Edit Product Dialog */}
       <Dialog open={!!editingProduct} onOpenChange={(open) => !open && setEditingProduct(null)}>
-        <DialogContent className="w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0 sm:p-0 dark:bg-gray-900 dark:text-white">
+        <DialogContent className="w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0 sm:p-0 dark:bg-zinc-900 dark:text-white">
           <div className="overflow-y-auto flex-1">
             <div className="p-6 sm:p-8">
               <DialogHeader className="mb-6">
@@ -1197,7 +1197,7 @@ function ProductForm({
             value={formData.name}
             onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
             placeholder="Enter product name"
-            className="text-base h-11 px-3 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+            className="text-base h-11 px-3 dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
           />
           {/* Inline error for Product Name */}
           {!formData.name && (
@@ -1207,7 +1207,7 @@ function ProductForm({
         <div className="space-y-2">
           <Label htmlFor="category">Category</Label>
           <Select value={formData.category} onValueChange={(value) => setFormData(prev => ({ ...prev, category: value }))}>
-            <SelectTrigger className="text-base h-11 px-3 dark:bg-gray-800 dark:border-gray-700 dark:text-white">
+            <SelectTrigger className="text-base h-11 px-3 dark:bg-zinc-800 dark:border-zinc-700 dark:text-white">
               <SelectValue placeholder="Select category" />
             </SelectTrigger>
             <SelectContent>
@@ -1251,7 +1251,7 @@ function ProductForm({
             value={formData.price}
             onChange={(e) => setFormData(prev => ({ ...prev, price: e.target.value }))}
             placeholder="0.00"
-            className="text-base h-11 px-3 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+            className="text-base h-11 px-3 dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
           />
           {/* Inline error for Price */}
           {(!formData.price || Number(formData.price) <= 0) && (
@@ -1267,7 +1267,7 @@ function ProductForm({
             value={formData.originalPrice}
             onChange={(e) => setFormData(prev => ({ ...prev, originalPrice: e.target.value }))}
             placeholder="0.00 (optional)"
-            className="text-base h-11 px-3 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+            className="text-base h-11 px-3 dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
           />
         </div>
       </div>
@@ -1281,7 +1281,7 @@ function ProductForm({
           onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
           placeholder="Enter product description"
           rows={4}
-          className="text-base h-11 px-3 resize-none dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+            className="text-base h-11 px-3 resize-none dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
         />
       </div>
 
@@ -1294,7 +1294,7 @@ function ProductForm({
             id="featured"
             checked={formData.featured}
             onChange={(e) => setFormData(prev => ({ ...prev, featured: e.target.checked }))}
-            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+            className="w-4 h-4 text-white bg-zinc-800 border-zinc-600 rounded focus:ring-white"
           />
           <Label htmlFor="featured" className="text-base font-medium">Featured Product</Label>
         </div>
@@ -1309,7 +1309,7 @@ function ProductForm({
         )}
         <div className="space-y-3">
           {formData.images.map((image: string, index: number) => (
-            <div key={index} className="flex items-center gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg">
+            <div key={index} className="flex items-center gap-3 p-3 border border-gray-200 dark:border-zinc-700 rounded-lg">
               <img
                 src={image}
                 alt={`Preview ${index + 1}`}
@@ -1326,7 +1326,7 @@ function ProductForm({
                   {image.startsWith('data:') ? 'From file upload' : image}
                 </p>
               </div>
-              <Button variant="outline" size="sm" onClick={() => removeImage(index)} className="shrink-0 dark:border-gray-600 dark:text-white">
+              <Button variant="outline" size="sm" onClick={() => removeImage(index)} className="shrink-0 dark:border-zinc-600 dark:text-white">
                 <X size={14} />
               </Button>
             </div>
@@ -1338,9 +1338,9 @@ function ProductForm({
               value={imageUrlInput}
               onChange={(e) => setImageUrlInput(e.target.value)}
               placeholder="Enter image URL (https://...)"
-              className="flex-1 text-base min-w-0 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+              className="flex-1 text-base min-w-0 dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
             />
-            <Button variant="outline" onClick={addImageUrl} disabled={!imageUrlInput.trim()} className="px-4 sm:px-6 flex-shrink-0 dark:border-gray-600 dark:text-white">
+            <Button variant="outline" onClick={addImageUrl} disabled={!imageUrlInput.trim()} className="px-4 sm:px-6 flex-shrink-0 dark:border-zinc-600 dark:text-white">
               <Image size={16} className="mr-2" />
               <span className="hidden sm:inline">Add URL</span>
               <span className="sm:hidden">Add</span>
@@ -1348,7 +1348,7 @@ function ProductForm({
           </div>
 
           {/* File Upload Section */}
-          <div className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-6 text-center hover:border-gray-400 dark:hover:border-gray-400 transition-colors">
+          <div className="border-2 border-dashed border-gray-300 dark:border-zinc-700 rounded-lg p-6 text-center hover:border-gray-400 dark:hover:border-gray-400 transition-colors">
             <Upload size={24} className="mx-auto text-gray-400 dark:text-gray-400 mb-2" />
             <div className="space-y-2">
               <Input
@@ -1356,7 +1356,7 @@ function ProductForm({
                 accept="image/*"
                 multiple
                 onChange={handleFileUpload}
-                className="file:mr-4 file:py-3 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-gray-700 file:text-white hover:file:bg-gray-600 file:cursor-pointer dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:ring-0 focus:outline-none"
+                className="file:mr-4 file:py-3 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-zinc-700 file:text-white hover:file:bg-zinc-600 file:cursor-pointer dark:bg-zinc-800 dark:border-zinc-700 dark:text-white focus:ring-0 focus:outline-none"
               />
               <p className="text-sm text-gray-600 dark:text-gray-300">
                 Or drag and drop images here
@@ -1364,7 +1364,7 @@ function ProductForm({
             </div>
           </div>
 
-          <p className="text-sm text-gray-400 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-3 rounded-md">
+          <p className="text-sm text-gray-400 dark:text-gray-400 bg-zinc-50 dark:bg-zinc-800 p-3 rounded-md">
             <strong>Supported formats:</strong> JPEG, PNG, WebP, GIF • <strong>Max size:</strong> 5MB per file • <strong>Multiple uploads allowed</strong>
           </p>
         </div>
@@ -1396,7 +1396,7 @@ function ProductForm({
         <div className="space-y-3">
           <Label className="text-base font-medium">Available Colors</Label>
           <div className="flex flex-wrap gap-2 max-w-full">
-            {colors.map(color => (
+            {Array.from(new Set([...colors, ...formData.colors])).map(color => (
               <Button
                 key={color}
                 variant={formData.colors.includes(color) ? "default" : "outline"}
@@ -1408,20 +1408,48 @@ function ProductForm({
               </Button>
             ))}
           </div>
+          {formData.colors.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-2">
+              {formData.colors.map((color) => (
+                <div
+                  key={color}
+                  className="flex items-center gap-1 bg-zinc-800 border border-zinc-700 px-2 py-1 rounded text-sm"
+                >
+                  <span>{color}</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormData(prev => ({
+                        ...prev,
+                        colors: prev.colors.filter(c => c !== color)
+                      }))
+                    }
+                    className="text-red-400 hover:text-red-300"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="flex flex-col sm:flex-row gap-2 mt-2">
             <Input
               placeholder="Add custom color"
               value={formData.customColorInput}
               onChange={(e) => setFormData(prev => ({ ...prev, customColorInput: e.target.value }))}
-              className="dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+            className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
             />
             <Button
               type="button"
               onClick={() => {
-                if (!formData.customColorInput.trim()) return;
+                const newColor = formData.customColorInput.trim();
+                if (!newColor) return;
+
                 setFormData(prev => ({
                   ...prev,
-                  colors: [...prev.colors, prev.customColorInput.trim()],
+                  colors: prev.colors.includes(newColor)
+                    ? prev.colors
+                    : [...prev.colors, newColor],
                   customColorInput: ""
                 }));
               }}
@@ -1437,20 +1465,20 @@ function ProductForm({
         <Label className="text-base font-medium">Stock per Size</Label>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {formData.sizes.map(size => (
-            <div key={size} className="flex items-center justify-between gap-2 bg-gray-800/40 p-2 rounded">
+            <div key={size} className="flex items-center justify-between gap-2 bg-zinc-800/40 p-2 rounded">
               <span className="w-10 text-sm">{size}</span>
               <Input
                 type="number"
                 value={formData.sizeStock[size] || ""}
                 onChange={(e) => updateSizeStock(size, e.target.value)}
                 placeholder="0"
-                className="dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
               />
             </div>
           ))}
         </div>
       </div>
-      <div className="text-sm text-gray-300 bg-gray-800/50 px-3 py-2 rounded border border-gray-700">
+      <div className="text-sm text-gray-300 bg-zinc-800/50 px-3 py-2 rounded border border-zinc-700">
         Total Stock: {Object.values(formData.sizeStock || {}).reduce(
           (sum, v) => sum + Number(v || 0),
           0
@@ -1466,7 +1494,7 @@ function ProductForm({
             value={formData.material}
             onChange={(e) => setFormData(prev => ({ ...prev, material: e.target.value }))}
             placeholder="e.g., Cotton, Silk, Leather"
-            className="text-base h-11 px-3 w-full break-words dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+            className="text-base h-11 px-3 w-full break-words dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
           />
         </div>
 
@@ -1477,7 +1505,7 @@ function ProductForm({
             value={formData.tags}
             onChange={(e) => setFormData(prev => ({ ...prev, tags: e.target.value }))}
             placeholder="e.g., summer, casual, trendy"
-            className="text-base h-11 px-3 w-full break-words dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+            className="text-base h-11 px-3 w-full break-words dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
           />
         </div>
       </div>
@@ -1490,7 +1518,7 @@ function ProductForm({
           onChange={(e) => setFormData(prev => ({ ...prev, careInstructions: e.target.value }))}
           placeholder="Washing and care instructions"
           rows={3}
-          className="text-base h-11 px-3 resize-none dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+          className="text-base h-11 px-3 resize-none dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
         />
       </div>
 
@@ -1500,8 +1528,8 @@ function ProductForm({
           <Check size={16} /> Ready to submit
         </div>
       )}
-      <div className="flex flex-col sm:flex-row justify-end gap-3 pt-6 border-t border-gray-700">
-        <Button variant="outline" onClick={onCancel} className="dark:border-gray-600 dark:text-white">
+      <div className="flex flex-col sm:flex-row justify-end gap-3 pt-6 border-t border-zinc-700">
+        <Button variant="outline" onClick={onCancel} className="dark:border-zinc-600 dark:text-white">
           Cancel
         </Button>
         <Button

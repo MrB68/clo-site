@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import { Eye, EyeOff, ArrowLeft, Check } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { FcGoogle } from "react-icons/fc";
-
+import { useAuth } from "../contexts/AuthContext";
 export function Register() {
   const [formData, setFormData] = useState({
     name: "",
@@ -19,6 +19,11 @@ export function Register() {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (user) navigate("/dashboard");
+  }, [user, navigate]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -54,18 +59,42 @@ export function Register() {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    if (isLoading) return;
     e.preventDefault();
+
+    if (isLoading) return; // 🔥 prevent multiple requests
+
     setError("");
 
     if (!validateForm()) return;
 
+    const email = formData.email.toLowerCase().trim();
+
     setIsLoading(true);
 
+    // 🔍 Check if user already exists in profiles table
+    const { data: existingUser, error: checkError } = await supabase
+      .from("profiles")
+      .select("email")
+      .ilike("email", email)
+      .maybeSingle();
+
+    if (checkError) {
+      console.error("User check error:", checkError);
+    }
+
+    if (existingUser) {
+      setError("Account already exists. Redirecting to sign in...");
+      setTimeout(() => {
+        navigate(`/signin?email=${encodeURIComponent(email)}`);
+      }, 1500);
+      setIsLoading(false);
+      return;
+    }
+
+    // Step 1: Create user in Supabase Auth
     try {
-      // Step 1: Create user in Supabase Auth
       const { data, error } = await supabase.auth.signUp({
-        email: formData.email,
+        email,
         password: formData.password,
         options: {
           emailRedirectTo: `${window.location.origin}/auth/callback`,
@@ -76,11 +105,23 @@ export function Register() {
       });
 
       if (error) {
-        if (error.message.includes("rate limit")) {
+        const msg = error.message.toLowerCase();
+
+        if (
+          msg.includes("user already registered") ||
+          msg.includes("already exists") ||
+          msg.includes("duplicate")
+        ) {
+          setError("Account already exists. Redirecting to sign in...");
+          setTimeout(() => {
+            navigate(`/signin?email=${encodeURIComponent(email)}`);
+          }, 1500);
+        } else if (msg.includes("rate limit")) {
           setError("Too many attempts. Please wait a minute and try again.");
         } else {
           setError(error.message);
         }
+
         setIsLoading(false);
         return;
       }
@@ -89,34 +130,45 @@ export function Register() {
       if (data.user) {
         const { error: profileError } = await supabase
           .from("profiles")
-          .upsert({
-            id: data.user.id,
-            email: formData.email,
-            full_name: formData.name.trim(),
-            role: "user",
-          });
+          .upsert(
+            {
+              id: data.user.id,
+              email,
+              full_name: formData.name.trim(),
+              role: "user",
+            },
+            { onConflict: "email" }
+          );
 
         if (profileError) {
           console.error("Profile insert error:", profileError);
         }
       }
 
-      // After signup, show message instead of redirecting immediately
-      setError("Check your email to verify your account.");
+      // After signup, navigate to signin with verify query or redirectAfterLogin
+      setError("");
+      const redirect =
+        localStorage.getItem("redirectAfterLogin") ||
+        "/signin?verify=true";
+      navigate(redirect);
     } catch (err) {
-      setError("An error occurred. Please try again.");
+      console.error("Register error:", err);
+      setError("Something went wrong. Please try again.");
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleGoogleSignUp = async () => {
+    if (isLoading) return; // 🔥 prevent double trigger
+
     try {
       setIsLoading(true);
+      // Google signup redirect: keep consistent with callback
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: window.location.origin,
+          redirectTo: `${window.location.origin}/auth/callback`, // (no functional change, keep as is)
         },
       });
 

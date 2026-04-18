@@ -1,4 +1,7 @@
-import { Link } from "react-router-dom";
+// Expected notification link format:
+// /orders?orderId=<id>&action=track
+// /orders?orderId=<id>&action=details
+import { Link, useLocation } from "react-router-dom";
 import { motion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Package, Clock, CheckCircle, Truck, XCircle } from "lucide-react";
@@ -20,6 +23,7 @@ type CustomerOrder = any;
 
 export function Orders() {
   const { user } = useAuth();
+  const location = useLocation();
   const { products } = useProducts();
   const [storedOrders, setStoredOrders] = useState<any[]>([]);
   const [storedReviews, setStoredReviews] = useState<any[]>([]);
@@ -50,6 +54,26 @@ export function Orders() {
     images: [] as string[],
   });
 
+  // 🔥 Handle deep link from notifications (e.g. /orders?orderId=xxx&action=track)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const orderId = params.get("orderId");
+    const action = params.get("action"); // "track" | "details"
+
+    if (!orderId || storedOrders.length === 0) return;
+
+    const found = storedOrders.find(
+      (o) => o.id === orderId || o.custom_design_id === orderId
+    );
+
+    if (!found) return;
+
+    if (action === "track") {
+      setSelectedTrackingOrder(found);
+    } else {
+      setSelectedOrderDetails(found);
+    }
+  }, [location.search, storedOrders]);
   useEffect(() => {
     const fetchOrders = async () => {
       const guestEmail = localStorage.getItem("guest_email");

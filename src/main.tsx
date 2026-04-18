@@ -5,7 +5,7 @@ import "./styles/index.css";
 import { Toaster } from "react-hot-toast";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
+  //<React.StrictMode>
     <>
       <Toaster
         position="top-right"
@@ -20,5 +20,5 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       />
       <App />
     </>
-  </React.StrictMode>
+ // </React.StrictMode>
 );

@@ -4,6 +4,8 @@ import { motion } from "framer-motion";
 import { Eye, EyeOff, ArrowLeft } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { FcGoogle } from "react-icons/fc";
+import { useEffect } from "react";
+import { useAuth } from "../contexts/AuthContext";
 
 export function SignIn() {
   const [email, setEmail] = useState("");
@@ -14,35 +16,74 @@ export function SignIn() {
 
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
 
-  const from = location.state?.from?.pathname || "/";
+
+  const query = new URLSearchParams(location.search);
+  const emailFromQuery = query.get("email");
+  const verify = query.get("verify");
+
+  useEffect(() => {
+    if (emailFromQuery) {
+      setEmail(emailFromQuery);
+    }
+  }, [emailFromQuery]);
+
+  useEffect(() => {
+    if (user) navigate("/dashboard");
+  }, [user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isLoading) return; // 🔥 prevent multiple requests
+
     setError("");
     setIsLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.toLowerCase().trim(),
         password,
       });
 
       if (error) {
-        setError(error.message);
+        if (error.message.toLowerCase().includes("invalid login")) {
+          setError("Invalid email or password.");
+        } else {
+          setError(error.message);
+        }
+        setIsLoading(false);
         return;
       }
 
-      navigate(from, { replace: true });
+      if (!data.session) {
+        setError("Please verify your email before signing in.");
+        setIsLoading(false);
+        return;
+      }
+
+      const redirect =
+        localStorage.getItem("redirectAfterLogin") ||
+        location.state?.from?.pathname ||
+        "/dashboard";
+
+      localStorage.removeItem("redirectAfterLogin");
+
+      navigate(redirect, { replace: true });
     } catch (err) {
-      setError("An error occurred. Please try again.");
+      console.error("Sign in error:", err);
+      setError("Something went wrong. Please try again.");
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleGoogleSignIn = async () => {
+    if (isLoading) return; // 🔥 prevent double trigger
+
     try {
+      setIsLoading(true);
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
@@ -58,6 +99,8 @@ export function SignIn() {
       }
     } catch (err) {
       setError("Google sign-in failed");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -83,6 +126,12 @@ export function SignIn() {
         <p className="text-center text-gray-400 mb-6 text-sm tracking-wider">
           Welcome back to CLO
         </p>
+
+        {verify && (
+          <div className="bg-green-900 text-green-400 text-sm p-3 mb-4 text-center rounded">
+            Check your email to verify your account before signing in.
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -153,15 +202,15 @@ export function SignIn() {
         </form>
 
         <div className="mt-6 text-center">
-          <p className="text-sm text-gray-400 tracking-wider">
-            Don't have an account?{" "}
-            <Link
-              to="/register"
-              className="text-black hover:underline font-medium"
-            >
-              Sign Up
-            </Link>
+          <p className="text-sm text-gray-400 tracking-wider mb-3">
+            Don't have an account?
           </p>
+          <Link
+            to="/register"
+            className="inline-block w-full text-center border border-gray-700 py-3 hover:bg-gray-900 transition-colors tracking-widest uppercase text-sm"
+          >
+            Create Account
+          </Link>
         </div>
       </motion.div>
     </div>

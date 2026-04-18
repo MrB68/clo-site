@@ -1,5 +1,4 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
-import { useEffect, useState } from "react";
 import { ScrollToTop } from "./components/ScrollToTop";
 import { Home } from "./pages/Home";
 import { Shop } from "./pages/Shop";
@@ -17,7 +16,6 @@ import { Terms } from "./pages/Terms";
 import { Privacy } from "./pages/Privacy";
 import { NotFound } from "./pages/NotFound";
 import AuthCallback from "./pages/AuthCallback";
-import { supabase } from "../lib/supabase";
 import Shipping from "./pages/Shipping";
 import SizeGuide from "./pages/SizeGuide";
 import Contact from "./pages/Contact";
@@ -30,21 +28,25 @@ import BestSellers from "./pages/BestSellers";
 import Wishlist from "./pages/Wishlist";
 import CollectionDetail from "./pages/CollectionDetail";
 import { Layout } from "./components/Layout";
+import { useAuth } from "./contexts/AuthContext";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, loading } = useAuth();
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
-  }, []);
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-sm tracking-wider animate-pulse">Loading...</p>
+      </div>
+    );
+  }
 
-  if (loading) return null;
+  if (!user) {
+    localStorage.setItem("redirectAfterLogin", window.location.pathname);
+    return <Navigate to="/signin" />;
+  }
 
-  return session ? <>{children}</> : <Navigate to="/signin" />;
+  return <>{children}</>;
 }
 
 export const router = createBrowserRouter([
@@ -58,6 +60,7 @@ export const router = createBrowserRouter([
     ),
     children: [
       { index: true, Component: Home },
+      { path: "dashboard", Component: Home },
       { path: "shop", Component: Shop },
       { path: "product/:id", Component: ProductDetail },
       { path: "about", Component: About },
@@ -73,7 +76,6 @@ export const router = createBrowserRouter([
       //{ path: "custom", Component: CustomDesign },
       { path: "signin", Component: SignIn },
       { path: "register", Component: Register },
-      { path: "auth/callback", Component: AuthCallback },
       {
         path: "orders",
         Component: () => (
@@ -105,6 +107,10 @@ export const router = createBrowserRouter([
       { path: "*", Component: NotFound },
       
     ],
+  },
+  {
+    path: "/auth/callback",
+    Component: AuthCallback,
   },
   {
     path: "/admin",

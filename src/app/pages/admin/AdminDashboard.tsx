@@ -20,32 +20,38 @@ import { initMessaging } from "../../../lib/firebase";
 
 // --- AUDIO UNLOCK AND REUSE ---
 let audioUnlocked = false;
-let notificationAudio: HTMLAudioElement | null = typeof window !== "undefined" ? new Audio("/notification.wav") : null;
 
 if (typeof window !== "undefined") {
-  window.addEventListener("click", () => {
+  const unlockHandler = () => {
     if (!audioUnlocked) {
-      notificationAudio = notificationAudio || new Audio("/notification.wav");
-      notificationAudio.muted = false;
-      notificationAudio.volume = 1;
-      notificationAudio.play().then(() => {
-        if (notificationAudio) {
-          notificationAudio.pause();
-          notificationAudio.currentTime = 0;
-        }
-        audioUnlocked = true;
-        (window as any).audioUnlocked = true;
-        (window as any).notificationAudio = notificationAudio;
-        // Removed debug log
-      }).catch(() => {});
+      const unlockAudio = new Audio("/notification.wav");
+      unlockAudio.volume = 0.01;
+
+      unlockAudio.play()
+        .then(() => {
+          unlockAudio.pause();
+          unlockAudio.currentTime = 0;
+
+          audioUnlocked = true;
+          (window as any).audioUnlocked = true;
+          // 🔥 ensure future checks see updated value
+          setTimeout(() => {
+            (window as any).audioUnlocked = true;
+          }, 0);
+        })
+        .catch(() => {});
     }
-  });
+  };
+
+  window.addEventListener("click", unlockHandler, { once: true });
+  window.addEventListener("keydown", unlockHandler, { once: true });
 }
 
-// Expose global audio and unlocked state (reliable)
+// expose unlock state properly (do NOT overwrite to false)
 if (typeof window !== "undefined") {
-  (window as any).notificationAudio = notificationAudio;
-  (window as any).audioUnlocked = audioUnlocked || false;
+  if ((window as any).audioUnlocked === undefined) {
+    (window as any).audioUnlocked = false;
+  }
 }
 
 // Lazy load admin components for code splitting
@@ -167,7 +173,13 @@ export function AdminDashboard() {
     totalRevenue: 0,
   });
 
-  const [recentOrders, setRecentOrders] = useState<Array<{id:string, customer:string, amount:number, time:number}>>([]);
+  const [recentOrders, setRecentOrders] = useState<Array<{id:string, customer:string, amount:number, time:number}>>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("admin_notifications");
+      return saved ? JSON.parse(saved) : [];
+    }
+    return [];
+  });
   const processedOrdersRef = useRef(new Set<string>());
 
   // --- CROSS-TAB NOTIFICATION BROADCAST CHANNEL ---
@@ -381,12 +393,16 @@ export function AdminDashboard() {
     }, 10000);
 
     // 🔥 Add to recent orders (keep last 10)
-    setRecentOrders(prev => [{
-      id,
-      customer,
-      amount,
-      time: Date.now()
-    }, ...prev].slice(0, 10));
+    setRecentOrders(prev => {
+      const updated = [{
+        id,
+        customer,
+        amount,
+        time: Date.now()
+      }, ...prev].slice(0, 10);
+      localStorage.setItem("admin_notifications", JSON.stringify(updated));
+      return updated;
+    });
 
     // 🔥 Update unread notifications counter
     setUnreadCount(prev => prev + 1);
@@ -397,23 +413,42 @@ export function AdminDashboard() {
       totalRevenue: prev.totalRevenue + amount,
     }));
 
-    // --- SKIP sound + toast if tab not active ---
-    if (!isTabActiveRef.current) return;
-
-    // 🔔 Sound (throttled)
+    // 🔔 Sound (throttled) — ALWAYS try sound even if tab inactive
     const now = Date.now();
     if (now - lastSoundRef.current > 1000) {
       lastSoundRef.current = now;
+
       if (soundEnabled) {
-        const audio = (window as any).notificationAudio;
-        if (audio) {
-          try {
-            audio.currentTime = 0;
-            audio.play();
-          } catch {}
+        try {
+          const audio = new Audio("/notification.wav");
+          audio.volume = 1;
+          audio.preload = "auto";
+
+          const play = () => audio.play().catch(() => {});
+
+          // try immediate play
+          play();
+
+          // 🔥 robust fallback: force unlock + replay
+          if (!(window as any).audioUnlocked) {
+            const unlock = new Audio("/notification.wav");
+            unlock.volume = 0.01;
+
+            unlock.play()
+              .then(() => {
+                (window as any).audioUnlocked = true;
+                setTimeout(play, 10);
+              })
+              .catch(() => {});
+          }
+        } catch (err) {
+          console.error("Sound error:", err);
         }
       }
     }
+
+    // Skip only toast if tab inactive
+    if (!isTabActiveRef.current) return;
 
     // 🔥 PREMIUM INTERACTIVE TOAST
     toast.custom((t) => (
@@ -521,7 +556,7 @@ export function AdminDashboard() {
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
+        email: email.toLowerCase().trim(),
         password,
       });
 
@@ -539,10 +574,11 @@ export function AdminDashboard() {
         .from("profiles")
         .select("*")
         .eq("id", data.user.id)
-        .single();
+        .maybeSingle();
 
       if (profileError || !profile) {
-        alert("Profile not found");
+        console.error("Profile fetch error:", profileError);
+        alert("Profile not found or not linked correctly");
         return;
       }
 
@@ -553,7 +589,7 @@ export function AdminDashboard() {
 
       const sessionData: AdminSession = {
         id: data.user.id,
-        name: profile.name,
+        name: profile.full_name,
         email: data.user.email || "",
         role: profile.role,
         branch: "Main",
@@ -865,7 +901,10 @@ export function AdminDashboard() {
               </button>
               <button
                 onClick={() => {
-                  if (confirm("Clear all notifications?")) setRecentOrders([]);
+                  if (confirm("Clear all notifications?")) {
+                    setRecentOrders([]);
+                    localStorage.removeItem("admin_notifications");
+                  }
                 }}
                 className="text-xs px-2 py-1 border border-white/10 rounded hover:bg-white/10"
               >
@@ -921,7 +960,11 @@ export function AdminDashboard() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            setRecentOrders(prev => prev.filter(o => o.id !== order.id));
+                            setRecentOrders(prev => {
+                              const updated = prev.filter(o => o.id !== order.id);
+                              localStorage.setItem("admin_notifications", JSON.stringify(updated));
+                              return updated;
+                            });
                           }}
                           className="text-[10px] px-2 py-1 border border-white/10 rounded hover:bg-white/10"
                         >
@@ -971,7 +1014,11 @@ export function AdminDashboard() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setRecentOrders(prev => prev.filter(o => o.id !== order.id));
+                                setRecentOrders(prev => {
+                                  const updated = prev.filter(o => o.id !== order.id);
+                                  localStorage.setItem("admin_notifications", JSON.stringify(updated));
+                                  return updated;
+                                });
                               }}
                               className="text-[10px] px-2 py-1 border border-white/10 rounded hover:bg-white/10"
                             >

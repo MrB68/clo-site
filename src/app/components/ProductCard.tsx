@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Heart } from "lucide-react";
 import { useWishlist } from "../contexts/WishlistContext";
 
@@ -27,6 +27,15 @@ export function ProductCard({ product, hideBadge }: ProductCardProps) {
   const saveAmount = hasDiscount ? original - price : 0;
   const stock = Number(product?.stock ?? 0);
   const isOutOfStock = stock <= 0;
+
+  // 🔥 track previous stock for animation
+  const [prevStock, setPrevStock] = useState(stock);
+
+  useEffect(() => {
+    if (stock !== prevStock) {
+      setPrevStock(stock);
+    }
+  }, [stock]);
 
   const [isAdding, setIsAdding] = useState(false);
 
@@ -173,15 +182,27 @@ export function ProductCard({ product, hideBadge }: ProductCardProps) {
 
           {/* STOCK INFO */}
           {!isOutOfStock && stock <= 5 && (
-            <p className="text-xs text-orange-500">
+            <motion.p
+              key={stock}
+              initial={{ scale: 1.2 }}
+              animate={{ scale: 1 }}
+              transition={{ duration: 0.3 }}
+              className="text-xs text-orange-500"
+            >
               Only {stock} left
-            </p>
+            </motion.p>
           )}
 
           {isOutOfStock && (
-            <p className="text-xs text-red-500">
+            <motion.p
+              key="out-of-stock"
+              initial={{ scale: 1.1 }}
+              animate={{ scale: 1 }}
+              transition={{ duration: 0.3 }}
+              className="text-xs text-red-500"
+            >
               Currently unavailable
-            </p>
+            </motion.p>
           )}
 
           {/* PRICE SECTION */}

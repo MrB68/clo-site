@@ -8,6 +8,18 @@ import { Bell } from "lucide-react";
 import { useNotifications } from "../contexts/NotificationContext";
 import { supabase } from "../../lib/supabase";
 import toast from "react-hot-toast";
+const timeAgo = (dateStr?: string) => {
+  if (!dateStr) return "";
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const s = Math.floor(diff / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+};
 const triggerHaptic = () => {
   if (typeof navigator !== "undefined" && "vibrate" in navigator) {
     navigator.vibrate(10);
@@ -29,12 +41,11 @@ export function Layout() {
   };
   const location = useLocation();
   const navigate = useNavigate();
-  const isHomePage = location.pathname === "/";
 
-  const { user, isLoading } = useAuth();
+  const { user } = useAuth();
   const isAuthenticated = !!user;
   const { notifications, setNotifications } = useNotifications();
-  const unreadCount = notifications?.filter((n: any) => !n.is_read).length || 0;
+  const unreadCount = (notifications || []).filter((n: any) => !n.is_read).length;
   const [notifOpen, setNotifOpen] = useState(false);
   const [cartBounce, setCartBounce] = useState(false);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
@@ -122,7 +133,7 @@ export function Layout() {
   }, []);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id || !supabase) return;
 
     const fetchProfile = async () => {
       const { data, error } = await supabase
@@ -140,7 +151,7 @@ export function Layout() {
   }, [user?.id]);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id || !supabase) return;
 
     const channel = supabase
       .channel("notifications")
@@ -153,22 +164,49 @@ export function Layout() {
           filter: `user_id=eq.${user.id}`,
         },
         (payload) => {
-          setNotifications((prev: any) => [payload.new, ...prev]);
+          const n = payload.new;
+          setNotifications((prev: any) => [n, ...(prev || [])]);
 
-          toast.custom(() => (
-            <div className="bg-black text-white px-5 py-3 rounded-xl border border-white/10 uppercase tracking-wider">
-              {payload.new.title || "New Notification"}
+          const meta = n.meta || {}; // expect { order_id, order_code, total, status, link }
+          const title = n.title || "Update";
+          const message = n.message || "";
+          const link = meta.link || (meta.order_id ? `/orders/${meta.order_id}` : undefined);
+
+          toast.custom((t) => (
+            <div className="bg-black text-white p-4 rounded-xl border border-white/10 w-[320px]">
+              <p className="text-sm font-semibold leading-tight">{title}</p>
+              {message && (
+                <p className="text-xs text-gray-400 mt-1 leading-snug">{message}</p>
+              )}
+              {(meta.order_code || meta.total || meta.status) && (
+                <div className="mt-2 text-[11px] text-gray-500 flex flex-wrap gap-2">
+                  {meta.order_code && <span>#{meta.order_code}</span>}
+                  {meta.total && <span>Rs {meta.total}</span>}
+                  {meta.status && <span className="uppercase">{meta.status}</span>}
+                </div>
+              )}
+              {link && (
+                <button
+                  onClick={() => {
+                    toast.dismiss(t.id);
+                    navigate(link);
+                  }}
+                  className="mt-3 text-[11px] uppercase tracking-wider border border-white/20 px-3 py-1 rounded hover:bg-white/10"
+                >
+                  View
+                </button>
+              )}
             </div>
           ));
 
-          // 🔊 play sound
+          // 🔊 Chrome-safe sound (fresh instance)
           try {
-            const globalAudio = (window as any).notificationAudio;
             const unlocked = (window as any).audioUnlocked;
-
-            if (unlocked && globalAudio) {
-              globalAudio.currentTime = 0;
-              globalAudio.play().catch(() => {});
+            if (unlocked) {
+              const audio = new Audio("/notification.wav");
+              audio.volume = 1;
+              const p = audio.play();
+              if (p !== undefined) p.catch(() => {});
             }
           } catch {}
         }
@@ -180,18 +218,6 @@ export function Layout() {
     };
   }, [user?.id]);
 
-  const markAsRead = async (id: string) => {
-    await supabase
-      .from("notifications")
-      .update({ is_read: true })
-      .eq("id", id);
-
-    setNotifications((prev: any) =>
-      prev.map((n: any) =>
-        n.id === id ? { ...n, is_read: true } : n
-      )
-    );
-  };
 
   // toast handled by ToastProvider
 
@@ -308,9 +334,11 @@ export function Layout() {
                             <div className="border-t border-gray-800 my-2"></div>
                             <button
                               onClick={async () => {
-                                const { supabase } = await import("../../lib/supabase");
                                 await supabase.auth.signOut();
                                 setUserMenuOpen(false);
+
+                                // 🔥 force immediate UI update + redirect
+                                navigate("/signin");
                               }}
                               className="w-full text-left px-6 py-3 text-sm tracking-wider uppercase hover:bg-white/5 transition-colors text-red-600 flex items-center gap-2"
                             >
@@ -345,16 +373,16 @@ export function Layout() {
                     const next = !notifOpen;
                     setNotifOpen(next);
 
-                    if (next && notifications.length > 0) {
+                    if (next && (notifications?.length || 0) > 0) {
                       // mark all as read in DB
                       await supabase
                         .from("notifications")
                         .update({ is_read: true })
-                        .eq("user_id", user?.id);
+                        .eq("user_id", user?.id || "");
 
                       // update local state
                       setNotifications((prev: any[]) =>
-                        prev.map((n) => ({ ...n, is_read: true }))
+                        (prev || []).map((n) => ({ ...n, is_read: true }))
                       );
                     }
                   }}
@@ -398,23 +426,82 @@ export function Layout() {
                       </div>
 
                       <div className="max-h-80 overflow-y-auto">
-                        {notifications?.length === 0 ? (
+                        {(notifications || []).length === 0 ? (
                           <p className="px-4 py-4 text-gray-400 text-sm">
                             No notifications
                           </p>
                         ) : (
-                          notifications.map((n: any) => (
-                            <div
-                              key={n.id}
-                              onClick={() => {}}
-                              className={`px-4 py-3 border-b border-gray-800 text-sm cursor-pointer flex flex-col gap-1 ${
-                                !n.is_read ? "bg-white/5" : ""
-                              }`}
-                            >
-                              <p className="font-medium leading-tight">{n.title}</p>
-                              <p className="text-xs text-gray-400 leading-snug">{n.message}</p>
-                            </div>
-                          ))
+                          (notifications || []).map((n: any) => {
+                            const meta = n.meta || {};
+                            const link =
+                            meta.link ||
+                            (meta.order_id
+                              ? `/orders?orderId=${meta.order_id}&action=details`
+                              : undefined);
+                            return (
+                              <div
+                                key={n.id}
+                                onClick={async () => {
+                                  // mark single as read
+                                  await supabase
+                                    .from("notifications")
+                                    .update({ is_read: true })
+                                    .eq("id", n.id);
+
+                                  setNotifications((prev: any[]) =>
+                                    (prev || []).map((x) =>
+                                      x.id === n.id ? { ...x, is_read: true } : x
+                                    )
+                                  );
+
+                                  if (link) {
+                                    navigate(link);
+                                  } else {
+                                    console.warn("No link found for notification:", n);
+                                  }
+                                }}
+                                className={`px-4 py-3 border-b border-gray-800 text-sm cursor-pointer flex flex-col gap-1 hover:bg-white/5 ${
+                                  !n.is_read ? "bg-white/5" : ""
+                                }`}
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <p className="font-medium leading-tight">
+                                    {n.title}
+                                  </p>
+                                  <span className="text-[10px] text-gray-500 whitespace-nowrap">
+                                    {new Date(n.created_at).toLocaleString("en-IN", {
+                                      day: "numeric",
+                                      month: "short",
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}
+                                  </span>
+                                </div>
+
+                                {n.message && (
+                                  <p className="text-xs text-gray-400 leading-snug">
+                                    {n.message}
+                                  </p>
+                                )}
+
+                                {(meta.order_code || meta.total || meta.status) && (
+                                  <div className="mt-1 text-[11px] text-gray-500 flex flex-wrap gap-2">
+                                    {meta.order_code && <span>#{meta.order_code}</span>}
+                                    {meta.total && <span>Rs {meta.total}</span>}
+                                    {meta.status && (
+                                      <span className="uppercase">{meta.status}</span>
+                                    )}
+                                  </div>
+                                )}
+
+                                {link && (
+                                  <span className="mt-1 text-[11px] uppercase tracking-wider text-white/70">
+                                    Tap to view →
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })
                         )}
                       </div>
                     </motion.div>
@@ -552,7 +639,7 @@ export function Layout() {
 
       <footer className="bg-black text-white pb-28 md:pb-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-          <div className="flex flex-col gap-10 md:grid md:grid-cols-2 lg:grid-cols-[1fr_0.9fr_0.9fr_1.2fr] lg:gap-12 text-center md:text-left">
+          <div className="flex flex-col gap-10 md:grid md:grid-cols-2 lg:grid-cols-[1fr_0.9fr_0.9fr_1.2fr] lg:gap-12 text-center md:text-center lg:text-left">
             {/* Brand + SOCIAL MEDIA LINKS */}
             <div className="group space-y-6 sm:col-span-2 lg:col-span-1">
               <h3 className="text-xl tracking-[0.3em] uppercase">clo</h3>
@@ -568,13 +655,13 @@ export function Layout() {
               </div>
 
               {/* === SOCIAL MEDIA LINKS === */}
-              <div className="flex items-center justify-center md:justify-start gap-6 pt-4">
+              <div className="flex items-center justify-center md:justify-start gap-4 pt-4">
                 {/* Facebook */}
                 <a
                   href=""//facebook.com/yourpage"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="group/social relative w-11 h-11 flex items-center justify-center hover:scale-105 transition-all duration-300"
+                  className="group/social relative w-10 h-10 flex items-center justify-center hover:scale-110 transition-all duration-300"
                 >
 
                   {/* White Icon (default) */}
@@ -598,7 +685,7 @@ export function Layout() {
                   href="https://www.instagram.com/clofitstudios/?utm_source=ig_web_button_share_sheet"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="group/social relative w-11 h-11 flex items-center justify-center hover:scale-105 transition-all duration-300"
+                  className="group/social relative w-10 h-10 flex items-center justify-center hover:scale-110 transition-all duration-300"
                   aria-label="Instagram"
                 >
 
@@ -623,7 +710,7 @@ export function Layout() {
                   href=""//tiktok.com/yourpage"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="group/social relative w-11 h-11 flex items-center justify-center hover:scale-105 transition-all duration-300"
+                  className="group/social relative w-10 h-10 flex items-center justify-center hover:scale-110 transition-all duration-300"
                 >
 
                   {/* White Icon (default) */}
@@ -645,45 +732,45 @@ export function Layout() {
             </div>
 
             {/* Shop */}
-            <div className="space-y-4 pt-6 border-t border-white/10 md:border-0 md:pt-0">
+            <div className="space-y-4 pt-6 border-t border-white/10 md:border-0 md:pt-0 flex flex-col items-center lg:items-center mx-auto max-w-[240px]">
               <button
                 onClick={() => toggleFooter("shop")}
-                className="w-full text-sm uppercase tracking-widest flex justify-between items-center md:block"
+                className="w-full text-xs uppercase tracking-[0.25em] text-white/80 flex flex-col items-center text-center"
               >
                 Shop
                 <span className="md:hidden">{footerOpen === "shop" ? "-" : "+"}</span>
               </button>
-              <ul className={`space-y-3 text-sm text-gray-400 ${footerOpen === "shop" ? "block" : "hidden"} md:block`}>
-                <li><Link to="/shop" onClick={triggerHaptic} className="inline-flex leading-6 hover:text-white transition-colors tracking-wider py-2 text-base">All Products</Link></li>
+              <ul className={`space-y-3 text-sm text-gray-400 ${footerOpen === "shop" ? "block" : "hidden"} md:block text-center flex flex-col items-center`}>
+                <li><Link to="/shop" onClick={triggerHaptic} className="inline-flex leading-6 transition-colors tracking-wider py-1.5 text-sm text-white/60 hover:text-white">All Products</Link></li>
                 {/* Custom Prints removed */}
-                <li><Link to="/shop?filter=new" onClick={triggerHaptic} className="inline-flex leading-6 hover:text-white transition-colors tracking-wider py-2 text-base">New Arrivals</Link></li>
-                <li><Link to="/collections" onClick={triggerHaptic} className="inline-flex leading-6 hover:text-white transition-colors tracking-wider py-2 text-base">Collections</Link></li>
-                <li><Link to="/sale" onClick={triggerHaptic} className="inline-flex leading-6 hover:text-white transition-colors tracking-wider py-2 text-base">Sale</Link></li>
+                <li><Link to="/shop?filter=new" onClick={triggerHaptic} className="inline-flex leading-6 transition-colors tracking-wider py-1.5 text-sm text-white/60 hover:text-white">New Arrivals</Link></li>
+                <li><Link to="/collections" onClick={triggerHaptic} className="inline-flex leading-6 transition-colors tracking-wider py-1.5 text-sm text-white/60 hover:text-white">Collections</Link></li>
+                <li><Link to="/sale" onClick={triggerHaptic} className="inline-flex leading-6 transition-colors tracking-wider py-1.5 text-sm text-white/60 hover:text-white">Sale</Link></li>
               </ul>
             </div>
 
             {/* Help */}
-            <div className="space-y-4 pt-6 border-t border-white/10 md:border-0 md:pt-0">
+            <div className="space-y-4 pt-6 border-t border-white/10 md:border-0 md:pt-0 flex flex-col items-center lg:items-center mx-auto max-w-[240px]">
               <button
                 onClick={() => toggleFooter("help")}
-                className="w-full text-sm uppercase tracking-widest flex justify-between items-center md:block"
+                className="w-full text-xs uppercase tracking-[0.25em] text-white/80 flex flex-col items-center text-center"
               >
                 Help
                 <span className="md:hidden">{footerOpen === "help" ? "-" : "+"}</span>
               </button>
-              <ul className={`space-y-3 text-sm text-gray-400 ${footerOpen === "help" ? "block" : "hidden"} md:block`}>
+              <ul className={`space-y-3 text-sm text-gray-400 ${footerOpen === "help" ? "block" : "hidden"} md:block text-center flex flex-col items-center`}>
                 <li>
                   <Link
                     to="/customer-service"
                     onClick={triggerHaptic}
-                    className="inline-flex leading-6 hover:text-white transition-colors tracking-wider py-2 text-base"
+                    className="inline-flex leading-6 transition-colors tracking-wider py-1.5 text-sm text-white/60 hover:text-white"
                   >
                     Customer Service
                   </Link>
                 </li>
-                <li><Link to="/shipping" onClick={triggerHaptic} className="inline-flex leading-6 hover:text-white transition-colors tracking-wider py-2 text-base">Shipping & Returns</Link></li>
-                <li><Link to="/size-guide" onClick={triggerHaptic} className="inline-flex leading-6 hover:text-white transition-colors tracking-wider py-2 text-base">Size Guide</Link></li>
-                <li><Link to="/contact" onClick={triggerHaptic} className="inline-flex leading-6 hover:text-white transition-colors tracking-wider py-2 text-base">Contact Us</Link></li>
+                <li><Link to="/shipping" onClick={triggerHaptic} className="inline-flex leading-6 transition-colors tracking-wider py-1.5 text-sm text-white/60 hover:text-white">Shipping & Returns</Link></li>
+                <li><Link to="/size-guide" onClick={triggerHaptic} className="inline-flex leading-6 transition-colors tracking-wider py-1.5 text-sm text-white/60 hover:text-white">Size Guide</Link></li>
+                <li><Link to="/contact" onClick={triggerHaptic} className="inline-flex leading-6 transition-colors tracking-wider py-1.5 text-sm text-white/60 hover:text-white">Contact Us</Link></li>
               </ul>
             </div>
 
@@ -691,7 +778,7 @@ export function Layout() {
             <div className="space-y-4 pt-6 border-t border-white/10 md:border-0 md:pt-0 sm:col-span-2 lg:col-span-1 lg:max-w-md">
               <button
                 onClick={() => toggleFooter("newsletter")}
-                className="w-full text-sm uppercase tracking-widest flex justify-between items-center md:block"
+                className="w-full text-xs uppercase tracking-[0.25em] text-white/80 flex justify-between items-center md:block"
               >
                 Newsletter
                 <span className="md:hidden">{footerOpen === "newsletter" ? "-" : "+"}</span>
@@ -704,9 +791,9 @@ export function Layout() {
                   <input
                     type="email"
                     placeholder="Email"
-                    className="w-full bg-white/10 border border-white/20 px-4 py-3 text-base focus:outline-none focus:border-white/40 tracking-wider rounded-md"
+                    className="w-full bg-transparent border-b border-white/30 px-2 py-3 text-sm focus:outline-none focus:border-white tracking-wider placeholder:text-white/40"
                   />
-                  <button className="w-full px-6 py-3 bg-white text-black hover:bg-gray-200 transition-colors text-sm tracking-widest uppercase rounded-md">
+                  <button className="w-full px-6 py-3 bg-white text-black hover:bg-gray-200 transition-all text-xs tracking-[0.25em] uppercase">
                     Join
                   </button>
                 </div>
@@ -715,11 +802,11 @@ export function Layout() {
           </div>
 
           {/* === PAYMENT METHODS SECTION === */}
-          <div className="mt-12 border-t border-white/10 pt-8">
+          <div className="mt-16 border-t border-white/10 pt-10">
             <div className="flex flex-col items-center gap-6 md:flex-row md:items-center md:justify-between">
               {/* Payment Methods */}
-              <div className="flex items-center gap-2 flex-wrap justify-center">
-                <span className="text-xs uppercase tracking-wider text-white/60 mr-4">We accept:</span>
+              <div className="flex items-center gap-3 flex-wrap justify-center md:justify-start">
+                <span className="text-[10px] uppercase tracking-[0.3em] text-white/50 mr-4">We accept:</span>
 
                 {/* Cash on Delivery */}
                 <div className="group flex items-center gap-2 bg-white/5 px-3 py-2 rounded-lg">
@@ -762,13 +849,13 @@ export function Layout() {
               </div>
 
               {/* Copyright & Legal */}
-              <div className="flex flex-col gap-4 text-center text-sm text-gray-400 md:flex-row md:items-center md:justify-between md:text-left">
+              <div className="flex flex-col gap-4 text-center text-xs text-white/50 md:flex-row md:items-center md:justify-between md:text-left">
                 <p>© 2026 CLO. All rights reserved.</p>
                 <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 md:justify-end">
-                  <Link to="/privacy" onClick={triggerHaptic} className="hover:text-white transition-colors tracking-wider">
+                  <Link to="/privacy" onClick={triggerHaptic} className="transition-colors tracking-wider hover:text-white">
                     Privacy Policy
                   </Link>
-                  <Link to="/terms" onClick={triggerHaptic} className="hover:text-white transition-colors tracking-wider">
+                  <Link to="/terms" onClick={triggerHaptic} className="transition-colors tracking-wider hover:text-white">
                     Terms of Service
                   </Link>
                 </div>

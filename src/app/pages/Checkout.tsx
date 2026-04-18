@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "motion/react";
+import { Button } from "../components/ui/button";
 import { ArrowLeft, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
@@ -181,7 +182,14 @@ const isPaymentSuccess =
     }
 
     const storedProfile = getCustomerProfile(user.id);
-    const nameParts = (user.name || "").trim().split(/\s+/);
+    // 🔥 Fix TS: safely access metadata
+    const meta = (user as any)?.user_metadata || {};
+    const fullName =
+      meta.full_name ||
+      meta.name ||
+      "";
+
+    const nameParts = fullName.trim().split(/\s+/);
 
     setFormData((current) => ({
       ...current,
@@ -1316,7 +1324,7 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 py-8 sm:py-12 grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="max-w-7xl mx-auto px-4 py-8 sm:py-12 grid grid-cols-1 lg:grid-cols-3 gap-8 pb-32">
         {/* Left - Form */}
         <div className="lg:col-span-2 space-y-8">
           {/* Shipping Form */}
@@ -1487,13 +1495,12 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
                   {shippingErrors.landmark && <p className="mt-1 text-sm text-red-600">{shippingErrors.landmark}</p>}
                 </div>
               </div>
-              <button
+              <Button
                 onClick={handleShippingSubmit}
-                // disabled={!user}
-                className="w-full bg-black text-white py-4 font-medium hover:bg-gray-900 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
+                className="w-full py-3 text-sm bg-white text-black border-white hover:bg-gray-200"
               >
                 Continue to Payment
-              </button>
+              </Button>
             </motion.div>
           )}
 
@@ -1558,20 +1565,21 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
               </div>
 
 
-              <div className="flex gap-4">
-                <button
+              <div className="flex gap-3">
+                <Button
+                  variant="secondary"
                   onClick={() => setStep("shipping")}
-                className="flex-1 border border-white text-white py-4 font-medium hover:bg-white hover:text-black transition text-sm sm:text-base"
+                  className="flex-1 py-3 text-sm"
                 >
                   Back
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={handlePaymentSubmit}
-                  disabled={isProcessingPayment}
-                  className="flex-1 bg-black text-white py-4 font-medium hover:bg-gray-900 transition text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                  loading={isProcessingPayment}
+                  className="flex-1 py-3 text-sm bg-white text-black border-white hover:bg-gray-200"
                 >
-                  {isProcessingPayment ? "Processing..." : "Continue"}
-                </button>
+                  Continue
+                </Button>
               </div>
             </motion.div>
           )}
@@ -1598,12 +1606,12 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
                   {formData.phone}
                 </p>
               </div>
-              <button
+              <Button
                 onClick={finalizeOrder}
-                className="w-full bg-black text-white py-4 font-medium hover:bg-gray-900 transition text-sm sm:text-base"
+                className="w-full py-3 text-sm bg-white text-black border-white hover:bg-gray-200"
               >
                 Place Order
-              </button>
+              </Button>
             </motion.div>
           )}
 
@@ -1613,19 +1621,16 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
               <div className="text-6xl text-green-500">✓</div>
               <h2 className="text-3xl sm:text-4xl font-semibold">Order Confirmed!</h2>
               <p className="text-gray-400 text-sm sm:text-base">Your order has been placed successfully. You'll receive a confirmation email shortly.</p>
-              <button
-                onClick={() => navigate("/")}
-                className="mx-auto block bg-black text-white px-8 py-3 font-medium hover:bg-gray-900 transition text-sm sm:text-base"
-              >
+              <Button onClick={() => navigate("/")}>
                 Continue Shopping
-              </button>
+              </Button>
             </motion.div>
           )}
         </div>
 
         {/* Right - Order Summary */}
-        <div className="lg:col-span-1">
-          <div className="sticky top-32 bg-[#0a0a0a] border border-gray-800 p-6 sm:p-8 space-y-6 text-white">
+        <div className="lg:col-span-1 relative z-0">
+          <div className="lg:sticky lg:top-32 bg-[#0a0a0a] border border-gray-800 p-6 sm:p-8 space-y-6 text-white">
             <h2 className="text-xl font-semibold">Order Summary</h2>
 
             {/* Items */}
@@ -1658,13 +1663,9 @@ const checkoutItems: CheckoutItem[] = isCustomCheckout
                     placeholder="Enter promo code"
                     className="flex-1 border border-gray-700 bg-black text-white px-4 py-3 text-sm focus:outline-none focus:border-white transition"
                   />
-                  <button
-                    type="button"
-                    onClick={() => applyDiscountCode(promoCode)}
-                    className="bg-black px-4 py-3 text-sm font-medium text-white hover:bg-gray-900 transition"
-                  >
+                  <Button onClick={() => applyDiscountCode(promoCode)}>
                     Apply
-                  </button>
+                  </Button>
                 </div>
                 {promoCodeError && (
                   <p className="text-sm text-red-600">{promoCodeError}</p>

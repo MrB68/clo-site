@@ -40,8 +40,6 @@ export const initMessaging = async () => {
       serviceWorkerRegistration: registration,
     });
 
-    console.log("🔥 FCM TOKEN:", token);
-
     return messaging;
   } catch (err) {
     console.error("FCM init error:", err);

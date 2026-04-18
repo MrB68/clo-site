@@ -39,18 +39,27 @@ const Button = React.forwardRef<
   React.ComponentProps<"button"> &
     VariantProps<typeof buttonVariants> & {
       asChild?: boolean;
+      fullWidth?: boolean;
+      loading?: boolean;
     }
 >(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, fullWidth, loading, disabled, children, ...props }, ref) => {
     const Comp = asChild ? Slot : "button";
 
     return (
       <Comp
         ref={ref}
         data-slot="button"
-        className={cn(buttonVariants({ variant, size, className }))}
+        disabled={disabled || loading}
+        className={cn(
+          buttonVariants({ variant, size, className }),
+          fullWidth && "w-full",
+          (disabled || loading) && "opacity-50 cursor-not-allowed"
+        )}
         {...props}
-      />
+      >
+        {loading ? "Processing..." : children}
+      </Comp>
     );
   }
 );
