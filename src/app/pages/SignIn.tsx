@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { Eye, EyeOff, ArrowLeft } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { FcGoogle } from "react-icons/fc";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useAuth } from "../contexts/AuthContext";
 
 export function SignIn() {
@@ -14,20 +14,59 @@ export function SignIn() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
+  const googleBtnRef = useRef<HTMLButtonElement | null>(null);
+  const emailBtnRef = useRef<HTMLButtonElement | null>(null);
+
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
+
+  useEffect(() => {
+    if (user) {
+      navigate("/", { replace: true });
+    }
+  }, [user, navigate]);
 
 
   const query = new URLSearchParams(location.search);
   const emailFromQuery = query.get("email");
   const verify = query.get("verify");
+  const providerFromQuery = query.get("provider");
 
   useEffect(() => {
     if (emailFromQuery) {
       setEmail(emailFromQuery);
     }
   }, [emailFromQuery]);
+
+  useEffect(() => {
+    if (!providerFromQuery) return;
+
+    if (providerFromQuery === "google") {
+      setError("Use Google to sign in with this account.");
+
+      setTimeout(() => {
+        googleBtnRef.current?.focus();
+        googleBtnRef.current?.classList.add("ring-2", "ring-white", "animate-pulse");
+
+        setTimeout(() => {
+          googleBtnRef.current?.classList.remove("animate-pulse");
+        }, 2000);
+      }, 100);
+
+    } else if (providerFromQuery === "email") {
+      setError("Use your email and password to sign in.");
+
+      setTimeout(() => {
+        emailBtnRef.current?.focus();
+        emailBtnRef.current?.classList.add("ring-2", "ring-white", "animate-pulse");
+
+        setTimeout(() => {
+          emailBtnRef.current?.classList.remove("animate-pulse");
+        }, 2000);
+      }, 100);
+    }
+  }, [providerFromQuery]);
 
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -39,6 +78,34 @@ export function SignIn() {
     setIsLoading(true);
 
     try {
+      // 🔥 Check provider from DB first
+      const { data: existingUser } = await supabase
+        .from("profiles")
+        .select("providers, provider")
+        .ilike("email", email.toLowerCase().trim())
+        .maybeSingle();
+
+      const providers = Array.isArray(existingUser?.providers)
+        ? existingUser.providers
+        : (existingUser?.provider ? [existingUser.provider] : []);
+
+      if (providers.includes("google") && !providers.includes("email")) {
+        setError("This account uses Google. Please sign in with Google.");
+
+        // 🔥 focus + highlight Google button
+        setTimeout(() => {
+          googleBtnRef.current?.focus();
+          googleBtnRef.current?.classList.add("ring-2", "ring-white", "animate-pulse");
+
+          setTimeout(() => {
+            googleBtnRef.current?.classList.remove("animate-pulse");
+          }, 2000);
+        }, 100);
+
+        setIsLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.toLowerCase().trim(),
         password,
@@ -47,10 +114,7 @@ export function SignIn() {
       if (error) {
         const msg = error.message.toLowerCase();
 
-        // 🔥 Detect Google-only account
-        if (msg.includes("oauth") || msg.includes("provider")) {
-          setError("This account uses Google. Please sign in with Google.");
-        } else if (msg.includes("invalid login")) {
+        if (msg.includes("invalid login")) {
           setError("Invalid email or password.");
         } else {
           setError(error.message);
@@ -70,7 +134,7 @@ export function SignIn() {
       const redirect =
         localStorage.getItem("redirectAfterLogin") ||
         location.state?.from?.pathname ||
-        "/dashboard";
+        "/";
 
       localStorage.removeItem("redirectAfterLogin");
 
@@ -84,10 +148,11 @@ export function SignIn() {
   };
 
   const handleGoogleSignIn = async () => {
-    if (isLoading) return; // 🔥 prevent double trigger
+    if (isLoading) return; // prevent double trigger
 
     try {
       setIsLoading(true);
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
@@ -100,10 +165,14 @@ export function SignIn() {
 
       if (error) {
         setError(error.message);
+        setIsLoading(false);
       }
+
+      // ⚠️ DO NOT reset loading here on success
+      // OAuth redirects the page, so React state will reset automatically
+
     } catch (err) {
       setError("Google sign-in failed");
-    } finally {
       setIsLoading(false);
     }
   };
@@ -208,17 +277,26 @@ export function SignIn() {
 
 
           {error && (
-            <div className="text-red-600 text-sm text-center tracking-wider">
+            <motion.div
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-red-400 text-sm text-center tracking-wider bg-red-500/10 border border-red-500/30 py-2 px-3 rounded"
+            >
               {error}
-            </div>
+            </motion.div>
           )}
 
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-white text-black py-3 rounded-lg font-medium hover:bg-gray-200 transition tracking-widest uppercase text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            ref={emailBtnRef}
+            className="w-full py-3 rounded-lg font-semibold tracking-widest uppercase text-sm transition bg-gradient-to-r from-white via-gray-200 to-white !text-black shadow-lg hover:from-gray-200 hover:via-white hover:to-gray-200 hover:!text-black focus:ring-2 focus:ring-white/30 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isLoading ? "Signing In..." : "Sign In"}
+            {isLoading ? (
+              <span className="text-black">Signing In...</span>
+            ) : (
+              <span className="text-black">Sign In</span>
+            )}
           </button>
 
           <div className="text-center mt-2">
@@ -239,7 +317,8 @@ export function SignIn() {
           <button
             type="button"
             onClick={handleGoogleSignIn}
-            className="w-full flex items-center justify-center gap-3 border border-gray-700 py-3 rounded-lg hover:bg-gray-900 transition tracking-wider uppercase text-sm text-white"
+            ref={googleBtnRef}
+            className="w-full flex items-center justify-center gap-3 border border-gray-700 py-3 rounded-lg hover:bg-gray-900 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] tracking-wider uppercase text-sm text-white"
           >
             <FcGoogle size={20} />
             Continue with Google

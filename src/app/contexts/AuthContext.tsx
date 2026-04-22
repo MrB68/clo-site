@@ -43,8 +43,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq("id", key)
         .maybeSingle();
 
-      if (profile) return profile;
+      if (profile) {
+        // 🔥 Derive provider strictly from auth (no fallback)
+        const authProvider = authUser?.app_metadata?.provider;
 
+        // 🔥 Ensure providers array exists
+        const existingProviders: string[] = Array.isArray(profile.providers)
+          ? profile.providers
+          : (profile.provider ? [profile.provider] : []);
+
+        // 🔥 Merge WITHOUT overwriting existing providers
+        const mergedSet = new Set(existingProviders || []);
+        if (authProvider) mergedSet.add(authProvider);
+
+        const merged = Array.from(mergedSet);
+
+        // 🔄 Update only if changed
+        if (JSON.stringify(merged) !== JSON.stringify(existingProviders)) {
+          await supabase
+            .from("profiles")
+            .update({ providers: merged })
+            .eq("id", key);
+        }
+
+        return { ...profile, providers: merged };
+      }
+
+      const authProvider = authUser?.app_metadata?.provider;
       const { data: newProfile } = await supabase
         .from("profiles")
         .upsert({
@@ -52,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           email: authUser.email,
           full_name: authUser.user_metadata?.full_name || "",
           role: "user",
+          providers: authProvider ? [authProvider] : [],
         })
         .select()
         .single();
@@ -117,8 +143,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        // Ignore only the initial automatic event
-        if (event === "INITIAL_SESSION") return;
+        // 🔥 Handle INITIAL_SESSION properly (important for OAuth redirect login)
+        if (event === "INITIAL_SESSION" && session?.user) {
+          const authUser = session.user;
+
+          if (mounted) {
+            setUser({
+              id: authUser.id,
+              email: authUser.email || "",
+            });
+          }
+
+          getOrCreateProfile(authUser).then((finalProfile) => {
+            if (!mounted) return;
+            setUser({
+              id: authUser.id,
+              email: authUser.email || "",
+              full_name: finalProfile?.full_name,
+              role: finalProfile?.role,
+            });
+          });
+
+          return;
+        }
 
         // Handle logout explicitly
         if (event === "SIGNED_OUT") {

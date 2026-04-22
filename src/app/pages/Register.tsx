@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import { Eye, EyeOff, ArrowLeft, Check } from "lucide-react";
@@ -17,6 +17,9 @@ export function Register() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+
+  const googleBtnRef = useRef<HTMLButtonElement | null>(null);
+  const emailBtnRef = useRef<HTMLButtonElement | null>(null);
 
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -74,34 +77,102 @@ export function Register() {
     // 🔍 Check if user already exists in profiles table
     const { data: existingUser, error: checkError } = await supabase
       .from("profiles")
-      .select("email")
-      .ilike("email", email)
+      .select("email, providers")
+      .eq("email", email)
       .maybeSingle();
-
-    // 🔥 Check if this email is already linked to a Google (OAuth) account
-    const { error: providerCheckError } = await supabase.auth.signInWithPassword({
-      email,
-      password: "dummy_password",
-    });
-
-    if (
-      providerCheckError?.message.toLowerCase().includes("oauth") ||
-      providerCheckError?.message.toLowerCase().includes("provider")
-    ) {
-      setError("This email is registered with Google. Please sign in with Google.");
-      setIsLoading(false);
-      return;
-    }
 
     if (checkError) {
       console.error("User check error:", checkError);
     }
 
     if (existingUser) {
-      setError("Account already exists. Redirecting to sign in...");
-      setTimeout(() => {
-        navigate(`/signin?email=${encodeURIComponent(email)}`);
-      }, 1500);
+      let providers: string[] = [];
+
+      if (Array.isArray(existingUser?.providers)) {
+        providers = existingUser.providers;
+      } else if (typeof existingUser?.providers === "string") {
+        // handle case where DB returns string instead of array
+        try {
+          providers = JSON.parse(existingUser.providers);
+        } catch {
+          providers = [existingUser.providers];
+        }
+      }
+
+      console.log("DEBUG providers:", providers, "email:", email);
+
+      const hasGoogle = providers.includes("google");
+      const hasEmail = providers.includes("email");
+
+      // 🔥 fallback detection if providers missing
+      // 🔥 fallback detection ONLY if truly unknown (DO NOT override valid cases)
+      if (!providers.length) {
+        setError("Account already exists. Please sign in.");
+        setIsLoading(false);
+        return;
+      }
+
+      if (hasGoogle && !hasEmail) {
+        setError("This email is already registered with Google. Please sign in using Google.");
+
+        setTimeout(() => {
+          googleBtnRef.current?.focus();
+          googleBtnRef.current?.classList.add("ring-2", "ring-white", "animate-pulse");
+
+          setTimeout(() => {
+            googleBtnRef.current?.classList.remove("animate-pulse");
+          }, 2000);
+        }, 100);
+
+        setTimeout(() => {
+          navigate(`/signin?email=${encodeURIComponent(email)}&provider=google`);
+        }, 1200);
+
+      } else if (hasEmail && !hasGoogle) {
+        setError("This email is already registered. Please sign in with your email and password.");
+
+        setTimeout(() => {
+          emailBtnRef.current?.focus();
+          emailBtnRef.current?.classList.add("ring-2", "ring-white", "animate-pulse");
+
+          setTimeout(() => {
+            emailBtnRef.current?.classList.remove("animate-pulse");
+          }, 2000);
+        }, 100);
+
+        setTimeout(() => {
+          navigate(`/signin?email=${encodeURIComponent(email)}&provider=email`);
+        }, 1200);
+      } else if (hasGoogle && hasEmail) {
+        setError("This account supports both Google and Email login. Please sign in.");
+
+      } else {
+        setError("Account already exists. Please sign in.");
+      }
+
+      setIsLoading(false);
+      return;
+    }
+
+    // 🔥 Auth-level check to prevent duplicate signup emails
+    const randomPassword = "__random_invalid_password__";
+
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password: randomPassword,
+    });
+
+    // If session exists → user logged in → immediately logout and block
+    if (signInData?.session) {
+      await supabase.auth.signOut();
+      setError("Account already exists. Please sign in.");
+      setIsLoading(false);
+      return;
+    }
+
+    // If invalid login → user likely exists (wrong password)
+    if (signInError && signInError.message.toLowerCase().includes("invalid login")) {
+      setError("Account already exists. Please sign in.");
       setIsLoading(false);
       return;
     }
@@ -141,10 +212,19 @@ export function Register() {
         return;
       }
 
+      // 🔥 Ensure profile exists with providers=["email"]
+      if (data.user) {
+        await supabase.from("profiles").upsert({
+          id: data.user.id,
+          email,
+          full_name: formData.name.trim(),
+          providers: ["email"],
+        });
+      }
+
       // 🔥 Require email verification before login
       if (!data.session) {
-        setError("");
-        alert("Account created! Please check your email to verify your account before signing in.");
+        setError("Account created! Please check your email to verify your account before signing in.");
         navigate("/signin?verify=true");
         return;
       }
@@ -160,15 +240,91 @@ export function Register() {
   };
 
   const handleGoogleSignUp = async () => {
-    if (isLoading) return; // 🔥 prevent double trigger
+    if (isLoading) return;
+
+    const email = formData.email.toLowerCase().trim();
 
     try {
       setIsLoading(true);
-      // Google signup redirect: keep consistent with callback
+
+      // 🔥 Check DB FIRST to prevent unwanted login
+      if (email) {
+        const { data: existingUser } = await supabase
+          .from("profiles")
+          .select("email, providers")
+          .eq("email", email)
+          .maybeSingle();
+
+        if (existingUser) {
+          let providers: string[] = [];
+
+          if (Array.isArray(existingUser?.providers)) {
+            providers = existingUser.providers;
+          } else if (typeof existingUser?.providers === "string") {
+            try {
+              providers = JSON.parse(existingUser.providers);
+            } catch {
+              providers = [existingUser.providers];
+            }
+          }
+
+          const hasGoogle = providers.includes("google");
+          const hasEmail = providers.includes("email");
+
+          if (hasGoogle && !hasEmail) {
+            setError("This email is already registered with Google. Please sign in using Google.");
+
+            setTimeout(() => {
+              googleBtnRef.current?.focus();
+              googleBtnRef.current?.classList.add("ring-2", "ring-white", "animate-pulse");
+
+              setTimeout(() => {
+                googleBtnRef.current?.classList.remove("animate-pulse");
+              }, 2000);
+            }, 100);
+
+            setTimeout(() => {
+              navigate(`/signin?email=${encodeURIComponent(email)}&provider=google`);
+            }, 1200);
+
+          } else if (hasEmail && !hasGoogle) {
+            setError("This email is already registered. Please sign in with your email and password.");
+
+            setTimeout(() => {
+              emailBtnRef.current?.focus();
+              emailBtnRef.current?.classList.add("ring-2", "ring-white", "animate-pulse");
+
+              setTimeout(() => {
+                emailBtnRef.current?.classList.remove("animate-pulse");
+              }, 2000);
+            }, 100);
+
+            setTimeout(() => {
+              navigate(`/signin?email=${encodeURIComponent(email)}&provider=email`);
+            }, 1200);
+
+          } else if (hasGoogle && hasEmail) {
+            setError("This account supports both Google and Email login. Please sign in.");
+
+          } else {
+            setError("Account already exists. Please sign in.");
+          }
+
+          setIsLoading(false);
+          return; // 🔥 STOP OAuth completely
+        }
+      }
+
+      // 🔥 Only allow OAuth if NO existing account
+      await supabase.auth.signOut();
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`, // (no functional change, keep as is)
+          redirectTo: `${window.location.origin}/auth/callback`,
+          queryParams: {
+            prompt: "select_account",
+          },
         },
       });
 
@@ -214,7 +370,7 @@ export function Register() {
               type="text"
               value={formData.name}
               onChange={(e) => handleInputChange("name", e.target.value)}
-              className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 text-white focus:outline-none focus:border-white tracking-wider placeholder-gray-500"
+              className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 text-white focus:outline-none focus:border-white tracking-wider placeholder-gray-500 focus:ring-2 focus:ring-white/20 transition-all duration-200"
               placeholder="Your full name"
               required
             />
@@ -228,7 +384,7 @@ export function Register() {
               type="email"
               value={formData.email}
               onChange={(e) => handleInputChange("email", e.target.value)}
-              className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 text-white focus:outline-none focus:border-white tracking-wider placeholder-gray-500"
+              className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 text-white focus:outline-none focus:border-white tracking-wider placeholder-gray-500 focus:ring-2 focus:ring-white/20 transition-all duration-200"
               placeholder="your@email.com"
               required
             />
@@ -243,7 +399,7 @@ export function Register() {
                 type={showPassword ? "text" : "password"}
                 value={formData.password}
                 onChange={(e) => handleInputChange("password", e.target.value)}
-                className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 text-white focus:outline-none focus:border-white tracking-wider placeholder-gray-500"
+                className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 text-white focus:outline-none focus:border-white tracking-wider placeholder-gray-500 focus:ring-2 focus:ring-white/20 transition-all duration-200"
                 placeholder="Create a password"
                 required
               />
@@ -269,7 +425,7 @@ export function Register() {
                 type={showConfirmPassword ? "text" : "password"}
                 value={formData.confirmPassword}
                 onChange={(e) => handleInputChange("confirmPassword", e.target.value)}
-                className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 text-white focus:outline-none focus:border-white tracking-wider placeholder-gray-500"
+                className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 text-white focus:outline-none focus:border-white tracking-wider placeholder-gray-500 focus:ring-2 focus:ring-white/20 transition-all duration-200"
                 placeholder="Confirm your password"
                 required
               />
@@ -291,7 +447,7 @@ export function Register() {
                 id="terms"
                 checked={agreedToTerms}
                 onChange={(e) => setAgreedToTerms(e.target.checked)}
-                className="w-4 h-4 border border-zinc-700 focus:outline-none focus:border-white"
+                className="w-4 h-4 border border-zinc-700 focus:outline-none focus:border-white focus:ring-2 focus:ring-white/20 transition-all duration-200"
               />
               {agreedToTerms && (
                 <Check size={12} className="absolute top-0.5 left-0.5 text-white" />
@@ -310,17 +466,29 @@ export function Register() {
           </div>
 
           {error && (
-            <div className="text-red-400 text-sm text-center tracking-wider">
+            <motion.div
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-red-400 text-sm text-center tracking-wider bg-red-500/10 border border-red-500/30 py-2 px-3 rounded"
+            >
               {error}
-            </div>
+            </motion.div>
           )}
 
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-white text-black py-3 hover:bg-gray-200 transition-colors tracking-widest uppercase text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            ref={emailBtnRef}
+            className="w-full bg-white text-black py-3 hover:bg-gray-200 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] tracking-widest uppercase text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isLoading ? "Creating Account..." : "Create Account"}
+            {isLoading ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></span>
+                Processing...
+              </span>
+            ) : (
+              "Create Account"
+            )}
           </button>
 
           <div className="flex items-center gap-2">
@@ -332,10 +500,20 @@ export function Register() {
           <button
             type="button"
             onClick={handleGoogleSignUp}
-            className="w-full flex items-center justify-center gap-3 border border-zinc-700 py-3 hover:bg-zinc-800 transition-colors tracking-wider uppercase text-sm text-white"
+            ref={googleBtnRef}
+            className="w-full flex items-center justify-center gap-3 border border-zinc-700 py-3 hover:bg-zinc-800 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] tracking-wider uppercase text-sm text-white"
           >
-            <FcGoogle size={20} />
-            Continue with Google
+            {isLoading ? (
+              <span className="flex items-center gap-2">
+                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                Please wait...
+              </span>
+            ) : (
+              <>
+                <FcGoogle size={20} />
+                Continue with Google
+              </>
+            )}
           </button>
         </form>
 

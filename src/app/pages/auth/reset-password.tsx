@@ -7,24 +7,40 @@ export default function ResetPassword() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isValidRecovery, setIsValidRecovery] = useState(false);
 
+  const hasRecoveryToken =
+    window.location.hash.includes("access_token") ||
+    window.location.search.includes("access_token");
+
   useEffect(() => {
-    const checkSession = async () => {
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        // 🔥 PASSWORD_RECOVERY is the key event
+        if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") {
+          if (session?.user) {
+            setIsValidRecovery(true);
+            setMessage("");
+          }
+        }
+      }
+    );
+
+    // 🔥 fallback check (in case event already fired)
+    const checkExistingSession = async () => {
       const { data } = await supabase.auth.getSession();
-
-      const hasRecoveryToken =
-        window.location.hash.includes("access_token") ||
-        window.location.search.includes("access_token");
-
-      if (!data.session || !hasRecoveryToken) {
+      if (data.session?.user && hasRecoveryToken) {
+        setIsValidRecovery(true);
+      } else if (!hasRecoveryToken) {
         setMessage("Invalid or expired reset link.");
         setIsValidRecovery(false);
-      } else {
-        setIsValidRecovery(true);
       }
     };
 
-    checkSession();
-  }, []);
+    checkExistingSession();
+
+    return () => {
+      listener.subscription.unsubscribe();
+    };
+  }, [hasRecoveryToken]);
 
   const handleReset = async () => {
     if (!isValidRecovery) {
@@ -52,9 +68,38 @@ export default function ResetPassword() {
       if (error) {
         setMessage(error.message);
       } else {
-        setMessage("Password updated successfully. Redirecting to login...");
+        // 🔥 Fetch current user
+        const { data: userData } = await supabase.auth.getUser();
+
+        // 🔥 Sync providers in DB
+        if (userData?.user?.id) {
+          const { data: profileData } = await supabase
+            .from("profiles")
+            .select("providers")
+            .eq("id", userData.user.id)
+            .single();
+
+          const existingProviders = Array.isArray(profileData?.providers)
+            ? profileData.providers
+            : [];
+
+          // 🔥 Only add email after verified recovery flow
+          const updatedProviders = hasRecoveryToken
+            ? Array.from(new Set([...(existingProviders || []), "email"]))
+            : existingProviders;
+
+          await supabase
+            .from("profiles")
+            .update({ providers: updatedProviders })
+            .eq("id", userData.user.id);
+        }
+
+        setMessage(
+          "Password set successfully. Email login is now enabled. Redirecting..."
+        );
 
         // 🔥 Force logout after reset (important)
+        await supabase.auth.refreshSession();
         await supabase.auth.signOut();
 
         setTimeout(() => {

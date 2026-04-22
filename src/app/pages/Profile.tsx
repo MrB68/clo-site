@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "motion/react";
-import { User, Mail, Calendar, ArrowLeft, LogOut, Camera } from "lucide-react";
+import { User, Mail, Calendar, ArrowLeft, LogOut, Camera, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
 import {
@@ -15,6 +15,15 @@ import { supabase } from "../../lib/supabase";
 export function Profile() {
   const { user } = useAuth();
   const supabaseUser = user as any;
+  const [authUser, setAuthUser] = useState<any>(null);
+  useEffect(() => {
+    const fetchAuthUser = async () => {
+      const { data } = await supabase.auth.getUser();
+      setAuthUser(data.user);
+    };
+
+    fetchAuthUser();
+  }, []);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [savedDetails, setSavedDetails] = useState<CustomerProfileDetails>({
     firstName: "",
@@ -38,40 +47,30 @@ export function Profile() {
     wishlist: 0,
     reviews: 0,
   });
+ 
+
   useEffect(() => {
-    if (!user?.id) return;
+    const uid = user?.id || authUser?.id;
+    if (!uid) return;
 
     const fetchProfileName = async () => {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("profiles")
         .select("full_name")
-        .eq("id", user.id)
-        .single();
+        .eq("id", uid)
+        .maybeSingle();
 
-      if (
-        !error &&
-        data?.full_name &&
-        data.full_name !== user.email?.split("@")[0]
-      ) {
+      if (data?.full_name && data.full_name.trim() !== "") {
+        // ✅ ALWAYS trust DB
         setProfileName(data.full_name);
       } else {
-        // 🔥 fallback + AUTO SYNC to DB
-        const finalName =
+        // fallback ONLY for UI (no DB writes)
+        const fallbackName =
           supabaseUser?.user_metadata?.full_name ||
           supabaseUser?.user_metadata?.name ||
-          user.email?.split("@")[0] ||
           "User";
 
-        setProfileName(finalName);
-
-        // ❗ only overwrite if DB is empty or junk (email-based)
-        if (!data?.full_name || data.full_name === user.email?.split("@")[0]) {
-          await supabase.from("profiles").upsert({
-            id: user.id,
-            email: user.email,
-            full_name: finalName,
-          });
-        }
+        setProfileName(fallbackName);
       }
     };
 
@@ -85,7 +84,7 @@ export function Profile() {
           event: "UPDATE",
           schema: "public",
           table: "profiles",
-          filter: `id=eq.${user.id}`,
+          filter: `id=eq.${uid}`,
         },
         (payload) => {
           if (payload.new?.full_name) {
@@ -98,16 +97,7 @@ export function Profile() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.id, user?.email]);
-  const [authUser, setAuthUser] = useState<any>(null);
-useEffect(() => {
-  const fetchAuthUser = async () => {
-    const { data } = await supabase.auth.getUser();
-    setAuthUser(data.user);
-  };
-
-  fetchAuthUser();
-}, []);
+  }, [user?.id, authUser?.id]);
 
 
   const handleSignOut = async () => {
@@ -387,7 +377,8 @@ useEffect(() => {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <>
+      <div className="min-h-screen bg-black text-white">
       {/* Header */}
       <div className="bg-black text-white py-6 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -426,16 +417,15 @@ useEffect(() => {
                 <div className="flex items-center gap-4">
                   <div className="relative">
                     <div className="w-16 h-16 overflow-hidden rounded-full bg-black flex items-center justify-center">
-                      {(savedDetails.profileImage && savedDetails.profileImage !== "") ||
-                        authUser?.user_metadata?.avatar_url ||
-                        supabaseUser?.user_metadata?.avatar_url ? (
+                      {(authUser?.user_metadata?.avatar_url ||
+                        supabaseUser?.user_metadata?.avatar_url ||
+                        savedDetails.profileImage) ? (
                         <img
                           src={
-                            savedDetails.profileImage && savedDetails.profileImage !== ""
-                              ? savedDetails.profileImage
-                              : authUser?.user_metadata?.avatar_url ||
-                                supabaseUser?.user_metadata?.avatar_url ||
-                                ""
+                            authUser?.user_metadata?.avatar_url ||
+                            supabaseUser?.user_metadata?.avatar_url ||
+                            savedDetails.profileImage ||
+                            ""
                           }
                           alt={profileName || `${savedDetails.firstName} ${savedDetails.lastName}`.trim() || "User"}
                           className="h-full w-full object-cover"
@@ -774,5 +764,5 @@ useEffect(() => {
         </div>
       </div>
     </div>
-  );
+    </>)
 }
