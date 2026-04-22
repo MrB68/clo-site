@@ -599,8 +599,9 @@ export function Orders() {
           requestedAt: new Date().toISOString(),
         },
       })
-      // 🔥 Allow exchange request for both logged-in users and guests (match by id OR email)
-      .or(`id.eq.${selectedExchangeOrder.id},customer_email.eq.${user?.email || localStorage.getItem("guest_email")}`)
+      // 🔥 Now strictly match by order id AND customer email
+      .eq("id", selectedExchangeOrder.id)
+      .eq("customer_email", user?.email || localStorage.getItem("guest_email"))
       .select();
 
     console.log("EXCHANGE UPDATE RESULT:", { data, error });

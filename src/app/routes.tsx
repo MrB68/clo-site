@@ -15,6 +15,8 @@ import { Orders } from "./pages/Orders";
 import { Terms } from "./pages/Terms";
 import { Privacy } from "./pages/Privacy";
 import { NotFound } from "./pages/NotFound";
+import ResetPassword from "./pages/auth/reset-password";
+import ForgotPassword from "./pages/auth/forgot-password";
 import AuthCallback from "./pages/AuthCallback";
 import Shipping from "./pages/Shipping";
 import SizeGuide from "./pages/SizeGuide";
@@ -76,6 +78,8 @@ export const router = createBrowserRouter([
       //{ path: "custom", Component: CustomDesign },
       { path: "signin", Component: SignIn },
       { path: "register", Component: Register },
+      { path: "auth/forgot-password", Component: ForgotPassword },
+      { path: "auth/reset-password", Component: ResetPassword },
       {
         path: "orders",
         Component: () => (

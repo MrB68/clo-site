@@ -73,12 +73,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // ⚡ Fast initial session (instant auth feel without blocking)
     supabase.auth.getSession().then(async ({ data }) => {
-      if (!mounted) return;
+      const isRecovery =
+        window.location.pathname.includes("reset-password") &&
+        window.location.hash.includes("access_token");
 
-      if (data.session?.user) {
+      // 🔥 HARD BLOCK: do not set user during password recovery
+      if (isRecovery) {
+        if (mounted) setUser(null);
+      } else if (data.session?.user) {
         const authUser = data.session.user;
 
-        // ⚡ instant user (no waiting)
         if (mounted) {
           setUser({
             id: authUser.id,
@@ -86,7 +90,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           });
         }
 
-        // 🔄 load profile in background (non-blocking)
         getOrCreateProfile(authUser).then((finalProfile) => {
           if (!mounted) return;
           setUser({
@@ -104,6 +107,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        const isRecovery =
+          window.location.pathname.includes("reset-password") &&
+          window.location.hash.includes("access_token");
+
+        // 🔥 HARD BLOCK recovery session completely
+        if (event === "PASSWORD_RECOVERY" || isRecovery) {
+          if (mounted) setUser(null);
+          return;
+        }
+
         // Ignore only the initial automatic event
         if (event === "INITIAL_SESSION") return;
 

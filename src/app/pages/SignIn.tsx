@@ -29,9 +29,6 @@ export function SignIn() {
     }
   }, [emailFromQuery]);
 
-  useEffect(() => {
-    if (user) navigate("/dashboard");
-  }, [user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,16 +45,23 @@ export function SignIn() {
       });
 
       if (error) {
-        if (error.message.toLowerCase().includes("invalid login")) {
+        const msg = error.message.toLowerCase();
+
+        // 🔥 Detect Google-only account
+        if (msg.includes("oauth") || msg.includes("provider")) {
+          setError("This account uses Google. Please sign in with Google.");
+        } else if (msg.includes("invalid login")) {
           setError("Invalid email or password.");
         } else {
           setError(error.message);
         }
+
         setIsLoading(false);
         return;
       }
 
-      if (!data.session) {
+      // 🔥 Block unverified users
+      if (!data.session || !data.user?.email_confirmed_at) {
         setError("Please verify your email before signing in.");
         setIsLoading(false);
         return;
@@ -104,12 +108,43 @@ export function SignIn() {
     }
   };
 
+  const handleForgotPassword = async (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+
+    if (!email) {
+      setError("Enter your email first to reset password.");
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const { error } = await supabase.auth.resetPasswordForEmail(
+        email.toLowerCase().trim(),
+        {
+          redirectTo: `${window.location.origin}/auth/reset-password`,
+        }
+      );
+
+      if (error) {
+        setError(error.message);
+      } else {
+        setError("Password reset link sent to your email.");
+      }
+    } catch (err) {
+      console.error("Reset password error:", err);
+      setError("Failed to send reset email.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-black text-white flex items-center justify-center px-4">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-[#0f0f0f] text-white p-8 rounded-lg shadow-lg max-w-md w-full border border-gray-800"
+        className="bg-[#0f0f0f] text-white p-8 rounded-2xl shadow-2xl max-w-md w-full border border-gray-800"
       >
         {/* Back Button */}
         <Link
@@ -142,7 +177,7 @@ export function SignIn() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 bg-black border border-gray-700 focus:outline-none focus:border-white text-white placeholder-gray-500 tracking-wider"
+              className="w-full px-4 py-3 bg-black border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white placeholder-gray-500 tracking-wider"
               placeholder="your@email.com"
               required
             />
@@ -157,7 +192,7 @@ export function SignIn() {
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 bg-black border border-gray-700 focus:outline-none focus:border-white text-white placeholder-gray-500 tracking-wider"
+                className="w-full px-4 py-3 bg-black border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white placeholder-gray-500 tracking-wider"
                 placeholder="Enter your password"
                 required
               />
@@ -171,6 +206,7 @@ export function SignIn() {
             </div>
           </div>
 
+
           {error && (
             <div className="text-red-600 text-sm text-center tracking-wider">
               {error}
@@ -180,10 +216,19 @@ export function SignIn() {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-black text-white py-3 hover:bg-gray-800 transition-colors tracking-widest uppercase text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-white text-black py-3 rounded-lg font-medium hover:bg-gray-200 transition tracking-widest uppercase text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isLoading ? "Signing In..." : "Sign In"}
           </button>
+
+          <div className="text-center mt-2">
+            <Link
+              to="/auth/forgot-password"
+              className="text-xs text-gray-400 hover:text-white underline"
+            >
+              Forgot password?
+            </Link>
+          </div>
 
           <div className="flex items-center gap-2 mt-4">
             <div className="flex-1 h-px bg-gray-300"></div>
@@ -194,7 +239,7 @@ export function SignIn() {
           <button
             type="button"
             onClick={handleGoogleSignIn}
-            className="w-full flex items-center justify-center gap-3 border border-gray-700 py-3 hover:bg-gray-900 transition-colors tracking-wider uppercase text-sm text-white"
+            className="w-full flex items-center justify-center gap-3 border border-gray-700 py-3 rounded-lg hover:bg-gray-900 transition tracking-wider uppercase text-sm text-white"
           >
             <FcGoogle size={20} />
             Continue with Google
@@ -207,7 +252,7 @@ export function SignIn() {
           </p>
           <Link
             to="/register"
-            className="inline-block w-full text-center border border-gray-700 py-3 hover:bg-gray-900 transition-colors tracking-widest uppercase text-sm"
+            className="inline-block w-full text-center border border-gray-700 py-3 rounded-lg hover:bg-gray-900 transition tracking-widest uppercase text-sm"
           >
             Create Account
           </Link>

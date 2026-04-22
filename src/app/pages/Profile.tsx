@@ -56,15 +56,11 @@ export function Profile() {
         setProfileName(data.full_name);
       } else {
         // 🔥 fallback + AUTO SYNC to DB
-        const fallback =
-          authUser?.user_metadata?.full_name ||
-          authUser?.user_metadata?.name ||
+        const finalName =
           supabaseUser?.user_metadata?.full_name ||
           supabaseUser?.user_metadata?.name ||
-          `${derivedName.firstName} ${derivedName.lastName}`.trim() ||
-          user.email?.split("@")[0];
-
-        const finalName = fallback || "User";
+          user.email?.split("@")[0] ||
+          "User";
 
         setProfileName(finalName);
 
@@ -108,14 +104,6 @@ useEffect(() => {
   const fetchAuthUser = async () => {
     const { data } = await supabase.auth.getUser();
     setAuthUser(data.user);
-
-    // 🔥 sync avatar into state
-    if (data.user?.user_metadata?.avatar_url) {
-      setSavedDetails((prev) => ({
-        ...prev,
-        profileImage: data.user.user_metadata.avatar_url,
-      }));
-    }
   };
 
   fetchAuthUser();
@@ -438,9 +426,17 @@ useEffect(() => {
                 <div className="flex items-center gap-4">
                   <div className="relative">
                     <div className="w-16 h-16 overflow-hidden rounded-full bg-black flex items-center justify-center">
-                      {savedDetails.profileImage || supabaseUser?.user_metadata?.avatar_url ? (
+                      {(savedDetails.profileImage && savedDetails.profileImage !== "") ||
+                        authUser?.user_metadata?.avatar_url ||
+                        supabaseUser?.user_metadata?.avatar_url ? (
                         <img
-                          src={savedDetails.profileImage || supabaseUser?.user_metadata?.avatar_url}
+                          src={
+                            savedDetails.profileImage && savedDetails.profileImage !== ""
+                              ? savedDetails.profileImage
+                              : authUser?.user_metadata?.avatar_url ||
+                                supabaseUser?.user_metadata?.avatar_url ||
+                                ""
+                          }
                           alt={profileName || `${savedDetails.firstName} ${savedDetails.lastName}`.trim() || "User"}
                           className="h-full w-full object-cover"
                         />

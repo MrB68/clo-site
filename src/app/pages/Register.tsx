@@ -78,6 +78,21 @@ export function Register() {
       .ilike("email", email)
       .maybeSingle();
 
+    // 🔥 Check if this email is already linked to a Google (OAuth) account
+    const { error: providerCheckError } = await supabase.auth.signInWithPassword({
+      email,
+      password: "dummy_password",
+    });
+
+    if (
+      providerCheckError?.message.toLowerCase().includes("oauth") ||
+      providerCheckError?.message.toLowerCase().includes("provider")
+    ) {
+      setError("This email is registered with Google. Please sign in with Google.");
+      setIsLoading(false);
+      return;
+    }
+
     if (checkError) {
       console.error("User check error:", checkError);
     }
@@ -126,12 +141,16 @@ export function Register() {
         return;
       }
 
-      // After signup, navigate to signin with verify query or redirectAfterLogin
-      setError("");
-      const redirect =
-        localStorage.getItem("redirectAfterLogin") ||
-        "/signin?verify=true";
-      navigate(redirect);
+      // 🔥 Require email verification before login
+      if (!data.session) {
+        setError("");
+        alert("Account created! Please check your email to verify your account before signing in.");
+        navigate("/signin?verify=true");
+        return;
+      }
+
+      // Fallback (should not normally happen if confirmation is enabled)
+      navigate("/dashboard");
     } catch (err) {
       console.error("Register error:", err);
       setError("Something went wrong. Please try again.");
