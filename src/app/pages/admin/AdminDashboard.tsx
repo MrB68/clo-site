@@ -140,8 +140,10 @@ const adminTabs: AdminTabItem[] = [
 
 export function AdminDashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loginError, setLoginError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [activeTab, setActiveTab] = useState<AdminTab>('analytics');
   const adminTheme = "dark";
@@ -241,12 +243,47 @@ export function AdminDashboard() {
   }, []);
 
   useEffect(() => {
-    // Check if admin is already authenticated
-    const savedAdminSession = getAdminSession();
-    if (savedAdminSession) {
-      setAdminSession(savedAdminSession);
-      setIsAuthenticated(true);
-    }
+    const validateAdminSession = async () => {
+      const savedAdminSession = getAdminSession();
+
+      if (!savedAdminSession) {
+        setCheckingAuth(false);
+        return;
+      }
+
+      try {
+        const { data: authData } = await supabase.auth.getUser();
+
+        if (!authData.user) {
+          clearAdminSession();
+          setCheckingAuth(false);
+          return;
+        }
+
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", authData.user.id)
+          .single();
+
+        if (!profile || profile.role !== "admin") {
+          clearAdminSession();
+          await supabase.auth.signOut();
+          setCheckingAuth(false);
+          return;
+        }
+
+        setAdminSession(savedAdminSession);
+        setIsAuthenticated(true);
+      } catch (err) {
+        console.error("Session validation error:", err);
+        clearAdminSession();
+      }
+
+      setCheckingAuth(false);
+    };
+
+    validateAdminSession();
   }, []);
 
   // Force dark mode at root level so Vercel matches local
@@ -561,12 +598,12 @@ export function AdminDashboard() {
       });
 
       if (error || !data.user) {
-        alert("Invalid email or password");
+        setLoginError("Invalid email or password");
         return;
       }
 
       if (!data.user.email_confirmed_at) {
-        alert("Please verify your email before logging in.");
+        setLoginError("Please verify your email before logging in.");
         return;
       }
 
@@ -578,14 +615,17 @@ export function AdminDashboard() {
 
       if (profileError || !profile) {
         console.error("Profile fetch error:", profileError);
-        alert("Profile not found or not linked correctly");
+        setLoginError("Profile not found or not linked correctly");
         return;
       }
 
       if (profile.role !== "admin") {
-        alert("Access denied: not an admin");
+        setLoginError("Access denied: Admin privileges required");
         return;
       }
+
+      // Clear error on successful login
+      setLoginError(null);
 
       const sessionData: AdminSession = {
         id: data.user.id,
@@ -616,7 +656,7 @@ export function AdminDashboard() {
 
     } catch (err) {
       console.error(err);
-      alert("Something went wrong");
+      setLoginError("Something went wrong. Please try again.");
     }
   };
 
@@ -651,13 +691,14 @@ export function AdminDashboard() {
     </div>
   );
 
+  if (checkingAuth) return null;
   if (!isAuthenticated) {
     return (
       <div className="admin-login admin-dark flex min-h-screen items-center justify-center px-4 bg-black text-white">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-md rounded-lg p-8 shadow-lg transition-colors duration-300 border border-white/10 bg-neutral-950 text-white"
+          className="w-full max-w-md rounded-2xl p-8 shadow-2xl transition border border-white/10 bg-[#0f0f0f] text-white"
         >
           <h1 className="text-2xl font-bold text-center mb-6 tracking-widest uppercase">
             Admin Access
@@ -671,7 +712,7 @@ export function AdminDashboard() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full border px-4 py-2 tracking-wider focus:outline-none border-white/20 bg-neutral-900 text-white focus:border-white"
+                className="w-full border px-4 py-3 rounded-lg tracking-wider focus:outline-none focus:ring-2 focus:ring-white/20 border-white/20 bg-black text-white focus:shadow-[0_0_10px_rgba(255,255,255,0.1)]"
                 placeholder="Enter admin email"
                 required
               />
@@ -685,22 +726,27 @@ export function AdminDashboard() {
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full border px-4 py-2 tracking-wider focus:outline-none border-white/20 bg-neutral-900 text-white focus:border-white"
+                  className="w-full border px-4 py-3 rounded-lg tracking-wider focus:outline-none focus:ring-2 focus:ring-white/20 border-white/20 bg-black text-white focus:shadow-[0_0_10px_rgba(255,255,255,0.1)]"
                   placeholder="Enter admin password"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
                 >
                   {showPassword ? "🙈" : "👁️"}
                 </button>
               </div>
             </div>
+            {loginError && (
+              <div className="mt-2 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+                {loginError}
+              </div>
+            )}
             <button
               type="submit"
-              className="w-full py-3 text-sm uppercase tracking-wider transition-colors bg-white text-black hover:bg-neutral-200"
+              className="w-full py-3 text-sm uppercase tracking-wider rounded-lg transition bg-gradient-to-r from-white via-gray-100 to-white !text-black hover:!text-black hover:from-gray-100 hover:via-white hover:to-gray-100 shadow-lg"
             >
               Access Admin Panel
             </button>
