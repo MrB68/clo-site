@@ -7,9 +7,10 @@ import { useWishlist } from "../contexts/WishlistContext";
 type ProductCardProps = {
   product: any;
   hideBadge?: boolean;
+  imageOnly?: boolean;
 };
 
-export function ProductCard({ product, hideBadge }: ProductCardProps) {
+export function ProductCard({ product, hideBadge, imageOnly = false }: ProductCardProps) {
   const { wishlist, addToWishlist, removeFromWishlist } = useWishlist();
   const isWishlisted = wishlist?.some((item: any) => item.product_id === product.id);
 
@@ -174,6 +175,7 @@ export function ProductCard({ product, hideBadge }: ProductCardProps) {
         </div>
 
         {/* CONTENT */}
+        {!imageOnly && (
         <div className={`mt-6 space-y-3 px-2 ${isFeatured ? "md:px-4" : ""}`}>
           {/* PRODUCT NAME */}
           <h3 className="text-[16px] font-medium tracking-wide line-clamp-2 min-h-[52px] break-words leading-snug">
@@ -225,6 +227,7 @@ export function ProductCard({ product, hideBadge }: ProductCardProps) {
             </p>
           )}
         </div>
+        )}
       </motion.div>
     </Link>
   );

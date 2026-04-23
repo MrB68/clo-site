@@ -1,0 +1,62 @@
+/* Kill Elfsight internal scroll completely */
+.elfsight-app-a28965ed-ad9b-4636-b8bb-5c118e211df1 {
+  height: 500px !important;
+  overflow: hidden !important;
+}
+
+.elfsight-app-a28965ed-ad9b-4636-b8bb-5c118e211df1 iframe {
+  height: 500px !important;
+  overflow: hidden !important;
+  display: block !important;
+  border: none !important;
+}
+
+/* Force single scrollbar (fix double scrollbar issue) */
+html {
+  overflow-y: auto;
+}
+
+body {
+  overflow-x: hidden;
+  margin: 0;
+}
+
+iframe {
+  overflow: hidden !important;
+}
+
+/* Smooth carousel animations using CSS transforms (GPU accelerated) */
+@keyframes scroll-rtl {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-scroll-rtl {
+  animation: scroll-rtl 25s linear infinite;
+  will-change: transform;
+}
+
+.animate-scroll-rtl-slow {
+  animation: scroll-rtl 35s linear infinite;
+  will-change: transform;
+}
+
+.animate-scroll-rtl-fast {
+  animation: scroll-rtl 18s linear infinite;
+  will-change: transform;
+}
+
+/* Pause animation on interaction */
+.animate-paused {
+  animation-play-state: paused;
+}
+
+/* GPU acceleration helper */
+.gpu-accelerated {
+  will-change: transform;
+  transform: translateZ(0);
+}

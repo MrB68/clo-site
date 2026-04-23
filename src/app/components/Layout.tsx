@@ -577,7 +577,7 @@ export function Layout() {
       </motion.nav>
 
       {/* Main Content */}
-      <main className="pt-20 pb-20 md:pb-0 overflow-x-hidden">
+      <main className="pt-20 pb-20 md:pb-0">
         <Outlet />
       {/* Mobile Bottom Nav */}
       <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 md:hidden bg-white/10 backdrop-blur-xl border border-white/10 flex justify-between px-5 py-2 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.6)] w-[92%] max-w-md">
