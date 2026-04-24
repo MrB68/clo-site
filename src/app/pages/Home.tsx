@@ -31,6 +31,8 @@ export function Home() {
   const filteredProducts = products.filter((p) => p.style === selectedStyle);
 
   // --- Premium Design Slider State/Ref ---
+  // Detect mobile view for scroll/duplication logic
+  const [isMobileView, setIsMobileView] = useState(window.innerWidth <= 768);
   const [designIndex, setDesignIndex] = useState(0);
   const [isInteracting, setIsInteracting] = useState(false);
   const scrollTimeoutRef = useRef<any>(null);
@@ -38,10 +40,31 @@ export function Home() {
   const heroRef = useRef<HTMLElement | null>(null);
   const [scrollY, setScrollY] = useState(0);
 
+useEffect(() => {
+  let ticking = false;
+  const onScroll = () => {
+    if (!ticking) {
+      requestAnimationFrame(() => {
+        setScrollY(window.scrollY || 0);
+        ticking = false;
+      });
+      ticking = true;
+    }
+  };
+  window.addEventListener("scroll", onScroll, { passive: true });
+  return () => window.removeEventListener("scroll", onScroll);
+}, []);
+
+  // Responsive: detect real mobile device width & update isMobileView state
   useEffect(() => {
-    const onScroll = () => setScrollY(window.scrollY || 0);
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    const handleResize = () => {
+      setIsMobileView(window.innerWidth <= 768);
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
   const toTime = (v: any) => {
   if (!v) return 0;
@@ -59,8 +82,30 @@ const newArrivals = [...filteredProducts]
   // Ref for auto-scroll horizontal carousel
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const newArrivalsRef = useRef<HTMLDivElement | null>(null);
+  const collectionsRef = useRef<HTMLDivElement | null>(null);
   const scrollPauseTimeout = useRef<any>(null);
   const newArrivalsPauseTimeout = useRef<any>(null);
+  // Auto-scroll for Collections carousel
+  useEffect(() => {
+    const el = collectionsRef.current;
+    if (el && !el.dataset.paused) el.dataset.paused = "false";
+    if (!el) return;
+
+    const speed = 1.0;
+
+    const interval = setInterval(() => {
+      if (!el) return;
+      if (el.dataset.paused !== "true") {
+        el.scrollBy({ left: isMobileView ? 1.2 : speed, behavior: "auto" });
+        // Restart from beginning when reaching end
+        if (el.scrollLeft + el.clientWidth >= el.scrollWidth) {
+          el.scrollTo({ left: 0, behavior: "auto" });
+        }
+      }
+    }, 20);
+
+    return () => clearInterval(interval);
+  }, [isMobileView, products]);
 
   // Force dark mode class on html and body, enforce background for Vercel
   useEffect(() => {
@@ -127,34 +172,27 @@ const newArrivals = [...filteredProducts]
     fetchReviews();
   }, []);
 
-  // Auto-scroll (seamless infinite, pauses on interaction)
+  // Auto-scroll (seamless loop, pauses on interaction)
   useEffect(() => {
     const el = scrollRef.current;
     if (el && !el.dataset.paused) el.dataset.paused = "false";
     if (!el) return;
 
-    let rafId: number;
-    const isMobile = window.matchMedia('(max-width: 768px)').matches;
-const speed = isMobile ? 0.5 : 1.2;
+    const speed = 1.0;
 
-    const step = () => {
+    const interval = setInterval(() => {
       if (!el) return;
-
       if (el.dataset.paused !== "true") {
-        el.scrollLeft += speed;
-
-        if (el.scrollLeft + el.clientWidth >= el.scrollWidth - 1) {
-          el.scrollLeft = 0;
+        el.scrollBy({ left: isMobileView ? 1.2 : speed, behavior: "auto" });
+        // Restart from beginning when reaching end
+        if (el.scrollLeft + el.clientWidth >= el.scrollWidth) {
+          el.scrollTo({ left: 0, behavior: "auto" });
         }
       }
+    }, 20); // ~50fps, larger step for mobile
 
-      rafId = requestAnimationFrame(step);
-    };
-
-    rafId = requestAnimationFrame(step);
-
-    return () => cancelAnimationFrame(rafId);
-  }, [selectedStyle]);
+    return () => clearInterval(interval);
+  }, [selectedStyle, isMobileView]);
 
   // Auto-scroll for New Arrivals
   useEffect(() => {
@@ -162,28 +200,21 @@ const speed = isMobile ? 0.5 : 1.2;
     if (el && !el.dataset.paused) el.dataset.paused = "false";
     if (!el) return;
 
-    let rafId: number;
-    const isMobile = window.matchMedia('(max-width: 768px)').matches;
-const speed = isMobile ? 0.5 : 1.2;
+    const speed = 1.0;
 
-    const step = () => {
+    const interval = setInterval(() => {
       if (!el) return;
-
       if (el.dataset.paused !== "true") {
-        el.scrollLeft += speed;
-
-        if (el.scrollLeft + el.clientWidth >= el.scrollWidth - 1) {
-          el.scrollLeft = 0;
+        el.scrollBy({ left: isMobileView ? 1.2 : speed, behavior: "auto" });
+        // Restart from beginning when reaching end
+        if (el.scrollLeft + el.clientWidth >= el.scrollWidth) {
+          el.scrollTo({ left: 0, behavior: "auto" });
         }
       }
+    }, 20); // ~50fps, larger step for mobile
 
-      rafId = requestAnimationFrame(step);
-    };
-
-    rafId = requestAnimationFrame(step);
-
-    return () => cancelAnimationFrame(rafId);
-  }, []);
+    return () => clearInterval(interval);
+  }, [isMobileView]);
 
   // --- Auto-rotate effect for Premium Design Slider ---
   useEffect(() => {
@@ -274,7 +305,7 @@ const speed = isMobile ? 0.5 : 1.2;
             >
               <Link
                 to="/collections"
-                className="inline-flex items-center gap-3 border border-white/40 text-white px-8 py-4 sm:px-12 hover:bg-white/10 hover:border-white hover:text-white transition-all duration-500 uppercase tracking-[0.2em] text-sm backdrop-blur-sm"
+                className="inline-flex items-center gap-3 border border-white/40 text-white px-8 py-4 sm:px-12 hover:bg-white hover:border-white hover:text-black transition-all duration-500 uppercase tracking-[0.2em] text-sm backdrop-blur-sm [&_svg]:transition-colors [&_svg]:duration-500 hover:[&_svg]:text-black"
               >
                 Explore Collections
                 <ArrowRight size={16} />
@@ -385,7 +416,7 @@ const speed = isMobile ? 0.5 : 1.2;
           </div>
           <div
             ref={scrollRef}
-            className="overflow-x-auto overflow-y-hidden cursor-grab active:cursor-grabbing md:scroll-auto snap-none relative [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)] [-webkit-overflow-scrolling:touch] overscroll-x-contain"
+            className="overflow-x-auto overflow-y-hidden touch-auto cursor-grab active:cursor-grabbing md:scroll-auto snap-none relative [&::-webkit-scrollbar]:hidden [-webkit-overflow-scrolling:touch] overscroll-x-contain will-change-transform translate-z-0"
             style={{}}
             onMouseEnter={() => {
               if (scrollRef.current) scrollRef.current.dataset.paused = "true";
@@ -405,40 +436,43 @@ const speed = isMobile ? 0.5 : 1.2;
               }, 2000);
             }}
           >
-            <div className="pointer-events-none absolute left-0 top-0 h-full w-12 sm:w-20 md:w-24 bg-gradient-to-r from-black/90 via-black/60 to-transparent backdrop-blur-sm z-10" />
-            <div className="pointer-events-none absolute right-0 top-0 h-full w-12 sm:w-20 md:w-24 bg-gradient-to-l from-black/90 via-black/60 to-transparent backdrop-blur-sm z-10" />
-            <div className="flex gap-4 select-none snap-none">
-              {filteredProducts
-                .filter((p) => p.images?.[0])
-                .slice(0, 12)
-                .map((product, index) => (
-                  <motion.div
-                    key={product.id + "-" + index}
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: index * 0.05 }}
-                    className={`min-w-[85%] sm:min-w-[50%] md:min-w-[33.33%]
+            <div className="pointer-events-none absolute left-0 top-0 h-full w-6 sm:w-12 md:w-16 bg-gradient-to-r from-black/40 md:from-black/20 via-black/20 md:via-black/10 to-transparent z-10" />
+            <div className="pointer-events-none absolute right-0 top-0 h-full w-6 sm:w-12 md:w-16 bg-gradient-to-l from-black/40 md:from-black/20 via-black/20 md:via-black/10 to-transparent z-10" />
+            <div className="flex gap-1 sm:gap-3 select-none snap-none items-stretch">
+              {(isMobileView
+                ? filteredProducts.filter((p) => p.images?.[0]).slice(0, 12)
+                : [
+                    ...filteredProducts.filter((p) => p.images?.[0]).slice(0, 12),
+                    ...filteredProducts.filter((p) => p.images?.[0]).slice(0, 12)
+                  ]
+              ).map((product, index) => (
+                <motion.div
+                  key={product.id + "-" + index}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: index * 0.05 }}
+                  className={`min-w-[75%] sm:min-w-[50%] md:min-w-[33.33%]
 max-w-[85%] sm:max-w-[50%] md:max-w-[33.33%] flex-shrink-0 transition-all duration-700 group-hover:scale-105 overflow-visible`}
-                  >
-                    <div className="group relative overflow-hidden h-[420px] sm:h-[480px] md:h-[520px] [&_img]:w-full [&_img]:h-full [&_img]:object-cover">
-                      <ProductCard product={product} imageOnly />
-                      <div className="pointer-events-none absolute inset-0 flex items-end justify-center opacity-0 group-hover:opacity-100 transition-all duration-500">
-                        <div className="pointer-events-auto w-full text-center pb-6 bg-gradient-to-t from-black/80 via-black/40 to-transparent">
-                          <p className="text-xs tracking-[0.3em] uppercase text-white">
-                            View Product
-                          </p>
-                        </div>
+                >
+                  <div className="group relative overflow-hidden h-[420px] sm:h-[480px] md:h-[520px] [&_img]:w-full [&_img]:h-full [&_img]:object-cover">
+                    <ProductCard product={product} imageOnly />
+                    <div className="pointer-events-none absolute inset-0 flex items-end justify-center opacity-0 group-hover:opacity-100 transition-all duration-500">
+                      <div className="pointer-events-auto w-full text-center pb-6 bg-gradient-to-t from-black/80 via-black/40 to-transparent">
+                        <p className="text-xs tracking-[0.3em] uppercase text-white">
+                          View Product
+                        </p>
                       </div>
                     </div>
-                  </motion.div>
-                ))}
+                  </div>
+                </motion.div>
+              ))}
             </div>
           </div>
           <div className="mt-10 text-center">
             <Link
               to={`/shop?style=${selectedStyle}`}
-              className="inline-flex items-center gap-3 border-2 border-white px-10 py-4 text-sm uppercase tracking-[0.2em] text-white transition-all duration-500 hover:bg-white hover:text-black"
+              className="inline-flex items-center gap-3 border-2 border-white px-10 py-4 text-sm uppercase tracking-[0.2em] text-white transition-all duration-500 hover:bg-white hover:!text-black [&_svg]:transition-colors [&_svg]:duration-500 hover:[&_svg]:text-black"
             >
               View All
               <ArrowRight size={16} />
@@ -447,7 +481,7 @@ max-w-[85%] sm:max-w-[50%] md:max-w-[33.33%] flex-shrink-0 transition-all durati
         </div>
       </section>
 
-      {/* Collection Grid */}
+      {/* Collection Carousel */}
       <section className="py-24 px-4 sm:px-6 lg:px-8 bg-black text-white transition-all duration-700">
         <motion.div
           variants={containerVariants}
@@ -470,47 +504,75 @@ max-w-[85%] sm:max-w-[50%] md:max-w-[33.33%] flex-shrink-0 transition-all durati
             </div>
           </motion.div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px bg-black md:[&>a]:opacity-90 md:hover:[&>a]:opacity-60 md:[&>a:hover]:opacity-100 transition-all duration-500">
-            {[...new Set(products.map((p) => p.category))].map((category, index) => {
-              const categoryProducts = products.filter((p) => p.category === category);
-              const previewImage =
-                categoryProducts.find((p) => p.images?.[0])?.images?.[0] ||
-                "https://images.unsplash.com/photo-1521334884684-d80222895322";
+          <div
+            ref={collectionsRef}
+            className="overflow-x-auto overflow-y-hidden touch-auto cursor-grab active:cursor-grabbing snap-none relative [&::-webkit-scrollbar]:hidden [-webkit-overflow-scrolling:touch] overscroll-x-contain will-change-transform translate-z-0"
+            onMouseEnter={() => {
+              if (collectionsRef.current) collectionsRef.current.dataset.paused = "true";
+            }}
+            onMouseLeave={() => {
+              if (collectionsRef.current) collectionsRef.current.dataset.paused = "false";
+            }}
+            onTouchStart={() => {
+              if (!collectionsRef.current) return;
+              collectionsRef.current.dataset.paused = "true";
+            }}
+            onTouchEnd={() => {
+              if (!collectionsRef.current) return;
+              setTimeout(() => {
+                if (collectionsRef.current) collectionsRef.current.dataset.paused = "false";
+              }, 2000);
+            }}
+          >
+            <div className="flex gap-1 sm:gap-3 select-none snap-none">
+              {(isMobileView
+                ? [...new Set(products.map((p) => p.category))]
+                : [
+                    ...new Set(products.map((p) => p.category)),
+                    ...new Set(products.map((p) => p.category))
+                  ]
+              ).map((category, index) => {
+                const categoryProducts = products.filter((p) => p.category === category);
+                const previewImage =
+                  categoryProducts.find((p) => p.images?.[0])?.images?.[0] ||
+                  "https://images.unsplash.com/photo-1521334884684-d80222895322";
 
-              return (
-                <Link key={category} to={`/collections/${category}`} className="block">
-                  <motion.div
-                    variants={itemVariants}
-                    className="group relative overflow-hidden aspect-[3/4] sm:aspect-[4/5] bg-black cursor-pointer transition-all duration-700 hover:scale-[1.03]"
-                  >
-                    <img
-                      src={previewImage || "/placeholder.png"}
-                      alt={`${category} collection`}
-                      className="w-full h-full object-cover transition-all duration-700 group-hover:scale-110"
-                    />
+                return (
+                  <div className="min-w-[75%] max-w-[75%] sm:min-w-[50%] sm:max-w-[50%] md:min-w-[33.33%] md:max-w-[33.33%] flex-shrink-0" key={category + "-" + index}>
+                    <Link to={`/collections/${category}`} className="block">
+                      <motion.div
+                        variants={itemVariants}
+                        className="group relative overflow-hidden h-[420px] sm:h-[480px] md:h-[520px] bg-black flex items-center justify-center cursor-pointer transition-all duration-700 hover:scale-[1.03] opacity-100"
+                      >
+                        <img
+                          src={previewImage || "/placeholder.png"}
+                          alt={`${category} collection`}
+                          className="max-w-full max-h-full object-contain p-2 sm:p-4 bg-transparent transition-all duration-700 group-hover:scale-105 relative z-0 block mx-auto"
+                        />
 
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 sm:from-black/60 via-black/10 to-transparent flex items-end p-10">
-                      <div className="text-white w-full">
-                        <h3 className="text-2xl md:text-3xl tracking-[0.2em] uppercase mb-3">
-                          {category?.charAt(0).toUpperCase() + category?.slice(1)}
-                        </h3>
-
-                        <span
-                          className="inline-flex items-center gap-2 text-xs tracking-[0.2em] uppercase opacity-0 group-hover:opacity-100 transition-all duration-500 group-hover:translate-x-2"
-                        >
-                          View Collection <ArrowRight size={14} />
-                        </span>
-                      </div>
-                    </div>
-                  </motion.div>
-                </Link>
-              );
-            })}
+                        <div className="absolute bottom-0 left-0 right-0 z-10 bg-gradient-to-t from-black/50 via-black/20 to-transparent p-3 sm:p-4">
+                          <div className="text-white w-full text-center">
+                            <h3 className="text-sm sm:text-base md:text-xl tracking-[0.15em] uppercase text-center leading-tight break-words">
+                              {category?.charAt(0).toUpperCase() + category?.slice(1)}
+                            </h3>
+                            <span
+                              className="inline-flex items-center gap-2 text-xs tracking-[0.2em] uppercase opacity-70 mt-1"
+                            >
+                              View Collection <ArrowRight size={14} />
+                            </span>
+                          </div>
+                        </div>
+                      </motion.div>
+                    </Link>
+                  </div>
+                );
+              })}
+            </div>
           </div>
           <div className="mt-12 text-center">
             <Link
               to="/collections"
-              className="inline-flex items-center gap-3 border-2 border-white px-10 py-4 text-sm uppercase tracking-[0.2em] text-white transition-all duration-500 hover:bg-white hover:text-black"
+              className="inline-flex items-center gap-3 border-2 border-white px-10 py-4 text-sm uppercase tracking-[0.2em] text-white transition-all duration-500 hover:bg-white hover:!text-black [&_svg]:transition-colors [&_svg]:duration-500 hover:[&_svg]:text-black"
             >
               View All Collections
               <ArrowRight size={16} />
@@ -541,7 +603,8 @@ max-w-[85%] sm:max-w-[50%] md:max-w-[33.33%] flex-shrink-0 transition-all durati
 
           <div
             ref={newArrivalsRef}
-            className="overflow-x-auto overflow-y-hidden cursor-grab active:cursor-grabbing md:scroll-auto snap-none relative [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)] [-webkit-overflow-scrolling:touch] overscroll-x-contain"
+            className="overflow-x-auto overflow-y-hidden touch-auto cursor-grab active:cursor-grabbing md:scroll-auto snap-none relative [&::-webkit-scrollbar]:hidden [-webkit-overflow-scrolling:touch] overscroll-x-contain will-change-transform translate-z-0"
+            style={{}}
             onMouseEnter={() => {
               if (newArrivalsRef.current) newArrivalsRef.current.dataset.paused = "true";
             }}
@@ -560,40 +623,44 @@ max-w-[85%] sm:max-w-[50%] md:max-w-[33.33%] flex-shrink-0 transition-all durati
               }, 2000);
             }}
           >
-            <div className="pointer-events-none absolute left-0 top-0 h-full w-12 sm:w-20 md:w-24 bg-gradient-to-r from-black/90 via-black/60 to-transparent backdrop-blur-sm z-10" />
-            <div className="pointer-events-none absolute right-0 top-0 h-full w-12 sm:w-20 md:w-24 bg-gradient-to-l from-black/90 via-black/60 to-transparent backdrop-blur-sm z-10" />
+            <div className="pointer-events-none absolute left-0 top-0 h-full w-6 sm:w-12 md:w-16 bg-gradient-to-r from-black/40 md:from-black/20 via-black/20 md:via-black/10 to-transparent z-10" />
+            <div className="pointer-events-none absolute right-0 top-0 h-full w-6 sm:w-12 md:w-16 bg-gradient-to-l from-black/40 md:from-black/20 via-black/20 md:via-black/10 to-transparent z-10" />
 
             <div className="flex gap-4 select-none snap-none">
-              {newArrivals
-                .filter((p) => p.images?.[0])
-                .map((product, index) => (
-                  <motion.div
-                    key={product.id}
-                    variants={itemVariants}
-                    initial="hidden"
-                    whileInView="show"
-                    className="min-w-[85%] sm:min-w-[50%] md:min-w-[33.33%]
+              {(isMobileView
+                ? newArrivals.filter((p) => p.images?.[0])
+                : [
+                    ...newArrivals.filter((p) => p.images?.[0]),
+                    ...newArrivals.filter((p) => p.images?.[0])
+                  ]
+              ).map((product, index) => (
+                <motion.div
+                  key={product.id + "-" + index}
+                  variants={itemVariants}
+                  initial="hidden"
+                  whileInView="show"
+                  className="min-w-[75%] sm:min-w-[50%] md:min-w-[33.33%]
 max-w-[85%] sm:max-w-[50%] md:max-w-[33.33%] flex-shrink-0 transition-all duration-700 hover:scale-[1.03] overflow-visible"
-                  >
-                    <div className="group relative overflow-hidden h-[420px] sm:h-[480px] md:h-[520px] [&_img]:w-full [&_img]:h-full [&_img]:object-cover">
-                      <ProductCard product={product} imageOnly />
-                      <div className="pointer-events-none absolute inset-0 flex items-end justify-center opacity-0 group-hover:opacity-100 transition-all duration-500">
-                        <div className="pointer-events-auto w-full text-center pb-6 bg-gradient-to-t from-black/80 via-black/40 to-transparent">
-                          <p className="text-xs tracking-[0.3em] uppercase text-white">
-                            View Product
-                          </p>
-                        </div>
+                >
+                  <div className="group relative overflow-hidden h-[420px] sm:h-[480px] md:h-[520px] [&_img]:w-full [&_img]:h-full [&_img]:object-cover">
+                    <ProductCard product={product} imageOnly />
+                    <div className="pointer-events-none absolute inset-0 flex items-end justify-center opacity-0 group-hover:opacity-100 transition-all duration-500">
+                      <div className="pointer-events-auto w-full text-center pb-6 bg-gradient-to-t from-black/80 via-black/40 to-transparent">
+                        <p className="text-xs tracking-[0.3em] uppercase text-white">
+                          View Product
+                        </p>
                       </div>
                     </div>
-                  </motion.div>
-                ))}
+                  </div>
+                </motion.div>
+              ))}
             </div>
           </div>
 
           <div className="mt-16 text-center">
             <Link
               to="/new-arrivals"
-              className="inline-flex items-center gap-3 border-2 border-white px-10 py-4 text-sm uppercase tracking-[0.2em] text-white transition-all duration-500 hover:bg-white hover:text-black"
+              className="inline-flex items-center gap-3 border-2 border-white px-10 py-4 text-sm uppercase tracking-[0.2em] text-white transition-all duration-500 hover:bg-white hover:!text-black [&_svg]:transition-colors [&_svg]:duration-500 hover:[&_svg]:text-black"
             >
               View All
               <ArrowRight size={16} />
