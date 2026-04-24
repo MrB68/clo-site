@@ -808,7 +808,7 @@ setProducts(normalized);
           <img
             src={collectionImage}
             alt="Collection Preview"
-            className="w-24 h-24 object-cover rounded border"
+            className="w-12 sm:w-20 md:w-24 h-24 object-cover rounded border"
           />
         )}
 
@@ -971,7 +971,7 @@ saveProducts(reordered);
                       </CardHeader>
                       <CardContent className="space-y-4 flex-1 flex flex-col justify-between">
                         {product.images.length > 0 && (
-                          <div className="aspect-[4/5] rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800">
+                          <div className="aspect-[3/4] sm:aspect-[4/5] rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800">
                             <img
                               src={product.images[0]}
                               alt={product.name}

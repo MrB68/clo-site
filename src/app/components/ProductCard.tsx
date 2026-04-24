@@ -83,7 +83,7 @@ export function ProductCard({ product, hideBadge, imageOnly = false }: ProductCa
             src={product.image}
             alt={product.name}
             className={`w-full object-cover transition-all duration-700 ease-out ${
-              isFeatured ? "h-[520px]" : "h-[420px]"
+              isFeatured ? "h-[420px] sm:h-[480px] md:h-[520px]" : "h-[420px]"
             } group-hover:opacity-0 group-hover:scale-115`}
           />
 
@@ -93,7 +93,7 @@ export function ProductCard({ product, hideBadge, imageOnly = false }: ProductCa
               src={product.images[1]}
               alt={`${product.name} hover`}
               className={`absolute inset-0 w-full object-cover opacity-0 transition-all duration-700 ease-out pointer-events-none ${
-                isFeatured ? "h-[520px]" : "h-[420px]"
+                isFeatured ? "h-[420px] sm:h-[480px] md:h-[520px]" : "h-[420px]"
               } group-hover:opacity-100 group-hover:scale-115`}
             />
           )}

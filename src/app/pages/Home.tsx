@@ -59,6 +59,8 @@ const newArrivals = [...filteredProducts]
   // Ref for auto-scroll horizontal carousel
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const newArrivalsRef = useRef<HTMLDivElement | null>(null);
+  const scrollPauseTimeout = useRef<any>(null);
+  const newArrivalsPauseTimeout = useRef<any>(null);
 
   // Force dark mode class on html and body, enforce background for Vercel
   useEffect(() => {
@@ -128,16 +130,18 @@ const newArrivals = [...filteredProducts]
   // Auto-scroll (seamless infinite, pauses on interaction)
   useEffect(() => {
     const el = scrollRef.current;
+    if (el && !el.dataset.paused) el.dataset.paused = "false";
     if (!el) return;
 
     let rafId: number;
-    const speed = 0.8;
+    const isMobile = window.matchMedia('(max-width: 768px)').matches;
+const speed = isMobile ? 0.5 : 1.2;
 
     const step = () => {
       if (!el) return;
 
       if (el.dataset.paused !== "true") {
-        el.scrollLeft += speed * 0.7;
+        el.scrollLeft += speed;
 
         if (el.scrollLeft + el.clientWidth >= el.scrollWidth - 1) {
           el.scrollLeft = 0;
@@ -155,16 +159,18 @@ const newArrivals = [...filteredProducts]
   // Auto-scroll for New Arrivals
   useEffect(() => {
     const el = newArrivalsRef.current;
+    if (el && !el.dataset.paused) el.dataset.paused = "false";
     if (!el) return;
 
     let rafId: number;
-    const speed = 0.8;
+    const isMobile = window.matchMedia('(max-width: 768px)').matches;
+const speed = isMobile ? 0.5 : 1.2;
 
     const step = () => {
       if (!el) return;
 
       if (el.dataset.paused !== "true") {
-        el.scrollLeft += speed * 0.7;
+        el.scrollLeft += speed;
 
         if (el.scrollLeft + el.clientWidth >= el.scrollWidth - 1) {
           el.scrollLeft = 0;
@@ -228,14 +234,14 @@ const newArrivals = [...filteredProducts]
             variants={containerVariants}
             initial="hidden"
             animate="show"
-            className="text-center text-white space-y-12 px-4 md:px-0"
+            className="text-center text-white space-y-8 px-6 md:px-0"
           >
             <motion.div
               variants={itemVariants}
               className="space-y-6"
             >
               <motion.h1
-                className="text-6xl md:text-8xl tracking-[0.3em] uppercase flex justify-center gap-2 drop-shadow-[0_0_20px_rgba(255,255,255,0.15)]"
+                className="text-4xl sm:text-5xl md:text-8xl tracking-[0.2em] uppercase flex justify-center gap-2 drop-shadow-[0_0_20px_rgba(255,255,255,0.15)]"
               >
                 {"clo".split("").map((char, i) => (
                   <motion.span
@@ -248,7 +254,7 @@ const newArrivals = [...filteredProducts]
                   </motion.span>
                 ))}
               </motion.h1>
-              <div className="flex items-center justify-center gap-8">
+              <div className="flex items-center justify-center gap-4 sm:gap-8">
                 <Minus size={40} className="opacity-50" />
                 <motion.p
                   className="text-sm md:text-base tracking-[0.2em] uppercase opacity-80"
@@ -268,7 +274,7 @@ const newArrivals = [...filteredProducts]
             >
               <Link
                 to="/collections"
-                className="inline-flex items-center gap-3 border border-white/40 text-white px-12 py-4 hover:bg-white/10 hover:border-white hover:text-white transition-all duration-500 uppercase tracking-[0.2em] text-sm backdrop-blur-sm"
+                className="inline-flex items-center gap-3 border border-white/40 text-white px-8 py-4 sm:px-12 hover:bg-white/10 hover:border-white hover:text-white transition-all duration-500 uppercase tracking-[0.2em] text-sm backdrop-blur-sm"
               >
                 Explore Collections
                 <ArrowRight size={16} />
@@ -322,8 +328,8 @@ const newArrivals = [...filteredProducts]
           {/* EmbedSocial Instagram Feed - Premium block */}
           <div className="relative overflow-hidden rounded-none w-full max-w-full">
             {/* edge fade */}
-            <div className="pointer-events-none absolute left-0 top-0 h-full w-24 bg-gradient-to-r from-black via-black/70 to-transparent z-10" />
-            <div className="pointer-events-none absolute right-0 top-0 h-full w-24 bg-gradient-to-l from-black via-black/70 to-transparent z-10" />
+            <div className="pointer-events-none absolute left-0 top-0 h-full w-12 sm:w-20 md:w-24 bg-gradient-to-r from-black via-black/70 to-transparent z-10" />
+            <div className="pointer-events-none absolute right-0 top-0 h-full w-12 sm:w-20 md:w-24 bg-gradient-to-l from-black via-black/70 to-transparent z-10" />
 
             <div
               className="embedsocial-hashtag w-full max-w-full transition-all duration-700"
@@ -379,7 +385,7 @@ const newArrivals = [...filteredProducts]
           </div>
           <div
             ref={scrollRef}
-            className="overflow-x-auto overflow-y-hidden cursor-grab active:cursor-grabbing scroll-smooth relative [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]"
+            className="overflow-x-auto overflow-y-hidden cursor-grab active:cursor-grabbing md:scroll-auto snap-none relative [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)] [-webkit-overflow-scrolling:touch] overscroll-x-contain"
             style={{}}
             onMouseEnter={() => {
               if (scrollRef.current) scrollRef.current.dataset.paused = "true";
@@ -387,10 +393,21 @@ const newArrivals = [...filteredProducts]
             onMouseLeave={() => {
               if (scrollRef.current) scrollRef.current.dataset.paused = "false";
             }}
+            onTouchStart={() => {
+              if (!scrollRef.current) return;
+              scrollRef.current.dataset.paused = "true";
+              if (scrollPauseTimeout.current) clearTimeout(scrollPauseTimeout.current);
+            }}
+            onTouchEnd={() => {
+              if (!scrollRef.current) return;
+              scrollPauseTimeout.current = setTimeout(() => {
+                if (scrollRef.current) scrollRef.current.dataset.paused = "false";
+              }, 2000);
+            }}
           >
-            <div className="pointer-events-none absolute left-0 top-0 h-full w-24 bg-gradient-to-r from-black/90 via-black/60 to-transparent backdrop-blur-sm z-10" />
-            <div className="pointer-events-none absolute right-0 top-0 h-full w-24 bg-gradient-to-l from-black/90 via-black/60 to-transparent backdrop-blur-sm z-10" />
-            <div className="flex gap-4 touch-pan-x select-none snap-x snap-mandatory">
+            <div className="pointer-events-none absolute left-0 top-0 h-full w-12 sm:w-20 md:w-24 bg-gradient-to-r from-black/90 via-black/60 to-transparent backdrop-blur-sm z-10" />
+            <div className="pointer-events-none absolute right-0 top-0 h-full w-12 sm:w-20 md:w-24 bg-gradient-to-l from-black/90 via-black/60 to-transparent backdrop-blur-sm z-10" />
+            <div className="flex gap-4 select-none snap-none">
               {filteredProducts
                 .filter((p) => p.images?.[0])
                 .slice(0, 12)
@@ -401,9 +418,10 @@ const newArrivals = [...filteredProducts]
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
                     transition={{ delay: index * 0.05 }}
-                    className={`min-w-[33.33%] max-w-[33.33%] flex-shrink-0 snap-start transition-all duration-700 group-hover:scale-105 overflow-visible`}
+                    className={`min-w-[85%] sm:min-w-[50%] md:min-w-[33.33%]
+max-w-[85%] sm:max-w-[50%] md:max-w-[33.33%] flex-shrink-0 transition-all duration-700 group-hover:scale-105 overflow-visible`}
                   >
-                    <div className="group relative overflow-hidden h-[520px] [&_img]:w-full [&_img]:h-full [&_img]:object-cover">
+                    <div className="group relative overflow-hidden h-[420px] sm:h-[480px] md:h-[520px] [&_img]:w-full [&_img]:h-full [&_img]:object-cover">
                       <ProductCard product={product} imageOnly />
                       <div className="pointer-events-none absolute inset-0 flex items-end justify-center opacity-0 group-hover:opacity-100 transition-all duration-500">
                         <div className="pointer-events-auto w-full text-center pb-6 bg-gradient-to-t from-black/80 via-black/40 to-transparent">
@@ -452,7 +470,7 @@ const newArrivals = [...filteredProducts]
             </div>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-black [&>a]:opacity-90 hover:[&>a]:opacity-60 [&>a:hover]:opacity-100 transition-all duration-500">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px bg-black md:[&>a]:opacity-90 md:hover:[&>a]:opacity-60 md:[&>a:hover]:opacity-100 transition-all duration-500">
             {[...new Set(products.map((p) => p.category))].map((category, index) => {
               const categoryProducts = products.filter((p) => p.category === category);
               const previewImage =
@@ -463,15 +481,15 @@ const newArrivals = [...filteredProducts]
                 <Link key={category} to={`/collections/${category}`} className="block">
                   <motion.div
                     variants={itemVariants}
-                    className="group relative overflow-hidden aspect-[4/5] bg-black cursor-pointer transition-all duration-700 hover:scale-[1.03]"
+                    className="group relative overflow-hidden aspect-[3/4] sm:aspect-[4/5] bg-black cursor-pointer transition-all duration-700 hover:scale-[1.03]"
                   >
                     <img
-                      src={previewImage}
+                      src={previewImage || "/placeholder.png"}
                       alt={`${category} collection`}
                       className="w-full h-full object-cover transition-all duration-700 group-hover:scale-110"
                     />
 
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent flex items-end p-10">
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 sm:from-black/60 via-black/10 to-transparent flex items-end p-10">
                       <div className="text-white w-full">
                         <h3 className="text-2xl md:text-3xl tracking-[0.2em] uppercase mb-3">
                           {category?.charAt(0).toUpperCase() + category?.slice(1)}
@@ -523,18 +541,29 @@ const newArrivals = [...filteredProducts]
 
           <div
             ref={newArrivalsRef}
-            className="overflow-x-auto overflow-y-hidden cursor-grab active:cursor-grabbing scroll-smooth relative [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]"
+            className="overflow-x-auto overflow-y-hidden cursor-grab active:cursor-grabbing md:scroll-auto snap-none relative [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)] [-webkit-overflow-scrolling:touch] overscroll-x-contain"
             onMouseEnter={() => {
               if (newArrivalsRef.current) newArrivalsRef.current.dataset.paused = "true";
             }}
             onMouseLeave={() => {
               if (newArrivalsRef.current) newArrivalsRef.current.dataset.paused = "false";
             }}
+            onTouchStart={() => {
+              if (!newArrivalsRef.current) return;
+              newArrivalsRef.current.dataset.paused = "true";
+              if (newArrivalsPauseTimeout.current) clearTimeout(newArrivalsPauseTimeout.current);
+            }}
+            onTouchEnd={() => {
+              if (!newArrivalsRef.current) return;
+              newArrivalsPauseTimeout.current = setTimeout(() => {
+                if (newArrivalsRef.current) newArrivalsRef.current.dataset.paused = "false";
+              }, 2000);
+            }}
           >
-            <div className="pointer-events-none absolute left-0 top-0 h-full w-24 bg-gradient-to-r from-black/90 via-black/60 to-transparent backdrop-blur-sm z-10" />
-            <div className="pointer-events-none absolute right-0 top-0 h-full w-24 bg-gradient-to-l from-black/90 via-black/60 to-transparent backdrop-blur-sm z-10" />
+            <div className="pointer-events-none absolute left-0 top-0 h-full w-12 sm:w-20 md:w-24 bg-gradient-to-r from-black/90 via-black/60 to-transparent backdrop-blur-sm z-10" />
+            <div className="pointer-events-none absolute right-0 top-0 h-full w-12 sm:w-20 md:w-24 bg-gradient-to-l from-black/90 via-black/60 to-transparent backdrop-blur-sm z-10" />
 
-            <div className="flex gap-4 touch-pan-x select-none snap-x snap-mandatory">
+            <div className="flex gap-4 select-none snap-none">
               {newArrivals
                 .filter((p) => p.images?.[0])
                 .map((product, index) => (
@@ -543,9 +572,10 @@ const newArrivals = [...filteredProducts]
                     variants={itemVariants}
                     initial="hidden"
                     whileInView="show"
-                    className="min-w-[33.33%] max-w-[33.33%] flex-shrink-0 snap-start transition-all duration-700 hover:scale-[1.03] overflow-visible"
+                    className="min-w-[85%] sm:min-w-[50%] md:min-w-[33.33%]
+max-w-[85%] sm:max-w-[50%] md:max-w-[33.33%] flex-shrink-0 transition-all duration-700 hover:scale-[1.03] overflow-visible"
                   >
-                    <div className="group relative overflow-hidden h-[520px] [&_img]:w-full [&_img]:h-full [&_img]:object-cover">
+                    <div className="group relative overflow-hidden h-[420px] sm:h-[480px] md:h-[520px] [&_img]:w-full [&_img]:h-full [&_img]:object-cover">
                       <ProductCard product={product} imageOnly />
                       <div className="pointer-events-none absolute inset-0 flex items-end justify-center opacity-0 group-hover:opacity-100 transition-all duration-500">
                         <div className="pointer-events-auto w-full text-center pb-6 bg-gradient-to-t from-black/80 via-black/40 to-transparent">
@@ -607,7 +637,7 @@ const newArrivals = [...filteredProducts]
                 whileInView={{ opacity: 1, x: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.8 }}
-                className="relative w-full h-[650px] overflow-x-auto overflow-y-hidden touch-pan-x scroll-smooth snap-x snap-mandatory [&::-webkit-scrollbar]:hidden"
+                className="relative w-full h-[420px] sm:h-[550px] md:h-[650px] overflow-x-auto overflow-y-hidden touch-pan-x scroll-smooth [&::-webkit-scrollbar]:hidden"
                 onScroll={(e) => {
                   const el = e.currentTarget as HTMLDivElement;
 
@@ -628,7 +658,7 @@ const newArrivals = [...filteredProducts]
                     .map((product) => (
                       <div
                         key={product.id}
-                        className="min-w-full h-full relative flex items-center justify-center bg-black snap-center"
+                        className="min-w-full h-full relative flex items-center justify-center bg-black"
                       >
                         <img
                           src={product.images?.[0] || ""}
