@@ -455,9 +455,9 @@ const newArrivals = [...filteredProducts]
                   className={`min-w-[75%] sm:min-w-[50%] md:min-w-[33.33%]
 max-w-[85%] sm:max-w-[50%] md:max-w-[33.33%] flex-shrink-0 transition-all duration-700 group-hover:scale-105 overflow-visible`}
                 >
-                  <div className="group relative overflow-hidden h-[420px] sm:h-[480px] md:h-[520px] [&_img]:w-full [&_img]:h-full [&_img]:object-cover">
+                  <div className="group relative overflow-hidden h-[420px] sm:h-[480px] md:h-[520px] [&_img]:w-full [&_img]:h-full [&_img]:object-cover [&_button]:hidden md:[&_button]:block">
                     <ProductCard product={product} imageOnly />
-                    <div className="pointer-events-none absolute inset-0 flex items-end justify-center opacity-0 group-hover:opacity-100 transition-all duration-500">
+                    <div className="pointer-events-none absolute inset-0 hidden md:flex items-end justify-center opacity-0 md:group-hover:opacity-100 transition-all duration-500">
                       <div className="pointer-events-auto w-full text-center pb-6 bg-gradient-to-t from-black/80 via-black/40 to-transparent">
                         <p className="text-xs tracking-[0.3em] uppercase text-white">
                           View Product
@@ -642,9 +642,9 @@ max-w-[85%] sm:max-w-[50%] md:max-w-[33.33%] flex-shrink-0 transition-all durati
                   className="min-w-[75%] sm:min-w-[50%] md:min-w-[33.33%]
 max-w-[85%] sm:max-w-[50%] md:max-w-[33.33%] flex-shrink-0 transition-all duration-700 hover:scale-[1.03] overflow-visible"
                 >
-                  <div className="group relative overflow-hidden h-[420px] sm:h-[480px] md:h-[520px] [&_img]:w-full [&_img]:h-full [&_img]:object-cover">
+                  <div className="group relative overflow-hidden h-[420px] sm:h-[480px] md:h-[520px] [&_img]:w-full [&_img]:h-full [&_img]:object-cover [&_button]:hidden md:[&_button]:block">
                     <ProductCard product={product} imageOnly />
-                    <div className="pointer-events-none absolute inset-0 flex items-end justify-center opacity-0 group-hover:opacity-100 transition-all duration-500">
+                    <div className="pointer-events-none absolute inset-0 hidden md:flex items-end justify-center opacity-0 md:group-hover:opacity-100 transition-all duration-500">
                       <div className="pointer-events-auto w-full text-center pb-6 bg-gradient-to-t from-black/80 via-black/40 to-transparent">
                         <p className="text-xs tracking-[0.3em] uppercase text-white">
                           View Product

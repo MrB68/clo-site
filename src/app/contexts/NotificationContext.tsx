@@ -78,6 +78,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const channelRef = useRef<BroadcastChannel | null>(null);
   const activeChannelRef = useRef<any>(null);
 
+  const hasLoadedRef = useRef(false);
+  const lastCountRef = useRef(0);
+
   useEffect(() => {
     if (typeof window !== "undefined" && "BroadcastChannel" in window) {
       channelRef.current = new BroadcastChannel("notifications_channel");
@@ -117,9 +120,16 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         channelRef.current?.postMessage(data);
         return updated;
       });
-      if (data && data.length > 0) {
+
+      const currentCount = data ? data.length : 0;
+
+      // 🔇 skip first load, only play when NEW notifications arrive
+      if (hasLoadedRef.current && currentCount > lastCountRef.current) {
         playNotificationSound();
       }
+
+      lastCountRef.current = currentCount;
+      hasLoadedRef.current = true;
     };
 
     fetchNotifications();
